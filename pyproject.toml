@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meme-sort-worker"
+version = "0.1.0"
+description = "Local worker foundation for MemeSort Milestone 1"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.6",
+    "pillow>=12.2.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.35.0",
+]
+
+[project.scripts]
+memesort-worker = "memesort_worker.cli:main"
+
+[tool.setuptools]
+packages = ["memesort_worker"]
