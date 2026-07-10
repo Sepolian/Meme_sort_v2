@@ -11,6 +11,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 from PIL import Image
@@ -1410,7 +1411,18 @@ def initialize_library(root: Path | str) -> LibraryInitResult:
     )
 
 
-def import_folder(library_root: Path | str, source_folder: Path | str) -> ImportFolderResult:
+def import_folder(
+    library_root: Path | str,
+    source_folder: Path | str,
+    wait_for_permission: Callable[[], None] | None = None,
+) -> ImportFolderResult:
+    """Import supported files, optionally waiting at each file boundary.
+
+    ``wait_for_permission`` is deliberately checked before a file is read or
+    copied.  This lets a UI pause a long import without leaving a partly
+    committed asset: a file already being processed finishes atomically, and
+    the next file waits.
+    """
     init_result = initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
     source_root = _resolve(source_folder)
@@ -1433,6 +1445,9 @@ def import_folder(library_root: Path | str, source_folder: Path | str) -> Import
         for file_path in sorted(source_root.rglob("*")):
             if not file_path.is_file():
                 continue
+
+            if wait_for_permission is not None:
+                wait_for_permission()
 
             discovered_files += 1
             media_type = SUPPORTED_EXTENSIONS.get(file_path.suffix.lower())

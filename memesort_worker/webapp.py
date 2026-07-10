@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 from wsgiref.simple_server import WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
+from .import_controller import ImportController
 from .app_state import build_app_state
 from .asset_browse import get_library_status
 from .app_commands import (
@@ -23,6 +24,7 @@ from .library import (
     get_asset_detail,
     import_folder,
     initialize_library,
+    is_runtime_ready_for_indexing,
     list_assets,
     remove_source_record,
     retry_failed_jobs,
@@ -131,6 +133,7 @@ def create_app(library_root: str):
     library_root_path = Path(library_root).expanduser().resolve()
     initialize_library(library_root_path)
     worker_loop = WorkerLoopController(library_root_path)
+    import_controller = ImportController(library_root_path)
 
     def app(environ, start_response):
         method = str(environ.get("REQUEST_METHOD", "GET")).upper()
@@ -145,6 +148,7 @@ def create_app(library_root: str):
                 payload = build_app_state(
                     library_root_path,
                     worker_loop_snapshot=worker_loop.snapshot(),
+                    import_task_snapshot=import_controller.snapshot().to_dict(),
                 ).to_dict()
                 status_line, headers, body = _json_response(HTTPStatus.OK, payload)
             elif path == "/api/runtime-settings" and method == "POST":
@@ -209,6 +213,24 @@ def create_app(library_root: str):
                 payload = _read_json_body(environ)
                 result = import_folder(library_root_path, str(payload["path"]))
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/import" and method == "GET":
+                status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.snapshot().to_dict())
+            elif path == "/api/import/start" and method == "POST":
+                payload = _read_json_body(environ)
+                start_indexing = bool(payload.get("start_indexing", False))
+                if start_indexing:
+                    runtime_ready, runtime_message = is_runtime_ready_for_indexing(library_root_path)
+                    if not runtime_ready:
+                        raise ValueError(runtime_message)
+                snapshot = import_controller.start(
+                    str(payload["path"]),
+                    on_completed=worker_loop.resume if start_indexing else None,
+                )
+                status_line, headers, body = _json_response(HTTPStatus.ACCEPTED, snapshot.to_dict())
+            elif path == "/api/import/pause" and method == "POST":
+                status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.pause().to_dict())
+            elif path == "/api/import/resume" and method == "POST":
+                status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.resume().to_dict())
             elif path == "/api/pick-folder" and method == "POST":
                 payload = _read_json_body(environ)
                 title = str(payload.get("title") or "Choose a folder")
@@ -409,7 +431,11 @@ def create_app(library_root: str):
         start_response(status_line, headers)
         return [body]
 
-    app.shutdown = worker_loop.shutdown  # type: ignore[attr-defined]
+    def shutdown() -> None:
+        import_controller.shutdown()
+        worker_loop.shutdown()
+
+    app.shutdown = shutdown  # type: ignore[attr-defined]
     return app
 
 

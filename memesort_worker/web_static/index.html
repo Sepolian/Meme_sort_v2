@@ -148,7 +148,11 @@
                 <button id="importBtn">Import Folder</button>
                 <button id="importAndIndexBtn" class="ghost">Import and Start Indexing</button>
                 <button id="runJobsBtn" class="ghost">Run Pending Jobs</button>
+                <button id="pauseImportBtn" class="ghost" disabled>Pause Import</button>
+                <button id="resumeImportBtn" class="ghost" disabled>Resume Import</button>
               </div>
+
+              <p id="importTaskStatus" class="muted small" aria-live="polite">No import is running.</p>
 
               <div class="runtime-summary">
                 <span class="section-title">Current Runtime</span>

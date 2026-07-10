@@ -6,6 +6,8 @@ const state = {
   assetSummary: null,
   libraryStatus: null,
   workerLoop: null,
+  importTask: null,
+  importPollTimer: null,
   selectedAsset: null,
   selectedAssetIds: new Set(),
   duplicatePairs: [],
@@ -1038,6 +1040,7 @@ async function loadState() {
   state.selectedAssetIds = new Set([...state.selectedAssetIds].filter((assetId) => availableAssetIds.has(assetId)));
   state.libraryStatus = payload.library_status || null;
   state.workerLoop = payload.worker_loop || null;
+  state.importTask = payload.import_task || null;
   state.lastHealthDiagnosticSteps = state.setupState?.runtime_readiness?.last_health_diagnostic_steps || [];
   if (
     state.selectedAsset &&
@@ -1056,6 +1059,8 @@ async function loadState() {
   renderAssetDetail();
   renderLibraryStatus();
   renderRightRail();
+  renderImportTask();
+  updateImportPolling();
 }
 
 async function loadAssetDetail(assetId) {
@@ -1192,13 +1197,68 @@ async function runHealthCheck() {
   await loadState();
 }
 
-async function importFolder() {
-  const result = await api("/api/import-folder", {
+function renderImportTask() {
+  const task = state.importTask || {};
+  const running = Boolean(task.running);
+  const paused = Boolean(task.paused);
+  const pauseRequested = Boolean(task.pause_requested);
+  const node = byId("importTaskStatus");
+  if (node) {
+    if (!running && !task.status) {
+      node.textContent = "No import is running.";
+    } else if (running) {
+      node.textContent = paused
+        ? "Import paused. Resume to continue with the next file."
+        : pauseRequested
+          ? "Pausing import after the current file finishes safely."
+          : `Importing ${task.source_folder || "folder"}. Pause takes effect between files.`;
+    } else if (task.status === "completed") {
+      node.textContent = `Import completed: ${task.result?.new_assets || 0} new asset(s), ${task.result?.duplicate_assets || 0} duplicate(s).`;
+    } else if (task.status === "failed" || task.status === "cancelled") {
+      node.textContent = `Import ${task.status}: ${task.error?.detail || "unknown error"}`;
+    } else {
+      node.textContent = "No import is running.";
+    }
+  }
+  byId("pauseImportBtn").disabled = !running || pauseRequested;
+  byId("resumeImportBtn").disabled = !running || !pauseRequested;
+}
+
+function updateImportPolling() {
+  if (state.importTask?.running && !state.importPollTimer) {
+    state.importPollTimer = window.setInterval(async () => {
+      try {
+        state.importTask = await api("/api/import");
+        renderImportTask();
+        if (!state.importTask.running) {
+          window.clearInterval(state.importPollTimer);
+          state.importPollTimer = null;
+          await loadState();
+        }
+      } catch (error) {
+        window.clearInterval(state.importPollTimer);
+        state.importPollTimer = null;
+        showError("importResult", error);
+      }
+    }, 700);
+  }
+}
+
+async function startImport(startIndexing) {
+  state.importTask = await api("/api/import/start", {
     method: "POST",
-    body: JSON.stringify({ path: byId("importPathInput").value.trim() }),
+    body: JSON.stringify({
+      path: byId("importPathInput").value.trim(),
+      start_indexing: startIndexing,
+    }),
   });
-  byId("importResult").textContent = JSON.stringify(result, null, 2);
-  await loadState();
+  byId("importResult").textContent = "Import started in the background.";
+  renderImportTask();
+  updateImportPolling();
+}
+
+async function importFolder() {
+  await startImport(false);
 }
 
 async function pickImportFolder() {
@@ -1242,12 +1302,16 @@ async function pickImageSearchFile() {
 }
 
 async function importAndStartIndexing() {
-  const result = await api("/api/import-and-start-index", {
+  await startImport(true);
+}
+
+async function importCommand(command) {
+  state.importTask = await api(`/api/import/${command}`, {
     method: "POST",
-    body: JSON.stringify({ path: byId("importPathInput").value.trim() }),
+    body: JSON.stringify({}),
   });
-  byId("importResult").textContent = JSON.stringify(result, null, 2);
-  await loadState();
+  renderImportTask();
+  updateImportPolling();
 }
 
 async function runJobs() {
@@ -1532,6 +1596,20 @@ function wireEvents() {
   byId("runJobsBtn").addEventListener("click", async () => {
     try {
       await runJobs();
+    } catch (error) {
+      showError("importResult", error);
+    }
+  });
+  byId("pauseImportBtn").addEventListener("click", async () => {
+    try {
+      await importCommand("pause");
+    } catch (error) {
+      showError("importResult", error);
+    }
+  });
+  byId("resumeImportBtn").addEventListener("click", async () => {
+    try {
+      await importCommand("resume");
     } catch (error) {
       showError("importResult", error);
     }

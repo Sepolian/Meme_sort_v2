@@ -23,6 +23,7 @@ class AppStateResult:
     asset_summary: dict[str, object]
     library_status: dict[str, object]
     worker_loop: dict[str, object]
+    import_task: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -31,6 +32,7 @@ class AppStateResult:
 def build_app_state(
     library_root: Path | str,
     worker_loop_snapshot: WorkerLoopSnapshot | None = None,
+    import_task_snapshot: dict[str, object] | None = None,
 ) -> AppStateResult:
     library_root_path = Path(library_root).expanduser().resolve()
     runtime_settings = get_runtime_settings(library_root_path)
@@ -51,4 +53,5 @@ def build_app_state(
             if worker_loop_snapshot is not None
             else {}
         ),
+        import_task=import_task_snapshot or {},
     )

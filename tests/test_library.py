@@ -78,9 +78,95 @@ from memesort_worker.webapp import create_app
 from memesort_worker.app_runtime import WorkerLoopController
 from memesort_worker.asset_browse import list_asset_summaries
 from memesort_worker.app_state import build_app_state
+from memesort_worker.import_controller import ImportController
 
 
 class LibraryTests(unittest.TestCase):
+    def test_import_controller_pauses_between_files_and_resumes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "first.png", (255, 0, 0))
+            self._write_demo_image(source_root / "second.png", (0, 255, 0))
+
+            first_hash_started = threading.Event()
+            allow_first_hash = threading.Event()
+            original_hash = library_module._compute_sha256
+            calls = 0
+
+            def slow_first_hash(file_path: Path) -> str:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    first_hash_started.set()
+                    self.assertTrue(allow_first_hash.wait(timeout=2))
+                return original_hash(file_path)
+
+            controller = ImportController(library_root)
+            with patch("memesort_worker.library._compute_sha256", side_effect=slow_first_hash):
+                controller.start(source_root)
+                self.assertTrue(first_hash_started.wait(timeout=2))
+                controller.pause()
+                allow_first_hash.set()
+
+                deadline = time.monotonic() + 2
+                while controller.snapshot().status != "paused" and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                paused_snapshot = controller.snapshot()
+                self.assertTrue(paused_snapshot.running)
+                self.assertTrue(paused_snapshot.paused)
+                self.assertEqual(1, len(list_assets(library_root).assets))
+
+                controller.resume()
+                deadline = time.monotonic() + 2
+                while controller.snapshot().running and time.monotonic() < deadline:
+                    time.sleep(0.01)
+
+            completed_snapshot = controller.snapshot()
+            self.assertEqual("completed", completed_snapshot.status)
+            self.assertEqual(2, len(list_assets(library_root).assets))
+
+    def test_web_app_starts_background_import_and_exposes_its_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "first.png", (255, 0, 0))
+            app = create_app(str(library_root))
+            captured = {}
+
+            def start_response(status, headers):
+                captured["status"] = status
+                captured["headers"] = headers
+
+            try:
+                request = json.dumps({"path": str(source_root), "start_indexing": False}).encode("utf-8")
+                body = b"".join(app({
+                    "REQUEST_METHOD": "POST",
+                    "PATH_INFO": "/api/import/start",
+                    "QUERY_STRING": "",
+                    "CONTENT_LENGTH": str(len(request)),
+                    "wsgi.input": BytesIO(request),
+                }, start_response))
+                started = json.loads(body.decode("utf-8"))
+                self.assertEqual("202 Accepted", captured["status"])
+                self.assertIn(started["status"], {"running", "completed"})
+
+                body = b"".join(app({
+                    "REQUEST_METHOD": "GET",
+                    "PATH_INFO": "/api/import",
+                    "QUERY_STRING": "",
+                    "CONTENT_LENGTH": "0",
+                    "wsgi.input": BytesIO(b""),
+                }, start_response))
+                status = json.loads(body.decode("utf-8"))
+                self.assertIn(status["status"], {"running", "completed"})
+            finally:
+                app.shutdown()
+
     def test_prepare_recipe_for_eval_defaults_to_current_baseline(self) -> None:
         selection = prepare_recipe_for_eval(recipe_preset=None)
 
