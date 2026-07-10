@@ -55,7 +55,10 @@ def run_pending_jobs(
 
             try:
                 with conn:
-                    job_queue.mark_job_running(conn, job_id)
+                    claimed = job_queue.mark_job_running(conn, job_id)
+                if not claimed:
+                    skipped_jobs += 1
+                    continue
 
                 if job_type == "generate_thumbnail":
                     _run_generate_thumbnail_job(conn, library_root_path, payload)

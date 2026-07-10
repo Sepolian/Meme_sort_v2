@@ -43,6 +43,7 @@ from memesort_worker.library import (
     apply_runtime_selection,
     delete_asset,
     delete_assets,
+    delete_pending_jobs,
     discover_local_model_path,
     ensure_project_local_model_snapshot,
     find_similar_assets,
@@ -76,12 +77,80 @@ from memesort_worker.semantic_retrieval import rank_asset_vector_rows
 from memesort_worker.retrieval_composition import compose_text_search_results
 from memesort_worker.webapp import create_app
 from memesort_worker.app_runtime import WorkerLoopController
-from memesort_worker.asset_browse import list_asset_summaries
+from memesort_worker.asset_browse import list_asset_summaries, list_pending_jobs
 from memesort_worker.app_state import build_app_state
 from memesort_worker.import_controller import ImportController
 
 
 class LibraryTests(unittest.TestCase):
+    def test_delete_pending_jobs_only_removes_unclaimed_queue_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "first.png", (255, 0, 0))
+            import_folder(library_root, source_root)
+
+            pending_jobs = list_pending_jobs(library_root)
+            self.assertGreaterEqual(len(pending_jobs), 2)
+            deleted_job_id = str(pending_jobs[0]["job_id"])
+            running_job_id = str(pending_jobs[1]["job_id"])
+            conn = sqlite3.connect(library_root / DATABASE_NAME)
+            try:
+                conn.execute("UPDATE job SET status = 'running' WHERE id = ?", (running_job_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+            result = delete_pending_jobs(library_root, [deleted_job_id, running_job_id])
+
+            self.assertEqual([deleted_job_id], result.deleted_job_ids)
+            self.assertEqual([running_job_id], result.skipped_job_ids)
+            self.assertEqual(1, len(list_assets(library_root).assets))
+            self.assertNotIn(deleted_job_id, {job["job_id"] for job in list_pending_jobs(library_root)})
+
+    def test_web_app_pending_jobs_endpoint_lists_and_deletes_selected_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "first.png", (255, 0, 0))
+            import_folder(library_root, source_root)
+            app = create_app(str(library_root))
+            captured = {}
+
+            def start_response(status, headers):
+                captured["status"] = status
+                captured["headers"] = headers
+
+            try:
+                body = b"".join(app({
+                    "REQUEST_METHOD": "GET",
+                    "PATH_INFO": "/api/pending-jobs",
+                    "QUERY_STRING": "",
+                    "CONTENT_LENGTH": "0",
+                    "wsgi.input": BytesIO(b""),
+                }, start_response))
+                pending_jobs = json.loads(body.decode("utf-8"))["jobs"]
+                self.assertEqual("200 OK", captured["status"])
+                self.assertTrue(pending_jobs)
+
+                request = json.dumps({"job_ids": [pending_jobs[0]["job_id"]]}).encode("utf-8")
+                body = b"".join(app({
+                    "REQUEST_METHOD": "POST",
+                    "PATH_INFO": "/api/pending-jobs/delete",
+                    "QUERY_STRING": "",
+                    "CONTENT_LENGTH": str(len(request)),
+                    "wsgi.input": BytesIO(request),
+                }, start_response))
+                result = json.loads(body.decode("utf-8"))
+                self.assertEqual("200 OK", captured["status"])
+                self.assertEqual([pending_jobs[0]["job_id"]], result["deleted_job_ids"])
+            finally:
+                app.shutdown()
+
     def test_import_controller_pauses_between_files_and_resumes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

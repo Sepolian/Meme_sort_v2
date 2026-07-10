@@ -8,6 +8,8 @@ const state = {
   workerLoop: null,
   importTask: null,
   importPollTimer: null,
+  pendingJobs: [],
+  selectedPendingJobIds: new Set(),
   selectedAsset: null,
   selectedAssetIds: new Set(),
   duplicatePairs: [],
@@ -946,6 +948,56 @@ function appendStatusCards(targetId, entries) {
   });
 }
 
+function renderPendingJobs() {
+  const jobs = state.pendingJobs || [];
+  const selectedCount = state.selectedPendingJobIds.size;
+  setText(
+    "pendingJobSelectionStatus",
+    jobs.length
+      ? `${selectedCount} of ${jobs.length} pending job(s) selected. Deleting removes only unclaimed queue records.`
+      : "No pending jobs."
+  );
+  byId("deleteSelectedPendingJobsBtn").disabled = selectedCount === 0;
+  byId("clearPendingJobSelectionBtn").disabled = selectedCount === 0;
+  byId("selectAllPendingJobsBtn").disabled = jobs.length === 0 || selectedCount === jobs.length;
+
+  const node = byId("pendingJobList");
+  node.innerHTML = "";
+  if (!jobs.length) {
+    node.innerHTML = `<div class="detail-empty">No pending jobs in the queue.</div>`;
+    return;
+  }
+
+  jobs.forEach((job) => {
+    const item = document.createElement("label");
+    item.className = "pending-job-item";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = state.selectedPendingJobIds.has(job.job_id);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        state.selectedPendingJobIds.add(job.job_id);
+      } else {
+        state.selectedPendingJobIds.delete(job.job_id);
+      }
+      renderPendingJobs();
+    });
+    const content = document.createElement("div");
+    content.className = "pending-job-content";
+    content.innerHTML = `
+      <div><strong>${escapeHtml(job.type)}</strong> <span class="chip">pending</span></div>
+      <div class="result-meta">
+        <span>${escapeHtml(job.asset_path || job.asset_id || "no asset")}</span>
+        <span>attempts ${escapeHtml(job.attempt_count)}</span>
+        <span>${escapeHtml(formatDate(job.created_at))}</span>
+      </div>
+      <div class="small muted mono">${escapeHtml(job.job_id)}</div>
+    `;
+    item.append(checkbox, content);
+    node.appendChild(item);
+  });
+}
+
 function renderLibraryStatus() {
   const assetCounts = Object.entries(state.libraryStatus?.asset_counts || {});
   const jobCounts = Object.entries(state.libraryStatus?.job_counts || {});
@@ -1041,6 +1093,11 @@ async function loadState() {
   state.libraryStatus = payload.library_status || null;
   state.workerLoop = payload.worker_loop || null;
   state.importTask = payload.import_task || null;
+  state.pendingJobs = payload.pending_jobs || [];
+  const availablePendingJobIds = new Set(state.pendingJobs.map((job) => job.job_id));
+  state.selectedPendingJobIds = new Set(
+    [...state.selectedPendingJobIds].filter((jobId) => availablePendingJobIds.has(jobId))
+  );
   state.lastHealthDiagnosticSteps = state.setupState?.runtime_readiness?.last_health_diagnostic_steps || [];
   if (
     state.selectedAsset &&
@@ -1058,6 +1115,7 @@ async function loadState() {
   renderAssets();
   renderAssetDetail();
   renderLibraryStatus();
+  renderPendingJobs();
   renderRightRail();
   renderImportTask();
   updateImportPolling();
@@ -1368,9 +1426,20 @@ async function scanDuplicates() {
 }
 
 async function refreshLibraryStatus() {
-  state.libraryStatus = await api("/api/library-status");
-  state.workerLoop = await api("/api/worker-loop");
+  const [libraryStatus, workerLoop, pendingJobs] = await Promise.all([
+    api("/api/library-status"),
+    api("/api/worker-loop"),
+    api("/api/pending-jobs"),
+  ]);
+  state.libraryStatus = libraryStatus;
+  state.workerLoop = workerLoop;
+  state.pendingJobs = pendingJobs.jobs || [];
+  const availablePendingJobIds = new Set(state.pendingJobs.map((job) => job.job_id));
+  state.selectedPendingJobIds = new Set(
+    [...state.selectedPendingJobIds].filter((jobId) => availablePendingJobIds.has(jobId))
+  );
   renderLibraryStatus();
+  renderPendingJobs();
   renderRightRail();
 }
 
@@ -1389,6 +1458,24 @@ async function retryFailedJobs() {
     body: JSON.stringify({}),
   });
   await refreshLibraryStatus();
+}
+
+async function deleteSelectedPendingJobs() {
+  const jobIds = [...state.selectedPendingJobIds];
+  if (!jobIds.length) {
+    return;
+  }
+  if (!window.confirm(`Delete ${jobIds.length} pending job(s)? Assets and generated files will not be deleted.`)) {
+    return;
+  }
+  const result = await api("/api/pending-jobs/delete", {
+    method: "POST",
+    body: JSON.stringify({ job_ids: jobIds }),
+  });
+  state.selectedPendingJobIds.clear();
+  await refreshLibraryStatus();
+  byId("pendingJobSelectionStatus").textContent =
+    `Deleted ${result.deleted_job_ids.length} pending job(s); skipped ${result.skipped_job_ids.length} that were already claimed or absent.`;
 }
 
 function showError(targetId, error) {
@@ -1675,6 +1762,28 @@ function wireEvents() {
       await retryFailedJobs();
     } catch (error) {
       showError("recentJobs", error);
+    }
+  });
+  byId("selectAllPendingJobsBtn").addEventListener("click", () => {
+    state.selectedPendingJobIds = new Set(state.pendingJobs.map((job) => job.job_id));
+    renderPendingJobs();
+  });
+  byId("clearPendingJobSelectionBtn").addEventListener("click", () => {
+    state.selectedPendingJobIds.clear();
+    renderPendingJobs();
+  });
+  byId("deleteSelectedPendingJobsBtn").addEventListener("click", async () => {
+    try {
+      await deleteSelectedPendingJobs();
+    } catch (error) {
+      showError("pendingJobList", error);
+    }
+  });
+  byId("reloadPendingJobsBtn").addEventListener("click", async () => {
+    try {
+      await refreshLibraryStatus();
+    } catch (error) {
+      showError("pendingJobList", error);
     }
   });
   byId("selectAllAssetsBtn").addEventListener("click", () => {

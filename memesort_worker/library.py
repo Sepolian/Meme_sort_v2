@@ -146,6 +146,16 @@ class ImportFolderResult:
 
 
 @dataclass
+class DeletePendingJobsResult:
+    requested_job_ids: list[str]
+    deleted_job_ids: list[str]
+    skipped_job_ids: list[str]
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
 class SwitchRecipeResult:
     library_root: str
     active_recipe_id: str
@@ -2040,6 +2050,43 @@ def retry_failed_jobs(library_root: Path | str) -> RetryJobsResult:
             library_root=str(library_root_path),
             retried_jobs=retried_jobs,
             failed_jobs_remaining=failed_jobs_remaining,
+        )
+    finally:
+        conn.close()
+
+
+def delete_pending_jobs(library_root: Path | str, job_ids: list[str]) -> DeletePendingJobsResult:
+    """Delete only queue records that have not been claimed by a worker.
+
+    Assets and generated library files are intentionally untouched.  A Job
+    that becomes running after the user selected it is reported as skipped.
+    """
+    unique_job_ids = list(dict.fromkeys(str(job_id) for job_id in job_ids if str(job_id)))
+    if not unique_job_ids:
+        raise ValueError("At least one pending job id is required")
+
+    init_result = initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = _connect(_database_path(library_root_path))
+    try:
+        placeholders = ", ".join("?" for _ in unique_job_ids)
+        with conn:
+            pending_rows = conn.execute(
+                f"SELECT id FROM job WHERE status = 'pending' AND id IN ({placeholders})",
+                unique_job_ids,
+            ).fetchall()
+            deleted_job_ids = [str(row["id"]) for row in pending_rows]
+            if deleted_job_ids:
+                deleted_placeholders = ", ".join("?" for _ in deleted_job_ids)
+                conn.execute(
+                    f"DELETE FROM job WHERE status = 'pending' AND id IN ({deleted_placeholders})",
+                    deleted_job_ids,
+                )
+        deleted_set = set(deleted_job_ids)
+        return DeletePendingJobsResult(
+            requested_job_ids=unique_job_ids,
+            deleted_job_ids=deleted_job_ids,
+            skipped_job_ids=[job_id for job_id in unique_job_ids if job_id not in deleted_set],
         )
     finally:
         conn.close()

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .app_runtime import WorkerLoopSnapshot
-from .asset_browse import get_library_status, list_asset_summaries
+from .asset_browse import get_library_status, list_asset_summaries, list_pending_jobs
 from .library import (
     get_runtime_settings,
     list_model_variants,
@@ -24,6 +24,7 @@ class AppStateResult:
     library_status: dict[str, object]
     worker_loop: dict[str, object]
     import_task: dict[str, object]
+    pending_jobs: list[dict[str, object]]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -54,4 +55,5 @@ def build_app_state(
             else {}
         ),
         import_task=import_task_snapshot or {},
+        pending_jobs=list_pending_jobs(library_root_path),
     )

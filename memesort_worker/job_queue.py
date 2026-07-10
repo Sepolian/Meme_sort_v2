@@ -146,8 +146,9 @@ def retry_failed_jobs(conn: sqlite3.Connection) -> tuple[int, int]:
     return int(retried_jobs), failed_jobs_remaining
 
 
-def mark_job_running(conn: sqlite3.Connection, job_id: str) -> None:
-    conn.execute(
+def mark_job_running(conn: sqlite3.Connection, job_id: str) -> bool:
+    """Claim a pending job without reviving a job deleted by an operator."""
+    updated = conn.execute(
         """
         UPDATE job
         SET status = 'running',
@@ -156,9 +157,11 @@ def mark_job_running(conn: sqlite3.Connection, job_id: str) -> None:
             error_code = NULL,
             error_detail = NULL
         WHERE id = ?
+          AND status = 'pending'
         """,
         (_utc_now(), job_id),
-    )
+    ).rowcount
+    return bool(updated)
 
 
 def mark_job_completed(conn: sqlite3.Connection, job_id: str) -> None:

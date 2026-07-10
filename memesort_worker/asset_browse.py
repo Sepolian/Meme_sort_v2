@@ -52,6 +52,41 @@ def get_library_status(library_root: Path | str) -> library.LibraryStatusResult:
         conn.close()
 
 
+def list_pending_jobs(library_root: Path | str, limit: int = 200) -> list[dict[str, object]]:
+    """Return the actionable queue in oldest-first order for local debugging."""
+    init_result = library.initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = library._connect(library._database_path(library_root_path))
+    try:
+        rows = conn.execute(
+            """
+            SELECT job.id, job.type, job.asset_id, job.recipe_id, job.attempt_count,
+                   job.created_at, job.updated_at, asset.library_path
+            FROM job
+            LEFT JOIN asset ON asset.id = job.asset_id
+            WHERE job.status = 'pending'
+            ORDER BY job.created_at ASC, job.id ASC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 1000)),),
+        ).fetchall()
+        return [
+            {
+                "job_id": str(row["id"]),
+                "type": str(row["type"]),
+                "asset_id": str(row["asset_id"]) if row["asset_id"] else None,
+                "asset_path": str(row["library_path"]) if row["library_path"] else None,
+                "recipe_id": str(row["recipe_id"]) if row["recipe_id"] else None,
+                "attempt_count": int(row["attempt_count"]),
+                "created_at": str(row["created_at"]),
+                "updated_at": str(row["updated_at"]),
+            }
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
 def _list_asset_summaries(conn: sqlite3.Connection, library_root_path: Path) -> library.AssetListResult:
     active_recipe_id = library._get_active_recipe_id(conn)
     recipe_row = library._get_recipe_row(conn, active_recipe_id)

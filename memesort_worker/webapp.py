@@ -10,7 +10,7 @@ from wsgiref.simple_server import WSGIServer, make_server
 from .app_runtime import WorkerLoopController
 from .import_controller import ImportController
 from .app_state import build_app_state
-from .asset_browse import get_library_status
+from .asset_browse import get_library_status, list_pending_jobs
 from .app_commands import (
     import_and_start_indexing,
     run_first_run_command,
@@ -21,6 +21,7 @@ from .app_commands import (
 from .library import (
     delete_assets,
     delete_asset,
+    delete_pending_jobs,
     get_asset_detail,
     import_folder,
     initialize_library,
@@ -173,6 +174,11 @@ def create_app(library_root: str):
             elif path == "/api/library-status" and method == "GET":
                 result = get_library_status(library_root_path)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/pending-jobs" and method == "GET":
+                status_line, headers, body = _json_response(
+                    HTTPStatus.OK,
+                    {"jobs": list_pending_jobs(library_root_path)},
+                )
             elif path == "/api/worker-loop" and method == "GET":
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
@@ -368,6 +374,13 @@ def create_app(library_root: str):
                 )
             elif path == "/api/retry-failed-jobs" and method == "POST":
                 result = retry_failed_jobs(library_root_path)
+                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/pending-jobs/delete" and method == "POST":
+                payload = _read_json_body(environ)
+                job_ids = payload.get("job_ids")
+                if not isinstance(job_ids, list):
+                    raise ValueError("job_ids must be an array")
+                result = delete_pending_jobs(library_root_path, [str(job_id) for job_id in job_ids])
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search" and method == "GET":
                 query_text = str(query.get("query", [""])[0])

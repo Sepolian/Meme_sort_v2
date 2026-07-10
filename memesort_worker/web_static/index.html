@@ -266,6 +266,23 @@
           <div class="card detail-card">
             <div class="card-header">
               <div>
+                <h2>Pending Job Queue</h2>
+                <p class="muted small">Remove pending queue records only. Assets and generated files remain unchanged.</p>
+              </div>
+              <div class="actions">
+                <button id="selectAllPendingJobsBtn" class="ghost">Select All</button>
+                <button id="clearPendingJobSelectionBtn" class="ghost">Clear Selection</button>
+                <button id="deleteSelectedPendingJobsBtn" class="danger">Delete Selected</button>
+                <button id="reloadPendingJobsBtn" class="ghost">Reload</button>
+              </div>
+            </div>
+            <p id="pendingJobSelectionStatus" class="muted small" aria-live="polite"></p>
+            <div id="pendingJobList" class="result-list"></div>
+          </div>
+
+          <div class="card detail-card">
+            <div class="card-header">
+              <div>
                 <h2>Recent Jobs</h2>
                 <p class="muted small">Latest job records for debugging retries and failures.</p>
               </div>
