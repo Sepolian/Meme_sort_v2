@@ -3,350 +3,108 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MemeSort Library Wall</title>
+    <title>MemeSort Library</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body data-theme="dark">
     <div class="app-shell">
-      <header class="topbar">
-        <a class="brand" href="/" aria-label="MemeSort home">
-          <span class="brand-mark">M</span>
-          <span>MemeSort</span>
-        </a>
-
+      <aside class="sidebar" aria-label="MemeSort navigation">
+        <a class="brand" href="/" aria-label="MemeSort home"><span class="brand-mark">M</span><span>MemeSort</span></a>
         <nav class="tab-list" aria-label="MemeSort sections">
-          <button class="tab-link active" data-tab="libraryTab">Asset Wall</button>
-          <button class="tab-link" data-tab="setupTab">Import & Runtime</button>
-          <button class="tab-link" data-tab="searchTab">Semantic Search</button>
+          <p class="nav-label">Workspace</p>
+          <button class="tab-link active" data-tab="libraryTab"><span>Grid library</span><span id="navAssetCount" class="nav-count">—</span></button>
+          <button class="tab-link" data-tab="searchTab">Semantic search</button>
           <button class="tab-link" data-tab="duplicatesTab">Duplicates</button>
-          <button class="tab-link" data-tab="statusTab">Status</button>
+          <p class="nav-label nav-label-spaced">Operations</p>
+          <button class="tab-link" data-tab="setupTab">Import &amp; runtime</button>
+          <button class="tab-link" data-tab="statusTab"><span>Index queue</span><span id="navQueueCount" class="nav-count">—</span></button>
         </nav>
+        <div class="sidebar-footer">
+          <span class="nav-label">Active recipe</span>
+          <div id="activeRecipe" class="recipe-name">Loading…</div>
+        </div>
+      </aside>
 
-        <button id="refreshState" class="ghost topbar-action">Refresh</button>
-      </header>
+      <main class="main">
+        <header class="topbar">
+          <div class="breadcrumb">Library <span>/</span> <strong id="breadcrumbLabel">All assets</strong></div>
+          <div class="topbar-actions">
+            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch colour theme">Light theme</button>
+            <button id="refreshState" class="ghost topbar-action">Refresh</button>
+          </div>
+        </header>
 
-      <div id="appWorkspace" class="workspace">
-        <main class="main">
+        <div id="appWorkspace" class="workspace">
           <section class="page-heading">
             <div>
-              <h1 id="pageTitle">MemeSort Asset Wall</h1>
-              <p id="pageSubtitle" class="muted">
-                Local memes, GIFs, semantic retrieval, and duplicate review from the active index recipe.
-              </p>
+              <p class="eyebrow">Asset workbench</p>
+              <h1 id="pageTitle">All assets</h1>
+              <p id="pageSubtitle" class="muted">Local memes, GIFs, semantic retrieval, and duplicate review from the active index recipe.</p>
             </div>
-            <div class="recipe-chip">
-              <span class="section-title">Active Recipe</span>
-              <div id="activeRecipe" class="pill"></div>
+            <div class="heading-metrics" aria-label="Library summary">
+              <div class="metric"><strong id="headingAssetCount">—</strong><span>assets</span></div>
+              <div class="metric"><strong id="headingPendingCount">—</strong><span>pending</span></div>
             </div>
           </section>
 
           <section id="libraryTab" class="tab-panel active">
-            <div class="toolbar-row">
-              <div>
-                <h2>Library Wall</h2>
-                <p id="assetStats" class="muted small"></p>
-              </div>
-              <div class="actions">
-                <button id="selectAllAssetsBtn" class="ghost">Select All</button>
-                <button id="clearAssetSelectionBtn" class="ghost">Clear Selection</button>
-                <button id="rebuildSelectedAssetsBtn" class="ghost">Rebuild Active Index</button>
-                <button id="deleteSelectedAssetsBtn" class="danger">Delete Selected</button>
-                <button id="reloadAssetsBtn" class="ghost">Reload Assets</button>
+            <section class="queue-monitor card" aria-label="Queue monitor">
+              <div><p class="section-title">Queue monitor</p><h2 id="queueMonitorTitle">Checking local queue…</h2></div>
+              <p id="queueMonitorSummary" class="muted small">Fetching worker state.</p>
+              <div class="queue-progress"><div class="queue-progress-track"><span id="queueMonitorProgress"></span></div><p id="queueMonitorNext" class="muted small mono">No queued work loaded yet.</p></div>
+              <button id="queueMonitorAction" class="ghost" type="button" disabled>Pause queue</button>
+            </section>
+
+            <div class="toolbar-row library-toolbar">
+              <div><h2>Library wall</h2><p id="assetStats" class="muted small"></p><p id="assetSelectionStatus" class="muted small" aria-live="polite"></p></div>
+              <div class="actions compact-actions">
+                <button id="selectAllAssetsBtn" class="ghost">Select all</button>
+                <button id="clearAssetSelectionBtn" class="ghost">Clear</button>
+                <button id="rebuildSelectedAssetsBtn" class="ghost">Rebuild index</button>
+                <button id="deleteSelectedAssetsBtn" class="danger">Delete</button>
+                <button id="reloadAssetsBtn" class="ghost">Reload</button>
               </div>
             </div>
-            <p id="assetSelectionStatus" class="muted small" aria-live="polite"></p>
             <div id="libraryWorkspace" class="library-workspace">
-              <div class="library-wall-pane">
-                <div id="assetGrid" class="asset-grid"></div>
-              </div>
-
+              <div class="library-wall-pane"><div id="assetGrid" class="asset-grid"></div></div>
               <aside id="libraryDetailDock" class="library-detail-dock">
-                <div
-                  id="libraryDetailResizeHandle"
-                  class="panel-resize-handle"
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label="Resize asset detail panel"
-                ></div>
-                <section class="detail-panel detail-panel-side">
-                  <div class="card-header">
-                    <div>
-                      <h2>Asset Detail</h2>
-                      <p class="muted small">
-                        Managed file, source records, job history, and stale versus active recipe state.
-                      </p>
-                    </div>
-                    <button id="closeAssetDetailBtn" type="button" class="ghost close-detail-btn">Close</button>
-                  </div>
-                  <div id="assetDetail" class="detail-empty">Select an asset from the library wall.</div>
-                </section>
+                <div id="libraryDetailResizeHandle" class="panel-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize asset detail panel"></div>
+                <section class="detail-panel detail-panel-side"><div class="card-header"><div><h2>Asset detail</h2><p class="muted small">Managed file, sources, job history, and recipe state.</p></div><button id="closeAssetDetailBtn" type="button" class="ghost close-detail-btn">Close</button></div><div id="assetDetail" class="detail-empty">Select an asset from the library wall.</div></section>
               </aside>
             </div>
           </section>
 
           <section id="setupTab" class="tab-panel">
-          <div class="grid-two">
-            <div class="card">
-              <h2>Runtime Setup</h2>
-              <p class="muted small">
-                Pick a runtime profile and embedding model before importing. CUDA Quality keeps a
-                separate recipe boundary so vectors never mix with the 480px presets, and 2B/8B
-                remain separate index spaces.
-              </p>
-
-              <label for="profileSelect">Runtime Profile</label>
-              <select id="profileSelect"></select>
-
-              <div id="profileSummary" class="runtime-summary"></div>
-
-              <label for="modelVariantSelect">Embedding Model</label>
-              <select id="modelVariantSelect"></select>
-
-              <div id="modelVariantSummary" class="runtime-summary"></div>
-
-              <label for="modelPathInput">Model Source Override</label>
-              <div class="inline-picker">
-                <input id="modelPathInput" placeholder="Leave blank to auto-download into .models" />
-                <button id="pickModelPathBtn" type="button" class="ghost">Browse Model Folder</button>
+            <div class="section-heading"><p class="eyebrow">Operations</p><h2>Import &amp; runtime</h2></div>
+            <div class="grid-two">
+              <div class="card"><h2>Runtime setup</h2><p class="muted small">Pick a runtime profile and embedding model before importing. Recipes remain isolated by profile and model.</p>
+                <label for="profileSelect">Runtime profile</label><select id="profileSelect"></select><div id="profileSummary" class="runtime-summary"></div>
+                <label for="modelVariantSelect">Embedding model</label><select id="modelVariantSelect"></select><div id="modelVariantSummary" class="runtime-summary"></div>
+                <label for="modelPathInput">Model source override</label><div class="inline-picker"><input id="modelPathInput" placeholder="Leave blank to auto-download into .models" /><button id="pickModelPathBtn" type="button" class="ghost">Browse model folder</button></div><div id="modelPathHint" class="runtime-summary"></div>
+                <label for="gifFrameCountInput">GIF frame count</label><input id="gifFrameCountInput" type="number" min="1" value="4" />
+                <div class="actions"><button id="saveSettingsBtn">Save settings</button><button id="prepareRuntimeBtn">Prepare runtime</button><button id="healthCheckBtn" class="ghost">Run health check</button></div><div id="setupGuide" class="runtime-summary"></div><div id="runtimeReadiness" class="runtime-summary"></div><div id="setupChecklist" class="checklist"></div><div id="healthDiagnostics" class="checklist"></div><pre id="healthResult" class="console"></pre>
               </div>
-
-              <div id="modelPathHint" class="runtime-summary"></div>
-
-              <label for="gifFrameCountInput">GIF Frame Count</label>
-              <input id="gifFrameCountInput" type="number" min="1" value="4" />
-
-              <div class="actions">
-                <button id="saveSettingsBtn">Save Settings</button>
-                <button id="prepareRuntimeBtn">Prepare Runtime</button>
-                <button id="healthCheckBtn" class="ghost">Run Health Check</button>
-              </div>
-
-              <div id="setupGuide" class="runtime-summary"></div>
-
-              <div id="runtimeReadiness" class="runtime-summary"></div>
-
-              <div id="setupChecklist" class="checklist"></div>
-
-              <div id="healthDiagnostics" class="checklist"></div>
-
-              <pre id="healthResult" class="console"></pre>
-            </div>
-
-            <div class="card">
-              <h2>Import and Index</h2>
-              <p class="muted small">
-                Import copies files into the managed library. If the same content appears again, the
-                import becomes an extra source record on the same asset.
-              </p>
-
-              <label for="importPathInput">Import Folder</label>
-              <input id="importPathInput" placeholder="F:\Pictures\memes" />
-
-              <div class="actions">
-                <button id="completeFirstRunBtn">Complete First Run</button>
-                <button id="pickImportFolderBtn" class="ghost">Browse Folder</button>
-                <button id="importBtn">Import Folder</button>
-                <button id="importAndIndexBtn" class="ghost">Import and Start Indexing</button>
-                <button id="runJobsBtn" class="ghost">Run Pending Jobs</button>
-                <button id="pauseImportBtn" class="ghost" disabled>Pause Import</button>
-                <button id="resumeImportBtn" class="ghost" disabled>Resume Import</button>
-              </div>
-
-              <p id="importTaskStatus" class="muted small" aria-live="polite">No import is running.</p>
-
-              <div class="runtime-summary">
-                <span class="section-title">Current Runtime</span>
-                <p id="runtimeSummary" class="small"></p>
-              </div>
-
-              <pre id="importResult" class="console"></pre>
-            </div>
-          </div>
-        </section>
-
-        <section id="searchTab" class="tab-panel">
-          <div class="grid-two">
-            <div class="card">
-              <h2>Text Search</h2>
-              <label for="searchInput">Query</label>
-              <input id="searchInput" placeholder="confused reaction" />
-              <div class="actions">
-                <button id="searchBtn">Search</button>
-              </div>
-              <div id="searchResults" class="result-list card-grid"></div>
-            </div>
-
-            <div class="card">
-              <h2>Image Search</h2>
-              <label for="imageSearchPathInput">Local Image or GIF</label>
-              <input id="imageSearchPathInput" placeholder="F:\Pictures\reaction.png" />
-              <div class="actions">
-                <button id="pickImageSearchFileBtn" class="ghost">Browse File</button>
-                <button id="searchImageBtn">Search Image</button>
-              </div>
-              <div id="imageSearchResults" class="result-list card-grid"></div>
-            </div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Find Similar Asset</h2>
-                <p class="muted small">Select an asset from the wall or a result card, then run recipe-matched similarity from indexed content only.</p>
+              <div class="card"><h2>Import and index</h2><p class="muted small">Import copies files into the managed library. Matching content becomes another source record.</p>
+                <label for="importPathInput">Import folder</label><input id="importPathInput" placeholder="F:\Pictures\memes" />
+                <div class="actions"><button id="completeFirstRunBtn">Complete first run</button><button id="pickImportFolderBtn" class="ghost">Browse folder</button><button id="importBtn">Import folder</button><button id="importAndIndexBtn" class="ghost">Import and start indexing</button><button id="runJobsBtn" class="ghost">Run pending jobs</button><button id="pauseImportBtn" class="ghost" disabled>Pause import</button><button id="resumeImportBtn" class="ghost" disabled>Resume import</button></div>
+                <p id="importTaskStatus" class="muted small" aria-live="polite">No import is running.</p><div class="runtime-summary"><span class="section-title">Current runtime</span><p id="runtimeSummary" class="small"></p></div><pre id="importResult" class="console"></pre>
               </div>
             </div>
-            <label for="similarAssetIdInput">Selected Asset</label>
-            <input id="similarAssetIdInput" type="hidden" />
-            <div id="similarSelectedAsset" class="runtime-summary small muted">No asset selected yet.</div>
-            <div class="actions">
-              <button id="similarBtn">Find Similar</button>
-            </div>
-            <div id="similarResults" class="result-list card-grid"></div>
-          </div>
-        </section>
-
-        <section id="duplicatesTab" class="tab-panel">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Duplicate Review</h2>
-                <p class="muted small">
-                  Scan candidate duplicates with the active recipe only. GIF matches use max frame-to-frame score.
-                </p>
-              </div>
-              <div class="actions">
-                <input id="duplicateThresholdInput" type="number" min="0" max="1" step="0.01" value="0.92" />
-                <button id="scanDuplicatesBtn">Scan Duplicates</button>
-              </div>
-            </div>
-            <div id="duplicateResults" class="result-list duplicate-list"></div>
-          </div>
-        </section>
-
-        <section id="statusTab" class="tab-panel">
-          <div class="grid-two">
-            <div class="card">
-              <div class="card-header">
-                <div>
-                  <h2>Asset Status</h2>
-                  <p class="muted small">Counts are projected through the active recipe.</p>
-                </div>
-                <button id="refreshStatusBtn" class="ghost">Refresh Status</button>
-              </div>
-              <div id="statusSummary" class="status-grid"></div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <div>
-                  <h2>Background Worker Loop</h2>
-                  <p class="muted small">Runs pending jobs inside the local app process.</p>
-                </div>
-                <div class="actions">
-                  <button id="resumeLoopBtn">Resume</button>
-                  <button id="pauseLoopBtn" class="ghost">Pause</button>
-                  <button id="retryFailedJobsBtn" class="ghost">Retry Failed</button>
-                  <button id="triggerLoopBtn" class="ghost">Run One Tick</button>
-                </div>
-              </div>
-              <div id="workerLoopSummary" class="status-grid"></div>
-            </div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Job Queue</h2>
-                <p class="muted small">Pending, running, failed, and completed job counts.</p>
-              </div>
-            </div>
-            <div id="jobSummary" class="status-grid"></div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Pending Job Queue</h2>
-                <p class="muted small">Remove pending queue records only. Assets and generated files remain unchanged.</p>
-              </div>
-              <div class="actions">
-                <button id="selectAllPendingJobsBtn" class="ghost">Select All</button>
-                <button id="clearPendingJobSelectionBtn" class="ghost">Clear Selection</button>
-                <button id="deleteSelectedPendingJobsBtn" class="danger">Delete Selected</button>
-                <button id="reloadPendingJobsBtn" class="ghost">Reload</button>
-              </div>
-            </div>
-            <p id="pendingJobSelectionStatus" class="muted small" aria-live="polite"></p>
-            <div id="pendingJobList" class="result-list"></div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Recent Jobs</h2>
-                <p class="muted small">Latest job records for debugging retries and failures.</p>
-              </div>
-            </div>
-            <div id="recentJobs" class="result-list"></div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Worker Events</h2>
-                <p class="muted small">In-memory loop events such as resume, pause, tick, and failure.</p>
-              </div>
-            </div>
-            <div id="workerLoopEvents" class="result-list"></div>
-          </div>
-
-          <div class="card detail-card">
-            <div class="card-header">
-              <div>
-                <h2>Persisted Worker Log</h2>
-                <p class="muted small">Recent worker loop events written to the library logs directory.</p>
-              </div>
-            </div>
-            <div id="workerLoopPersistedEvents" class="result-list"></div>
-          </div>
-          </section>
-        </main>
-
-        <aside id="rightRail" class="right-rail">
-          <div
-            id="rightRailResizeHandle"
-            class="panel-resize-handle"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize sidebar"
-          ></div>
-          <section class="rail-section rail-status-only">
-            <p class="section-title">Library Root</p>
-            <div id="libraryRoot" class="mono small"></div>
           </section>
 
-          <section class="rail-section rail-status-only">
-            <p class="section-title">Setup Progress</p>
-            <div id="setupProgressText" class="rail-number">0/0</div>
-            <div id="setupNextStep" class="small muted"></div>
+          <section id="searchTab" class="tab-panel"><div class="section-heading"><p class="eyebrow">Discovery</p><h2>Semantic search</h2></div><div class="grid-two"><div class="card"><h2>Text search</h2><label for="searchInput">Query</label><input id="searchInput" placeholder="confused reaction" /><div class="actions"><button id="searchBtn">Search</button></div><div id="searchResults" class="result-list card-grid"></div></div><div class="card"><h2>Image search</h2><label for="imageSearchPathInput">Local image or GIF</label><input id="imageSearchPathInput" placeholder="F:\Pictures\reaction.png" /><div class="actions"><button id="pickImageSearchFileBtn" class="ghost">Browse file</button><button id="searchImageBtn">Search image</button></div><div id="imageSearchResults" class="result-list card-grid"></div></div></div><div class="card detail-card"><div class="card-header"><div><h2>Find similar asset</h2><p class="muted small">Select an asset from the wall or a result card, then search similar indexed content.</p></div></div><label for="similarAssetIdInput">Selected asset</label><input id="similarAssetIdInput" type="hidden" /><div id="similarSelectedAsset" class="runtime-summary small muted">No asset selected yet.</div><div class="actions"><button id="similarBtn">Find similar</button></div><div id="similarResults" class="result-list card-grid"></div></div></section>
+
+          <section id="duplicatesTab" class="tab-panel"><div class="section-heading"><p class="eyebrow">Review</p><h2>Duplicates</h2></div><div class="card"><div class="card-header"><div><h2>Duplicate review</h2><p class="muted small">Scan candidate duplicates with the active recipe only. GIF matches use max frame-to-frame score.</p></div><div class="actions"><input id="duplicateThresholdInput" type="number" min="0" max="1" step="0.01" value="0.92" /><button id="scanDuplicatesBtn">Scan duplicates</button></div></div><div id="duplicateResults" class="result-list duplicate-list"></div></div></section>
+
+          <section id="statusTab" class="tab-panel"><div class="section-heading"><p class="eyebrow">Operations</p><h2>Queue &amp; status</h2></div><div class="grid-two"><div class="card"><div class="card-header"><div><h2>Asset status</h2><p class="muted small">Counts are projected through the active recipe.</p></div><button id="refreshStatusBtn" class="ghost">Refresh status</button></div><div id="statusSummary" class="status-grid"></div></div><div class="card"><div class="card-header"><div><h2>Background worker loop</h2><p class="muted small">Runs pending jobs inside the local app process.</p></div><div class="actions"><button id="resumeLoopBtn">Resume</button><button id="pauseLoopBtn" class="ghost">Pause</button><button id="retryFailedJobsBtn" class="ghost">Retry failed</button><button id="triggerLoopBtn" class="ghost">Run one tick</button></div></div><div id="workerLoopSummary" class="status-grid"></div></div></div>
+            <div class="card detail-card"><div class="card-header"><div><h2>Job queue</h2><p class="muted small">Pending, running, failed, and completed job counts.</p></div></div><div id="jobSummary" class="status-grid"></div></div>
+            <div class="card detail-card"><div class="card-header"><div><h2>Pending job queue</h2><p class="muted small">Remove pending queue records only. Assets and generated files remain unchanged.</p></div><div class="actions"><button id="selectAllPendingJobsBtn" class="ghost">Select all</button><button id="clearPendingJobSelectionBtn" class="ghost">Clear</button><button id="deleteSelectedPendingJobsBtn" class="danger">Delete selected</button><button id="reloadPendingJobsBtn" class="ghost">Reload</button></div></div><p id="pendingJobSelectionStatus" class="muted small" aria-live="polite"></p><div id="pendingJobList" class="result-list"></div></div>
+            <div class="card detail-card"><h2>Recent jobs</h2><p class="muted small">Latest job records for debugging retries and failures.</p><div id="recentJobs" class="result-list"></div></div><div class="card detail-card"><h2>Worker events</h2><p class="muted small">In-memory loop events such as resume, pause, tick, and failure.</p><div id="workerLoopEvents" class="result-list"></div></div><div class="card detail-card"><h2>Persisted worker log</h2><p class="muted small">Recent worker loop events written to the library logs directory.</p><div id="workerLoopPersistedEvents" class="result-list"></div></div>
           </section>
 
-          <section class="rail-section">
-            <p class="section-title">Asset Status</p>
-            <div id="rightAssetCounts" class="rail-list"></div>
-          </section>
-
-          <section class="rail-section">
-            <p class="section-title">Job Queue</p>
-            <div id="rightJobCounts" class="rail-list"></div>
-          </section>
-
-          <section class="rail-section">
-            <p class="section-title">Worker</p>
-            <div id="rightWorkerState" class="rail-list"></div>
-          </section>
-        </aside>
-      </div>
+          <aside id="rightRail" class="right-rail" aria-label="Library diagnostics"><div id="rightRailResizeHandle" class="panel-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div><section class="rail-section rail-status-only"><p class="section-title">Library root</p><div id="libraryRoot" class="mono small"></div></section><section class="rail-section rail-status-only"><p class="section-title">Setup progress</p><div id="setupProgressText" class="rail-number">0/0</div><div id="setupNextStep" class="small muted"></div></section><section class="rail-section"><p class="section-title">Asset status</p><div id="rightAssetCounts" class="rail-list"></div></section><section class="rail-section"><p class="section-title">Job queue</p><div id="rightJobCounts" class="rail-list"></div></section><section class="rail-section"><p class="section-title">Worker</p><div id="rightWorkerState" class="rail-list"></div></section></aside>
+        </div>
+      </main>
     </div>
     <script src="/app.js"></script>
   </body>

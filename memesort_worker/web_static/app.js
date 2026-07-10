@@ -18,27 +18,28 @@ const state = {
 
 const RIGHT_RAIL_WIDTH_KEY = "memesort.rightRailWidth";
 const LIBRARY_DETAIL_WIDTH_KEY = "memesort.libraryDetailWidth";
+const THEME_KEY = "memesort.theme";
 const MOBILE_STACK_BREAKPOINT = 1180;
 
 const pageCopy = {
   libraryTab: {
-    title: "MemeSort Asset Wall",
+    title: "All assets",
     subtitle: "Local memes, GIFs, semantic retrieval, and duplicate review from the active index recipe.",
   },
   setupTab: {
-    title: "Import & Runtime",
+    title: "Import & runtime",
     subtitle: "Prepare the embedding runtime, import local folders, and start the index worker.",
   },
   searchTab: {
-    title: "Semantic Search",
+    title: "Semantic search",
     subtitle: "Search indexed assets with text, a local image, or an existing library asset.",
   },
   duplicatesTab: {
-    title: "Duplicate Review",
+    title: "Duplicates",
     subtitle: "Compare candidate duplicate assets using the active recipe only.",
   },
   statusTab: {
-    title: "Worker Status",
+    title: "Queue & status",
     subtitle: "Inspect asset state, queued work, recent jobs, and worker loop events.",
   },
 };
@@ -109,6 +110,31 @@ function switchTab(tabId) {
   const copy = pageCopy[tabId] || pageCopy.libraryTab;
   setText("pageTitle", copy.title);
   setText("pageSubtitle", copy.subtitle);
+  setText("breadcrumbLabel", copy.title);
+}
+
+function applyTheme(theme) {
+  const resolvedTheme = theme === "light" ? "light" : "dark";
+  document.body.dataset.theme = resolvedTheme;
+  const button = byId("themeToggle");
+  if (button) {
+    button.textContent = resolvedTheme === "dark" ? "Light theme" : "Dark theme";
+  }
+  try {
+    window.localStorage.setItem(THEME_KEY, resolvedTheme);
+  } catch {
+    // Theme still applies for this session if storage is unavailable.
+  }
+}
+
+function initializeTheme() {
+  let storedTheme = "dark";
+  try {
+    storedTheme = window.localStorage.getItem(THEME_KEY) || storedTheme;
+  } catch {
+    // Keep the deliberate dark default when storage is unavailable.
+  }
+  applyTheme(storedTheme);
 }
 
 function formatDate(value) {
@@ -620,6 +646,52 @@ function renderRightRail() {
     ],
     "Worker state is unavailable."
   );
+  renderWorkbenchOverview();
+}
+
+function renderWorkbenchOverview() {
+  const assets = state.assetSummary?.assets || [];
+  const jobCounts = state.libraryStatus?.job_counts || {};
+  const pendingCount = Number(jobCounts.pending || state.pendingJobs.length || 0);
+  const runningCount = Number(jobCounts.running || 0);
+  const workerLoop = state.workerLoop || {};
+  const importTask = state.importTask || {};
+  const recipe = state.assetSummary?.active_recipe_label || "No active recipe";
+
+  setText("activeRecipe", recipe);
+  setText("navAssetCount", assets.length);
+  setText("navQueueCount", pendingCount + runningCount);
+  setText("headingAssetCount", assets.length);
+  setText("headingPendingCount", pendingCount);
+
+  const queueTitle = byId("queueMonitorTitle");
+  const queueSummary = byId("queueMonitorSummary");
+  const queueProgress = byId("queueMonitorProgress");
+  const queueNext = byId("queueMonitorNext");
+  const queueAction = byId("queueMonitorAction");
+  if (!queueTitle || !queueSummary || !queueProgress || !queueNext || !queueAction) {
+    return;
+  }
+
+  const paused = Boolean(workerLoop.paused);
+  const queueTotal = pendingCount + runningCount;
+  queueTitle.textContent = paused ? "Index worker is paused" : queueTotal ? "Index queue is active" : "Index queue is clear";
+  queueSummary.textContent = importTask.running
+    ? (importTask.paused ? "Import is paused between files." : "Import is adding work to the local queue.")
+    : runningCount
+      ? `${runningCount} job(s) running, ${pendingCount} waiting.`
+      : pendingCount
+        ? `${pendingCount} job(s) waiting for the worker.`
+        : "No pending indexing work.";
+  queueProgress.style.width = queueTotal ? `${Math.max(12, Math.min(100, (runningCount / queueTotal) * 100))}%` : "0%";
+  const nextJob = state.pendingJobs[0];
+  queueNext.textContent = nextJob
+    ? `Next: ${nextJob.type} / ${nextJob.asset_id || "library task"}`
+    : paused
+      ? "Resume the worker to continue queued work."
+      : "No pending jobs in the local queue.";
+  queueAction.disabled = !workerLoop.running && !paused;
+  queueAction.textContent = paused ? "Resume queue" : "Pause queue";
 }
 
 function renderAssetDetail() {
@@ -1608,6 +1680,9 @@ function initResizablePanels() {
 }
 
 function wireEvents() {
+  byId("themeToggle").addEventListener("click", () => {
+    applyTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
+  });
   byId("refreshState").addEventListener("click", () => {
     loadState().catch((error) => showError("healthResult", error));
   });
@@ -1807,11 +1882,19 @@ function wireEvents() {
       showError("workerLoopEvents", error);
     }
   });
+  byId("queueMonitorAction").addEventListener("click", async () => {
+    try {
+      await workerLoopCommand(state.workerLoop?.paused ? "resume" : "pause");
+    } catch (error) {
+      showError("assetGrid", error);
+    }
+  });
   document.querySelectorAll(".tab-link").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });
 }
 
+initializeTheme();
 initResizablePanels();
 wireEvents();
 loadState().catch((error) => {
