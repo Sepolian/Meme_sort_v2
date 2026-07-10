@@ -18,6 +18,7 @@ from .app_commands import (
     search_text_for_active_runtime,
 )
 from .library import (
+    delete_assets,
     delete_asset,
     get_asset_detail,
     import_folder,
@@ -25,6 +26,7 @@ from .library import (
     list_assets,
     remove_source_record,
     retry_failed_jobs,
+    rebuild_active_indexes,
     scan_duplicate_assets,
     switch_active_recipe,
 )
@@ -315,6 +317,21 @@ def create_app(library_root: str):
                     library_root_path,
                     asset_id=str(payload["asset_id"]),
                 )
+                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/assets/batch-action" and method == "POST":
+                payload = _read_json_body(environ)
+                asset_ids = payload.get("asset_ids")
+                if not isinstance(asset_ids, list):
+                    raise ValueError("asset_ids must be an array")
+                action = str(payload.get("action") or "")
+                if action == "delete":
+                    result = delete_assets(library_root_path, [str(asset_id) for asset_id in asset_ids])
+                elif action == "rebuild-active-index":
+                    result = rebuild_active_indexes(library_root_path, [str(asset_id) for asset_id in asset_ids])
+                    if result.reindex_jobs_created:
+                        worker_loop.resume()
+                else:
+                    raise ValueError(f"Unsupported batch action: {action}")
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/reveal-asset-file" and method == "POST":
                 payload = _read_json_body(environ)

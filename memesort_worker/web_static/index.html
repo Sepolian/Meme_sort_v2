@@ -46,8 +46,15 @@
                 <h2>Library Wall</h2>
                 <p id="assetStats" class="muted small"></p>
               </div>
-              <button id="reloadAssetsBtn" class="ghost">Reload Assets</button>
+              <div class="actions">
+                <button id="selectAllAssetsBtn" class="ghost">Select All</button>
+                <button id="clearAssetSelectionBtn" class="ghost">Clear Selection</button>
+                <button id="rebuildSelectedAssetsBtn" class="ghost">Rebuild Active Index</button>
+                <button id="deleteSelectedAssetsBtn" class="danger">Delete Selected</button>
+                <button id="reloadAssetsBtn" class="ghost">Reload Assets</button>
+              </div>
             </div>
+            <p id="assetSelectionStatus" class="muted small" aria-live="polite"></p>
             <div id="libraryWorkspace" class="library-workspace">
               <div class="library-wall-pane">
                 <div id="assetGrid" class="asset-grid"></div>

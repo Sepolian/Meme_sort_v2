@@ -41,6 +41,7 @@ from memesort_worker.library import (
     DEFAULT_RECIPE,
     apply_runtime_selection,
     delete_asset,
+    delete_assets,
     discover_local_model_path,
     ensure_project_local_model_snapshot,
     find_similar_assets,
@@ -60,6 +61,7 @@ from memesort_worker.library import (
     remove_source_record,
     resolve_effective_model_source,
     retry_failed_jobs,
+    rebuild_active_indexes,
     run_pending_jobs,
     run_first_run_flow,
     run_runtime_health_check,
@@ -1872,6 +1874,46 @@ class LibraryTests(unittest.TestCase):
 
         self.assertTrue(result.asset_deleted)
         self.assertEqual(0, len(assets_after.assets))
+
+    def test_delete_assets_removes_all_selected_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "one.png", (255, 0, 0))
+            self._write_demo_image(source_root / "two.png", (0, 255, 0))
+            import_folder(library_root, source_root)
+            asset_ids = [asset["asset_id"] for asset in list_assets(library_root).assets]
+
+            result = delete_assets(library_root, asset_ids)
+            remaining_assets = len(list_assets(library_root).assets)
+
+        self.assertEqual(asset_ids, result.affected_asset_ids)
+        self.assertEqual(2, result.removed_source_records)
+        self.assertEqual(0, remaining_assets)
+
+    def test_rebuild_active_indexes_replaces_selected_embeddings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "one.png", (255, 0, 0))
+            import_folder(library_root, source_root)
+            run_pending_jobs(library_root, backend_name="debug")
+            asset_id = list_assets(library_root).assets[0]["asset_id"]
+
+            result = rebuild_active_indexes(library_root, [asset_id])
+            pending_asset = list_assets(library_root).assets[0]
+            run_pending_jobs(library_root, backend_name="debug")
+            final_status = list_assets(library_root).assets[0]["status"]
+
+        self.assertEqual([asset_id], result.affected_asset_ids)
+        self.assertEqual(1, result.reindex_jobs_created)
+        self.assertGreaterEqual(result.removed_embeddings, 1)
+        self.assertIn(pending_asset["status"], {"pending_initial_index", "reindex_pending"})
+        self.assertEqual("indexed", final_status)
 
     def test_retry_failed_jobs_requeues_failed_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

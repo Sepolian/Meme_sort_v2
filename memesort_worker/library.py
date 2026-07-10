@@ -273,6 +273,23 @@ class AssetMutationResult:
 
 
 @dataclass
+class BatchAssetActionResult:
+    library_root: str
+    action: str
+    requested_asset_ids: list[str]
+    affected_asset_ids: list[str]
+    skipped_running_asset_ids: list[str]
+    removed_source_records: int
+    removed_jobs: int
+    removed_renditions: int
+    removed_embeddings: int
+    reindex_jobs_created: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
 class RetryJobsResult:
     library_root: str
     retried_jobs: int
@@ -1895,6 +1912,105 @@ def delete_asset(
             )
     finally:
         conn.close()
+
+
+def delete_assets(library_root: Path | str, asset_ids: list[str]) -> BatchAssetActionResult:
+    requested_asset_ids = _normalize_batch_asset_ids(asset_ids)
+    init_result = initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = _connect(_database_path(library_root_path))
+    try:
+        with conn:
+            _require_existing_asset_ids(conn, requested_asset_ids)
+            removed_source_records = 0
+            removed_jobs = 0
+            removed_renditions = 0
+            removed_embeddings = 0
+            for asset_id in requested_asset_ids:
+                removed_source_records += int(
+                    conn.execute("SELECT COUNT(*) FROM source_record WHERE asset_id = ?", (asset_id,)).fetchone()[0]
+                )
+                jobs, renditions, embeddings = _delete_asset_rows(conn, library_root_path, asset_id)
+                removed_jobs += jobs
+                removed_renditions += renditions
+                removed_embeddings += embeddings
+        return BatchAssetActionResult(
+            library_root=str(library_root_path), action="delete", requested_asset_ids=requested_asset_ids,
+            affected_asset_ids=requested_asset_ids, skipped_running_asset_ids=[],
+            removed_source_records=removed_source_records, removed_jobs=removed_jobs,
+            removed_renditions=removed_renditions, removed_embeddings=removed_embeddings,
+            reindex_jobs_created=0,
+        )
+    finally:
+        conn.close()
+
+
+def rebuild_active_indexes(library_root: Path | str, asset_ids: list[str]) -> BatchAssetActionResult:
+    requested_asset_ids = _normalize_batch_asset_ids(asset_ids)
+    init_result = initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = _connect(_database_path(library_root_path))
+    try:
+        with conn:
+            _require_existing_asset_ids(conn, requested_asset_ids)
+            active_recipe_id = _get_active_recipe_id(conn)
+            affected_asset_ids: list[str] = []
+            skipped_running_asset_ids: list[str] = []
+            removed_embeddings = 0
+            reindex_jobs_created = 0
+            for asset_id in requested_asset_ids:
+                running = conn.execute(
+                    "SELECT 1 FROM job WHERE asset_id = ? AND recipe_id = ? AND type = 'embed_asset' AND status = 'running' LIMIT 1",
+                    (asset_id, active_recipe_id),
+                ).fetchone()
+                if running is not None:
+                    skipped_running_asset_ids.append(asset_id)
+                    continue
+                removed_embeddings += conn.execute(
+                    "DELETE FROM embedding_item WHERE asset_id = ? AND recipe_id = ? AND kind = 'image'",
+                    (asset_id, active_recipe_id),
+                ).rowcount
+                conn.execute(
+                    "DELETE FROM job WHERE asset_id = ? AND recipe_id = ? AND type = 'embed_asset' AND status IN ('pending', 'failed')",
+                    (asset_id, active_recipe_id),
+                )
+                asset_row = conn.execute(
+                    "SELECT library_path, media_type FROM asset WHERE id = ?", (asset_id,)
+                ).fetchone()
+                reindex_jobs_created += _create_job(
+                    conn, "embed_asset", asset_id, active_recipe_id,
+                    {"asset_id": asset_id, "recipe_id": active_recipe_id,
+                     "media_type": str(asset_row["media_type"]), "library_path": str(asset_row["library_path"])},
+                    _utc_now(),
+                )
+                affected_asset_ids.append(asset_id)
+        return BatchAssetActionResult(
+            library_root=str(library_root_path), action="rebuild-active-index",
+            requested_asset_ids=requested_asset_ids, affected_asset_ids=affected_asset_ids,
+            skipped_running_asset_ids=skipped_running_asset_ids, removed_source_records=0,
+            removed_jobs=0, removed_renditions=0, removed_embeddings=removed_embeddings,
+            reindex_jobs_created=reindex_jobs_created,
+        )
+    finally:
+        conn.close()
+
+
+def _normalize_batch_asset_ids(asset_ids: list[str]) -> list[str]:
+    normalized = list(dict.fromkeys(str(asset_id).strip() for asset_id in asset_ids if str(asset_id).strip()))
+    if not normalized:
+        raise ValueError("At least one asset id is required")
+    return normalized
+
+
+def _require_existing_asset_ids(conn: sqlite3.Connection, asset_ids: list[str]) -> None:
+    placeholders = ", ".join("?" for _ in asset_ids)
+    rows = conn.execute(
+        f"SELECT id FROM asset WHERE deleted_at IS NULL AND id IN ({placeholders})", tuple(asset_ids)
+    ).fetchall()
+    found_ids = {str(row["id"]) for row in rows}
+    missing_ids = [asset_id for asset_id in asset_ids if asset_id not in found_ids]
+    if missing_ids:
+        raise ValueError(f"Unknown asset ids: {', '.join(missing_ids)}")
 
 
 def retry_failed_jobs(library_root: Path | str) -> RetryJobsResult:

@@ -7,6 +7,7 @@ const state = {
   libraryStatus: null,
   workerLoop: null,
   selectedAsset: null,
+  selectedAssetIds: new Set(),
   duplicatePairs: [],
   lastHealthDiagnosticSteps: [],
 };
@@ -519,6 +520,7 @@ function renderAssets() {
   const container = byId("assetGrid");
   const activeRecipe = state.assetSummary?.active_recipe_label || "none";
   setText("assetStats", `${assets.length} assets | active recipe: ${activeRecipe}`);
+  renderAssetSelectionControls(assets);
   container.innerHTML = "";
 
   if (!assets.length) {
@@ -533,18 +535,40 @@ function renderAssets() {
     if (state.selectedAsset?.asset_id === asset.asset_id) {
       button.classList.add("is-selected");
     }
+    if (state.selectedAssetIds.has(asset.asset_id)) {
+      button.classList.add("is-batch-selected");
+    }
     const preview = assetPreviewUrl(asset);
     const title = assetDisplayName(asset, index);
     button.innerHTML = `
+      <span class="asset-select"><input type="checkbox" aria-label="Select ${escapeHtml(title)}" ${state.selectedAssetIds.has(asset.asset_id) ? "checked" : ""} /></span>
       ${preview ? `<img src="${preview}" alt="${escapeHtml(title)} preview" />` : `<div class="preview-media"></div>`}
       <div class="asset-card-body">
         <h4>${escapeHtml(title)}</h4>
         ${renderCardMeta(assetInfoLabel(asset), asset.status)}
       </div>
     `;
-    button.addEventListener("click", () => loadAssetDetail(asset.asset_id));
+    button.addEventListener("click", (event) => {
+      if (event.target.closest(".asset-select")) {
+        state.selectedAssetIds.has(asset.asset_id)
+          ? state.selectedAssetIds.delete(asset.asset_id)
+          : state.selectedAssetIds.add(asset.asset_id);
+        renderAssets();
+        return;
+      }
+      loadAssetDetail(asset.asset_id);
+    });
     container.appendChild(button);
   });
+}
+
+function renderAssetSelectionControls(assets) {
+  const selectedCount = state.selectedAssetIds.size;
+  setText("assetSelectionStatus", selectedCount ? `${selectedCount} selected` : "No assets selected");
+  byId("selectAllAssetsBtn").disabled = !assets.length || selectedCount === assets.length;
+  byId("clearAssetSelectionBtn").disabled = !selectedCount;
+  byId("rebuildSelectedAssetsBtn").disabled = !selectedCount;
+  byId("deleteSelectedAssetsBtn").disabled = !selectedCount;
 }
 
 function renderRailList(targetId, entries, emptyText) {
@@ -1010,6 +1034,8 @@ async function loadState() {
   state.runtimeSettings = payload.runtime_settings || null;
   state.setupState = payload.setup_state || null;
   state.assetSummary = payload.asset_summary || null;
+  const availableAssetIds = new Set((state.assetSummary?.assets || []).map((asset) => asset.asset_id));
+  state.selectedAssetIds = new Set([...state.selectedAssetIds].filter((assetId) => availableAssetIds.has(assetId)));
   state.libraryStatus = payload.library_status || null;
   state.workerLoop = payload.worker_loop || null;
   state.lastHealthDiagnosticSteps = state.setupState?.runtime_readiness?.last_health_diagnostic_steps || [];
@@ -1065,6 +1091,26 @@ async function deleteAsset(assetId) {
   });
   state.selectedAsset = null;
   await loadState();
+}
+
+async function runBatchAssetAction(action) {
+  const assetIds = [...state.selectedAssetIds];
+  if (!assetIds.length) {
+    return;
+  }
+  if (action === "delete" && !window.confirm(`Delete ${assetIds.length} selected asset(s)? This also deletes their library copies and derived artifacts.`)) {
+    return;
+  }
+  const result = await api("/api/assets/batch-action", {
+    method: "POST",
+    body: JSON.stringify({ action, asset_ids: assetIds }),
+  });
+  state.selectedAssetIds.clear();
+  state.selectedAsset = null;
+  await loadState();
+  setText("assetSelectionStatus", action === "delete"
+    ? `Deleted ${result.affected_asset_ids.length} asset(s).`
+    : `Queued ${result.reindex_jobs_created} active-index rebuild(s); skipped ${result.skipped_running_asset_ids.length} running asset(s).`);
 }
 
 async function revealAssetFile(assetId, target = "managed", sourcePath = null) {
@@ -1552,6 +1598,20 @@ function wireEvents() {
     } catch (error) {
       showError("recentJobs", error);
     }
+  });
+  byId("selectAllAssetsBtn").addEventListener("click", () => {
+    state.selectedAssetIds = new Set((state.assetSummary?.assets || []).map((asset) => asset.asset_id));
+    renderAssets();
+  });
+  byId("clearAssetSelectionBtn").addEventListener("click", () => {
+    state.selectedAssetIds.clear();
+    renderAssets();
+  });
+  byId("deleteSelectedAssetsBtn").addEventListener("click", async () => {
+    try { await runBatchAssetAction("delete"); } catch (error) { showError("assetGrid", error); }
+  });
+  byId("rebuildSelectedAssetsBtn").addEventListener("click", async () => {
+    try { await runBatchAssetAction("rebuild-active-index"); } catch (error) { showError("assetGrid", error); }
   });
   byId("triggerLoopBtn").addEventListener("click", async () => {
     try {
