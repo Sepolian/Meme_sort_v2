@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 
-import memesort_worker.library as library
+from . import library_internal as library
 from . import ocr_artifacts
 
 

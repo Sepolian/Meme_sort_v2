@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import memesort_worker.library as library
+from .asset_browse import list_asset_summaries
+from . import library_internal as library
 from .library_store import LibraryStore
 
 
@@ -471,7 +472,7 @@ def run_first_run_flow(
 
 def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
     settings = library.get_runtime_settings(library_root)
-    assets_result = library.list_assets(library_root)
+    assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
     suggested_model_path = library.discover_local_model_path(settings.selected_model_key)
     effective_model_source = library.resolve_effective_model_source(

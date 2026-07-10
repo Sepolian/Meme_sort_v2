@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import memesort_worker.library as library
+from . import library_internal as library
 from .library_store import LibraryStore
 from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import blob_to_vector, rank_asset_vector_rows

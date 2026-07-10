@@ -7,12 +7,7 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .library import (
-    get_runtime_config_for_profile,
-    get_runtime_settings,
-    resolve_effective_model_source,
-    run_pending_jobs,
-)
+from .active_runtime import run_pending_jobs_for_active_runtime
 
 
 @dataclass
@@ -145,23 +140,8 @@ class WorkerLoopController:
         self._append_event("tick-started", {})
 
         try:
-            settings = get_runtime_settings(self._library_root)
-            effective_model_source = resolve_effective_model_source(
-                settings.selected_model_key,
-                settings.model_name_or_path,
-            )
-            runtime_config = get_runtime_config_for_profile(
-                settings.selected_profile,
-                model_name_or_path=effective_model_source,
-            )
-            result = run_pending_jobs(
+            result = run_pending_jobs_for_active_runtime(
                 self._library_root,
-                backend_name=settings.backend_name,
-                model_name_or_path=effective_model_source,
-                torch_dtype=runtime_config.torch_dtype,
-                device=runtime_config.device,
-                num_threads=runtime_config.num_threads,
-                num_interop_threads=runtime_config.num_interop_threads,
                 max_jobs=20,
             ).to_dict()
             self._append_event("tick-finished", {"processed_jobs": result["processed_jobs"]})

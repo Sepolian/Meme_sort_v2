@@ -73,6 +73,7 @@ from memesort_worker.semantic_retrieval import rank_asset_vector_rows
 from memesort_worker.retrieval_composition import compose_text_search_results
 from memesort_worker.webapp import create_app
 from memesort_worker.app_runtime import WorkerLoopController
+from memesort_worker.asset_browse import list_asset_summaries
 from memesort_worker.app_state import build_app_state
 
 
@@ -325,6 +326,25 @@ class LibraryTests(unittest.TestCase):
             self.assertEqual(2, asset_count)
             self.assertEqual(3, source_count)
             self.assertEqual(6, job_count)
+
+    def test_asset_summary_keeps_list_fields_without_detail_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "summary.png", (255, 0, 0))
+
+            import_folder(library_root, source_root)
+            run_pending_jobs(library_root, backend_name="debug")
+            asset = list_asset_summaries(library_root).assets[0]
+
+        self.assertEqual("indexed", asset["status"])
+        self.assertEqual(1, asset["source_record_count"])
+        self.assertEqual("summary.png", Path(asset["source_records"][0]["source_path"]).name)
+        self.assertNotIn("jobs", asset)
+        self.assertNotIn("ocr_results", asset)
+        self.assertNotIn("renditions", asset)
 
     def test_cli_init_library_prints_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2315,7 +2335,7 @@ class LibraryTests(unittest.TestCase):
                 backend = backend_factory.return_value
                 backend.embed_text.return_value = self._unit_vector(2048)
                 backend.backend_id = "fake-qwen"
-                with patch("memesort_worker.app_runtime.run_pending_jobs") as run_jobs_mock:
+                with patch("memesort_worker.app_runtime.run_pending_jobs_for_active_runtime") as run_jobs_mock:
                     run_jobs_mock.return_value.to_dict.return_value = {
                         "backend": "fake-qwen",
                         "processed_jobs": 0,
@@ -2381,7 +2401,7 @@ class LibraryTests(unittest.TestCase):
                     library_root=library_root,
                 )
 
-            with patch("memesort_worker.app_runtime.run_pending_jobs") as run_jobs_mock:
+            with patch("memesort_worker.app_runtime.run_pending_jobs_for_active_runtime") as run_jobs_mock:
                 run_jobs_mock.return_value.to_dict.return_value = {
                     "backend": "fake-qwen",
                     "processed_jobs": 0,

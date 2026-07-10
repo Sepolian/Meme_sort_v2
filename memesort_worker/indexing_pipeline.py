@@ -7,11 +7,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-import memesort_worker.library as library
+from . import library_internal as library
 from . import job_queue
 from . import ocr_artifacts
 from .embedding_backend import EmbeddingBackend, EmbeddingBackendError
 from .ocr_backend import OcrBackend, get_ocr_backend
+from .semantic_retrieval import vector_to_blob
 
 
 def run_pending_jobs(
@@ -288,7 +289,7 @@ def _insert_embedding_item(
             recipe_id,
             source_ref,
             output_dimension,
-            sqlite3.Binary(library._vector_to_blob(vector)),
+            sqlite3.Binary(vector_to_blob(vector)),
             library._utc_now(),
         ),
     )

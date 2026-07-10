@@ -4,10 +4,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .app_runtime import WorkerLoopSnapshot
+from .asset_browse import get_library_status, list_asset_summaries
 from .library import (
-    get_library_status,
     get_runtime_settings,
-    list_assets,
     list_model_variants,
     list_runtime_profiles,
 )
@@ -36,7 +35,7 @@ def build_app_state(
     library_root_path = Path(library_root).expanduser().resolve()
     runtime_settings = get_runtime_settings(library_root_path)
     setup_state = get_setup_state(library_root_path)
-    asset_summary = list_assets(library_root_path)
+    asset_summary = list_asset_summaries(library_root_path)
     library_status = get_library_status(library_root_path)
 
     return AppStateResult(

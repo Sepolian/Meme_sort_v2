@@ -9,6 +9,7 @@ from wsgiref.simple_server import WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
 from .app_state import build_app_state
+from .asset_browse import get_library_status
 from .app_commands import (
     import_and_start_indexing,
     run_first_run_command,
@@ -19,7 +20,6 @@ from .app_commands import (
 from .library import (
     delete_asset,
     get_asset_detail,
-    get_library_status,
     import_folder,
     initialize_library,
     list_assets,

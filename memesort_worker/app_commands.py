@@ -3,17 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from .embedding_backend import EmbeddingRuntimeConfig
+from .active_runtime import (
+    run_pending_jobs_for_active_runtime as _run_pending_jobs_for_active_runtime,
+    search_image_for_active_runtime as _search_image_for_active_runtime,
+    search_text_for_active_runtime as _search_text_for_active_runtime,
+)
 from .library import (
-    RuntimeSettings,
-    get_runtime_config_for_profile,
-    get_runtime_settings,
     import_folder,
     is_runtime_ready_for_indexing,
-    resolve_effective_model_source,
-    run_pending_jobs,
 )
-from .retrieval_service import search_image_path, search_text
 from .runtime_service import run_first_run_flow
 
 
@@ -25,35 +23,14 @@ class WorkerLoop(Protocol):
         ...
 
 
-def _runtime_execution_settings(
-    library_root: Path | str,
-) -> tuple[RuntimeSettings, str | None, EmbeddingRuntimeConfig]:
-    settings = get_runtime_settings(library_root)
-    effective_model_source = resolve_effective_model_source(
-        settings.selected_model_key,
-        settings.model_name_or_path,
-    )
-    runtime_config = get_runtime_config_for_profile(
-        settings.selected_profile,
-        model_name_or_path=effective_model_source,
-    )
-    return settings, effective_model_source, runtime_config
-
-
 def run_jobs_for_active_runtime(
     library_root: Path | str,
     backend_name: str | None = None,
     max_jobs: int = 20,
 ):
-    settings, effective_model_source, runtime_config = _runtime_execution_settings(library_root)
-    return run_pending_jobs(
+    return _run_pending_jobs_for_active_runtime(
         library_root,
-        backend_name=backend_name or settings.backend_name,
-        model_name_or_path=effective_model_source,
-        torch_dtype=runtime_config.torch_dtype,
-        device=runtime_config.device,
-        num_threads=runtime_config.num_threads,
-        num_interop_threads=runtime_config.num_interop_threads,
+        backend_name=backend_name,
         max_jobs=max_jobs,
     )
 
@@ -64,17 +41,11 @@ def search_text_for_active_runtime(
     top_k: int,
     backend_name: str | None = None,
 ):
-    settings, effective_model_source, runtime_config = _runtime_execution_settings(library_root)
-    return search_text(
+    return _search_text_for_active_runtime(
         library_root,
         query=query,
         top_k=top_k,
-        backend_name=backend_name or settings.backend_name,
-        model_name_or_path=effective_model_source,
-        torch_dtype=runtime_config.torch_dtype,
-        device=runtime_config.device,
-        num_threads=runtime_config.num_threads,
-        num_interop_threads=runtime_config.num_interop_threads,
+        backend_name=backend_name,
     )
 
 
@@ -84,17 +55,11 @@ def search_image_for_active_runtime(
     top_k: int,
     backend_name: str | None = None,
 ):
-    settings, effective_model_source, runtime_config = _runtime_execution_settings(library_root)
-    return search_image_path(
+    return _search_image_for_active_runtime(
         library_root,
         image_path=image_path,
         top_k=top_k,
-        backend_name=backend_name or settings.backend_name,
-        model_name_or_path=effective_model_source,
-        torch_dtype=runtime_config.torch_dtype,
-        device=runtime_config.device,
-        num_threads=runtime_config.num_threads,
-        num_interop_threads=runtime_config.num_interop_threads,
+        backend_name=backend_name,
     )
 
 
