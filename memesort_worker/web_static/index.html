@@ -50,7 +50,8 @@
           <section id="libraryTab" class="tab-panel active">
             <section class="queue-monitor card" aria-label="Queue monitor">
               <div><p class="section-title">Queue monitor</p><h2 id="queueMonitorTitle">Checking local queue…</h2></div>
-              <p id="queueMonitorSummary" class="muted small">Fetching worker state.</p>
+              <div class="queue-monitor-stat"><strong id="queueMonitorJobs">—</strong><span>jobs in queue</span></div>
+              <div class="queue-monitor-stat"><strong id="queueMonitorWorker">—</strong><span>worker state</span></div>
               <div class="queue-progress"><div class="queue-progress-track"><span id="queueMonitorProgress"></span></div><p id="queueMonitorNext" class="muted small mono">No queued work loaded yet.</p></div>
               <button id="queueMonitorAction" class="ghost" type="button" disabled>Pause queue</button>
             </section>
@@ -102,7 +103,6 @@
             <div class="card detail-card"><h2>Recent jobs</h2><p class="muted small">Latest job records for debugging retries and failures.</p><div id="recentJobs" class="result-list"></div></div><div class="card detail-card"><h2>Worker events</h2><p class="muted small">In-memory loop events such as resume, pause, tick, and failure.</p><div id="workerLoopEvents" class="result-list"></div></div><div class="card detail-card"><h2>Persisted worker log</h2><p class="muted small">Recent worker loop events written to the library logs directory.</p><div id="workerLoopPersistedEvents" class="result-list"></div></div>
           </section>
 
-          <aside id="rightRail" class="right-rail" aria-label="Library diagnostics"><div id="rightRailResizeHandle" class="panel-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div><section class="rail-section rail-status-only"><p class="section-title">Library root</p><div id="libraryRoot" class="mono small"></div></section><section class="rail-section rail-status-only"><p class="section-title">Setup progress</p><div id="setupProgressText" class="rail-number">0/0</div><div id="setupNextStep" class="small muted"></div></section><section class="rail-section"><p class="section-title">Asset status</p><div id="rightAssetCounts" class="rail-list"></div></section><section class="rail-section"><p class="section-title">Job queue</p><div id="rightJobCounts" class="rail-list"></div></section><section class="rail-section"><p class="section-title">Worker</p><div id="rightWorkerState" class="rail-list"></div></section></aside>
         </div>
       </main>
     </div>

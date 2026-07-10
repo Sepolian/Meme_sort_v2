@@ -16,7 +16,6 @@ const state = {
   lastHealthDiagnosticSteps: [],
 };
 
-const RIGHT_RAIL_WIDTH_KEY = "memesort.rightRailWidth";
 const LIBRARY_DETAIL_WIDTH_KEY = "memesort.libraryDetailWidth";
 const THEME_KEY = "memesort.theme";
 const MOBILE_STACK_BREAKPOINT = 1180;
@@ -106,7 +105,6 @@ function switchTab(tabId) {
   document.querySelectorAll(".tab-link").forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tabId);
   });
-  byId("rightRail")?.classList.toggle("status-tab-active", tabId === "statusTab");
   const copy = pageCopy[tabId] || pageCopy.libraryTab;
   setText("pageTitle", copy.title);
   setText("pageSubtitle", copy.subtitle);
@@ -284,7 +282,6 @@ function renderRuntimeSummary() {
     ].join(" / ")
   );
   setText("activeRecipe", state.assetSummary?.active_recipe_label || "No active index yet");
-  setText("libraryRoot", state.runtimeSettings.library_root || "");
 
   const suggestedModelPath = state.setupState?.suggested_model_path || "";
   byId("modelPathInput").value = state.runtimeSettings.model_name_or_path || suggestedModelPath || "";
@@ -601,54 +598,6 @@ function renderAssetSelectionControls(assets) {
   byId("deleteSelectedAssetsBtn").disabled = !selectedCount;
 }
 
-function renderRailList(targetId, entries, emptyText) {
-  const node = byId(targetId);
-  if (!node) {
-    return;
-  }
-  node.innerHTML = "";
-  if (!entries.length) {
-    node.innerHTML = `<div class="small muted">${escapeHtml(emptyText)}</div>`;
-    return;
-  }
-  entries.forEach(([label, value]) => {
-    const item = document.createElement("div");
-    item.className = "rail-row";
-    item.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`;
-    node.appendChild(item);
-  });
-}
-
-function renderRightRail() {
-  const checklist = state.setupState?.checklist || [];
-  const completed = checklist.filter((item) => item.done).length;
-  setText("setupProgressText", `${completed}/${checklist.length}`);
-  const nextItem = checklist.find((item) => !item.done);
-  setText("setupNextStep", nextItem ? nextItem.label : "Ready for search and duplicate review.");
-
-  renderRailList(
-    "rightAssetCounts",
-    Object.entries(state.libraryStatus?.asset_counts || {}),
-    "No assets yet."
-  );
-  renderRailList(
-    "rightJobCounts",
-    Object.entries(state.libraryStatus?.job_counts || {}),
-    "No jobs yet."
-  );
-  const workerLoop = state.workerLoop || {};
-  renderRailList(
-    "rightWorkerState",
-    [
-      ["running", workerLoop.running ?? "n/a"],
-      ["paused", workerLoop.paused ?? "n/a"],
-      ["last finish", formatDate(workerLoop.last_tick_finished_at)],
-    ],
-    "Worker state is unavailable."
-  );
-  renderWorkbenchOverview();
-}
-
 function renderWorkbenchOverview() {
   const assets = state.assetSummary?.assets || [];
   const jobCounts = state.libraryStatus?.job_counts || {};
@@ -665,27 +614,25 @@ function renderWorkbenchOverview() {
   setText("headingPendingCount", pendingCount);
 
   const queueTitle = byId("queueMonitorTitle");
-  const queueSummary = byId("queueMonitorSummary");
+  const queueJobs = byId("queueMonitorJobs");
+  const queueWorker = byId("queueMonitorWorker");
   const queueProgress = byId("queueMonitorProgress");
   const queueNext = byId("queueMonitorNext");
   const queueAction = byId("queueMonitorAction");
-  if (!queueTitle || !queueSummary || !queueProgress || !queueNext || !queueAction) {
+  if (!queueTitle || !queueJobs || !queueWorker || !queueProgress || !queueNext || !queueAction) {
     return;
   }
 
   const paused = Boolean(workerLoop.paused);
   const queueTotal = pendingCount + runningCount;
   queueTitle.textContent = paused ? "Index worker is paused" : queueTotal ? "Index queue is active" : "Index queue is clear";
-  queueSummary.textContent = importTask.running
-    ? (importTask.paused ? "Import is paused between files." : "Import is adding work to the local queue.")
-    : runningCount
-      ? `${runningCount} job(s) running, ${pendingCount} waiting.`
-      : pendingCount
-        ? `${pendingCount} job(s) waiting for the worker.`
-        : "No pending indexing work.";
+  queueJobs.textContent = String(queueTotal);
+  queueWorker.textContent = paused ? "Paused" : workerLoop.running ? "Running" : "Offline";
   queueProgress.style.width = queueTotal ? `${Math.max(12, Math.min(100, (runningCount / queueTotal) * 100))}%` : "0%";
   const nextJob = state.pendingJobs[0];
-  queueNext.textContent = nextJob
+  queueNext.textContent = importTask.running
+    ? (importTask.paused ? "Import paused between files." : "Import is adding work to the local queue.")
+    : nextJob
     ? `Next: ${nextJob.type} / ${nextJob.asset_id || "library task"}`
     : paused
       ? "Resume the worker to continue queued work."
@@ -1188,7 +1135,7 @@ async function loadState() {
   renderAssetDetail();
   renderLibraryStatus();
   renderPendingJobs();
-  renderRightRail();
+  renderWorkbenchOverview();
   renderImportTask();
   updateImportPolling();
 }
@@ -1512,7 +1459,7 @@ async function refreshLibraryStatus() {
   );
   renderLibraryStatus();
   renderPendingJobs();
-  renderRightRail();
+  renderWorkbenchOverview();
 }
 
 async function workerLoopCommand(command) {
@@ -1521,7 +1468,7 @@ async function workerLoopCommand(command) {
     body: JSON.stringify({}),
   });
   renderLibraryStatus();
-  renderRightRail();
+  renderWorkbenchOverview();
 }
 
 async function retryFailedJobs() {
@@ -1564,13 +1511,6 @@ function showError(targetId, error) {
 
 function restoreResizablePanelWidths() {
   [
-    {
-      storageKey: RIGHT_RAIL_WIDTH_KEY,
-      variableName: "--right-rail-width",
-      fallbackWidth: 280,
-      minWidth: 220,
-      maxWidth: 520,
-    },
     {
       storageKey: LIBRARY_DETAIL_WIDTH_KEY,
       variableName: "--library-detail-width",
@@ -1660,14 +1600,6 @@ function attachResizablePanel({
 
 function initResizablePanels() {
   restoreResizablePanelWidths();
-  attachResizablePanel({
-    handleId: "rightRailResizeHandle",
-    containerId: "appWorkspace",
-    variableName: "--right-rail-width",
-    storageKey: RIGHT_RAIL_WIDTH_KEY,
-    minWidth: 220,
-    maxWidth: 520,
-  });
   attachResizablePanel({
     handleId: "libraryDetailResizeHandle",
     containerId: "libraryWorkspace",
