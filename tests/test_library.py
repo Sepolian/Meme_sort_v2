@@ -7,6 +7,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from contextlib import redirect_stdout
@@ -1914,6 +1915,36 @@ class LibraryTests(unittest.TestCase):
         self.assertGreaterEqual(result.removed_embeddings, 1)
         self.assertIn(pending_asset["status"], {"pending_initial_index", "reindex_pending"})
         self.assertEqual("indexed", final_status)
+
+    def test_import_does_not_wait_for_slow_embedding_transaction(self) -> None:
+        class SlowBackend:
+            backend_id = "slow-debug"
+
+            def embed_image_bytes(self, image_bytes, output_dimension, instruction):
+                entered.set()
+                time.sleep(6)
+                return np.ones(output_dimension, dtype=np.float32) / np.sqrt(output_dimension)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            first_source = root / "first"
+            second_source = root / "second"
+            first_source.mkdir(); second_source.mkdir()
+            self._write_demo_image(first_source / "first.png", (255, 0, 0))
+            self._write_demo_image(second_source / "second.png", (0, 255, 0))
+            import_folder(library_root, first_source)
+            entered = threading.Event()
+            with patch("memesort_worker.library.get_embedding_backend", return_value=SlowBackend()):
+                worker = threading.Thread(target=lambda: run_pending_jobs(library_root, backend_name="debug"))
+                worker.start()
+                self.assertTrue(entered.wait(2))
+                started = time.monotonic()
+                import_folder(library_root, second_source)
+                elapsed = time.monotonic() - started
+                worker.join()
+
+        self.assertLess(elapsed, 3)
 
     def test_retry_failed_jobs_requeues_failed_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -56,27 +56,30 @@ def run_pending_jobs(
             try:
                 with conn:
                     job_queue.mark_job_running(conn, job_id)
-                    if job_type == "generate_thumbnail":
-                        _run_generate_thumbnail_job(conn, library_root_path, payload)
-                    elif job_type == "embed_asset":
-                        if backend is None:
-                            backend = library.get_embedding_backend(
-                                backend_name,
-                                runtime_config=runtime_config,
-                            )
-                        _run_embed_asset_job(conn, library_root_path, payload, backend)
-                    elif job_type == "ocr_asset":
-                        if ocr_backend is None:
-                            ocr_backend = get_ocr_backend(library_root_path, backend_name)
-                        ocr_artifacts.run_ocr_asset_job(
-                            conn,
-                            library_root_path,
-                            payload,
-                            ocr_backend,
+
+                if job_type == "generate_thumbnail":
+                    _run_generate_thumbnail_job(conn, library_root_path, payload)
+                elif job_type == "embed_asset":
+                    if backend is None:
+                        backend = library.get_embedding_backend(
+                            backend_name,
+                            runtime_config=runtime_config,
                         )
-                    else:
-                        skipped_jobs += 1
-                        raise ValueError(f"Unsupported job type: {job_type}")
+                    _run_embed_asset_job(conn, library_root_path, payload, backend)
+                elif job_type == "ocr_asset":
+                    if ocr_backend is None:
+                        ocr_backend = get_ocr_backend(library_root_path, backend_name)
+                    ocr_artifacts.run_ocr_asset_job(
+                        conn,
+                        library_root_path,
+                        payload,
+                        ocr_backend,
+                    )
+                else:
+                    skipped_jobs += 1
+                    raise ValueError(f"Unsupported job type: {job_type}")
+
+                with conn:
                     job_queue.mark_job_completed(conn, job_id)
                     completed_jobs += 1
             except Exception as exc:
