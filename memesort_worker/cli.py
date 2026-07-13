@@ -17,7 +17,7 @@ from .retrieval_service import find_similar_assets, search_image_path, search_te
 from .webapp import run_web_app
 
 
-BACKEND_CHOICES = ("debug", "qwen3-vl")
+BACKEND_CHOICES = ("debug", "qwen3-vl", "llama.cpp")
 
 
 def _add_embedding_runtime_args(parser: argparse.ArgumentParser) -> None:
@@ -30,7 +30,7 @@ def _add_embedding_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--model-name-or-path",
         default=None,
-        help="Required for qwen3-vl. Hugging Face model id or local model path.",
+        help="HF source for qwen3-vl, or a local main GGUF/file bundle for llama.cpp.",
     )
     parser.add_argument(
         "--torch-dtype",
@@ -82,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
             "qwen3-8b-cuda-balanced",
             "qwen3-2b-cuda-quality",
             "qwen3-8b-cuda-quality",
+            "qwen3-2b-vulkan-balanced",
         ),
         help="Named recipe preset",
     )

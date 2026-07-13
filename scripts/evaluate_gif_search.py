@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -9,7 +10,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from memesort_worker.library import import_folder, list_assets, run_pending_jobs, search_text
+from memesort_worker.library import (
+    import_folder,
+    initialize_library,
+    list_assets,
+    run_pending_jobs,
+    search_text,
+    switch_active_recipe,
+)
 
 
 DEFAULT_QUERY_FIELDS = (
@@ -62,8 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate GIF retrieval against labeled examples")
     parser.add_argument("--dataset-dir", default="gif_example", help="Directory containing GIF assets")
     parser.add_argument("--labels-path", default="labels/gif_labels.json", help="JSON labels keyed by filename")
-    parser.add_argument("--backend", default="debug", choices=("debug", "qwen3-vl"), help="Embedding backend")
-    parser.add_argument("--model-name-or-path", default=None, help="Required for qwen3-vl")
+    parser.add_argument("--backend", default="debug", choices=("debug", "qwen3-vl", "llama.cpp"), help="Embedding backend")
+    parser.add_argument("--model-name-or-path", default=None, help="Required for qwen3-vl and llama.cpp")
+    parser.add_argument("--llama-server", default=None, help="Path to llama-server.exe")
     parser.add_argument("--torch-dtype", default="auto", help="Torch dtype for qwen3-vl")
     parser.add_argument("--device", default=None, help="Optional torch device for qwen3-vl")
     parser.add_argument("--num-threads", type=int, default=None, help="Optional torch intra-op thread count for qwen3-vl")
@@ -83,11 +92,18 @@ def main() -> None:
     dataset_dir = Path(args.dataset_dir).resolve()
     labels_path = Path(args.labels_path).resolve()
     labels = json.loads(labels_path.read_text(encoding="utf-8"))
+    if args.llama_server:
+        os.environ["MEMESORT_LLAMA_SERVER"] = str(Path(args.llama_server).resolve())
+    if args.backend == "llama.cpp" and not args.model_name_or_path:
+        parser.error("--model-name-or-path is required for llama.cpp")
 
     temp_root = Path(tempfile.mkdtemp(prefix="memesort_gif_eval_"))
     library_root = temp_root / "library"
 
     try:
+        initialize_library(library_root)
+        if args.backend == "llama.cpp":
+            switch_active_recipe(library_root, "qwen3-2b-vulkan-balanced")
         import_started_at = time.perf_counter()
         import_folder(library_root, dataset_dir)
         import_seconds = time.perf_counter() - import_started_at

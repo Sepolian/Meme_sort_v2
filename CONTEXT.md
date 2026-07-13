@@ -48,6 +48,14 @@ _Avoid_: Broken import, corrupt asset
 A user-selectable execution mode that defines how embeddings are produced and validated on a machine, such as `cpu-low-memory` or `cuda-balanced`. A runtime profile influences the active index recipe but is not itself the compatibility boundary.
 _Avoid_: Device, backend, recipe
 
+**Inference Backend**:
+The engine contract used to execute an embedding model, such as Transformers/PyTorch or llama.cpp. A backend is selected by a runtime profile; application indexing and search code should not depend on backend-specific request formats.
+_Avoid_: Runtime profile, model format
+
+**Model Artifact**:
+The concrete files loaded by an inference backend, such as a Hugging Face Safetensors snapshot or a GGUF main model plus multimodal projector. Quantization and conversion differences may make artifacts from the same embedding family incompatible for indexing.
+_Avoid_: Embedding family, runtime profile
+
 **Active Index Recipe**:
 The single compatibility definition that determines which embeddings are current for search. Semantic retrieval uses one active index recipe at a time.
 _Avoid_: Current model, active profile
@@ -72,6 +80,7 @@ _Avoid_: Frame result, sub-asset
 
 - **Asset vs Image**: Use `asset` for the durable library object. Use `image` only for a still-image media subtype or a specific embedding item kind.
 - **Runtime Profile vs Active Index Recipe**: Use `runtime profile` for the user-facing execution choice. Use `active index recipe` for the compatibility boundary that decides whether embeddings are current or stale.
+- **Embedding Family vs Model Artifact**: A 2B Qwen3-VL model can exist as both Safetensors and quantized GGUF artifacts. Do not assume their vectors are index-compatible merely because they share a model family.
 
 ## Example Dialogue
 

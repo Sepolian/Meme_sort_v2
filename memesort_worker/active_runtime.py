@@ -11,7 +11,7 @@ from .library_internal import (
     RuntimeSettings,
     get_runtime_config_for_profile,
     get_runtime_settings,
-    resolve_effective_model_source,
+    resolve_effective_model_source_for_backend,
 )
 from .retrieval_service import search_image_path as _search_image_path
 from .retrieval_service import search_text as _search_text
@@ -32,7 +32,8 @@ class ActiveRuntime:
 
 def resolve_active_runtime(library_root: Path | str) -> ActiveRuntime:
     settings = get_runtime_settings(library_root)
-    model_source = resolve_effective_model_source(
+    model_source = resolve_effective_model_source_for_backend(
+        settings.backend_name,
         settings.selected_model_key,
         settings.model_name_or_path,
     )

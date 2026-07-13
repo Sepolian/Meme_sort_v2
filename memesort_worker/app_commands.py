@@ -86,7 +86,7 @@ def run_first_run_command(
     model_name_or_path: str | None,
     import_path: str | None,
     gif_frame_count: int | None,
-    backend_name: str,
+    backend_name: str | None,
     worker_loop: WorkerLoop,
 ) -> dict[str, object]:
     result = run_first_run_flow(

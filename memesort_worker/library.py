@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -89,6 +90,14 @@ RECIPE_PRESETS: dict[str, dict[str, object]] = {
         "output_dimension": 4096,
         "runtime_profile": "cuda-quality",
         "preprocess_version": "still-native-up-to-1536-gif-native-up-to-960-v1",
+    },
+    "qwen3-2b-vulkan-balanced": {
+        **DEFAULT_RECIPE,
+        "model_id": "DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
+        "model_revision": (
+            "main-sha256-42a4ebc629ecc651-mmproj-sha256-3f89a7768ffa6606"
+        ),
+        "runtime_profile": "vulkan-balanced",
     },
 }
 
@@ -324,6 +333,8 @@ class RuntimeProfileSpec:
     gif_max_side: int
     gif_frame_count: int
     notes: str
+    backend_name: str = "qwen3-vl"
+    supported_model_keys: tuple[str, ...] = ("qwen3-2b", "qwen3-8b")
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -472,6 +483,22 @@ RUNTIME_PROFILES: dict[str, RuntimeProfileSpec] = {
         gif_frame_count=4,
         notes="Higher-cost NVIDIA path with capped native-resolution preprocessing.",
     ),
+    "vulkan-balanced": RuntimeProfileSpec(
+        profile_id="vulkan-balanced",
+        label="Vulkan Balanced (llama.cpp)",
+        recipe_preset="qwen3-2b-vulkan-balanced",
+        model_id="DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
+        device="vulkan",
+        torch_dtype="gguf-q4_k_m",
+        num_threads=8,
+        num_interop_threads=2,
+        still_max_side=480,
+        gif_max_side=480,
+        gif_frame_count=4,
+        notes="Cross-vendor GPU path for NVIDIA, AMD, and Intel using llama.cpp Vulkan.",
+        backend_name="llama.cpp",
+        supported_model_keys=("qwen3-2b",),
+    ),
 }
 
 MODEL_VARIANTS: dict[str, ModelVariantSpec] = {
@@ -496,6 +523,7 @@ MODEL_PRESET_BY_PROFILE: dict[str, dict[str, str]] = {
         "cpu-low-memory": "qwen3-2b-cpu",
         "cuda-balanced": "qwen3-2b-cuda-balanced",
         "cuda-quality": "qwen3-2b-cuda-quality",
+        "vulkan-balanced": "qwen3-2b-vulkan-balanced",
     },
     "qwen3-8b": {
         "cpu-low-memory": "qwen3-8b-cpu",
@@ -655,6 +683,19 @@ def discover_local_model_path(model_key: str) -> str | None:
     )
 
 
+def discover_local_gguf_model_path(model_key: str) -> str | None:
+    model_dir = project_model_store_root() / "gguf" / f"{model_key}-q4_k_m"
+    if not model_dir.is_dir():
+        return None
+    try:
+        from .llama_cpp_backend import resolve_gguf_bundle
+
+        resolve_gguf_bundle(str(model_dir))
+    except Exception:
+        return None
+    return str(model_dir.resolve())
+
+
 def resolve_effective_model_source(
     selected_model_key: str,
     configured_model_name_or_path: str | None,
@@ -687,22 +728,54 @@ def resolve_effective_model_source(
     return None
 
 
+def resolve_effective_model_source_for_backend(
+    backend_name: str,
+    selected_model_key: str,
+    configured_model_name_or_path: str | None,
+    allow_download: bool = False,
+) -> str | None:
+    if backend_name == "qwen3-vl":
+        return resolve_effective_model_source(
+            selected_model_key,
+            configured_model_name_or_path,
+            allow_download=allow_download,
+        )
+    if backend_name == "llama.cpp":
+        configured = _existing_local_model_path(configured_model_name_or_path)
+        return configured or discover_local_gguf_model_path(selected_model_key)
+    return _configured_model_source(configured_model_name_or_path)
+
+
 def is_runtime_ready_for_indexing(library_root: Path | str) -> tuple[bool, str]:
     settings = get_runtime_settings(library_root)
-    effective_model_source = resolve_effective_model_source(
+    effective_model_source = resolve_effective_model_source_for_backend(
+        settings.backend_name,
         settings.selected_model_key,
         settings.model_name_or_path,
     )
-    if settings.backend_name != "qwen3-vl":
-        return False, "Runtime backend is not set to qwen3-vl."
+    if settings.backend_name not in {"qwen3-vl", "llama.cpp"}:
+        return False, f"Unsupported runtime backend: {settings.backend_name}."
     if not effective_model_source:
         return False, "Model source is not ready yet."
     last_health_check = get_last_health_check(library_root)
     if last_health_check is None:
         return False, "Runtime health check has not been run yet."
+    if not runtime_health_matches_settings(settings, last_health_check):
+        return False, "Runtime health check is stale for the current profile, model, or backend."
     if not last_health_check.smoke_test_ok:
         return False, last_health_check.error or "Runtime health check failed."
     return True, "Runtime is ready for indexing."
+
+
+def runtime_health_matches_settings(
+    settings: RuntimeSettings,
+    health_check: RuntimeHealthResult,
+) -> bool:
+    return (
+        health_check.profile_id == settings.selected_profile
+        and health_check.backend_name == settings.backend_name
+        and health_check.selected_model_key == settings.selected_model_key
+    )
 
 
 def _database_path(library_root: Path) -> Path:
@@ -1127,6 +1200,8 @@ def _build_runtime_config(
         device=device,
         num_threads=num_threads,
         num_interop_threads=num_interop_threads,
+        llama_server_path=os.environ.get("MEMESORT_LLAMA_SERVER"),
+        llama_server_url=os.environ.get("MEMESORT_LLAMA_SERVER_URL"),
     )
 
 
@@ -1153,8 +1228,12 @@ def get_model_variant(model_key: str) -> ModelVariantSpec:
 
 
 def resolve_recipe_preset(profile_id: str, model_key: str) -> str:
-    get_runtime_profile(profile_id)
+    profile = get_runtime_profile(profile_id)
     get_model_variant(model_key)
+    if model_key not in profile.supported_model_keys:
+        raise ValueError(
+            f"Runtime profile {profile_id} does not support model variant {model_key}"
+        )
     try:
         return MODEL_PRESET_BY_PROFILE[model_key][profile_id]
     except KeyError as exc:
@@ -1170,7 +1249,7 @@ def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
     try:
         payload = _get_worker_state_json(conn, "runtime_settings")
         if payload is None:
-            default_profile = get_runtime_profile("cpu-low-memory")
+            default_profile = get_runtime_profile("vulkan-balanced")
             default_model = get_model_variant("qwen3-2b")
             settings = RuntimeSettings(
                 selected_profile=default_profile.profile_id,
@@ -1181,7 +1260,7 @@ def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
                     default_model.model_key,
                 ),
                 gif_frame_count=default_profile.gif_frame_count,
-                backend_name="qwen3-vl",
+                backend_name=default_profile.backend_name,
                 library_root=str(library_root_path),
             )
             with conn:
@@ -1205,7 +1284,10 @@ def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
             ),
             selected_recipe_preset=selected_recipe_preset,
             gif_frame_count=int(payload["gif_frame_count"]),
-            backend_name=str(payload.get("backend_name", "qwen3-vl")),
+            backend_name=str(
+                payload.get("backend_name")
+                or get_runtime_profile(str(payload["selected_profile"])).backend_name
+            ),
             library_root=str(library_root_path),
         )
     finally:
@@ -1219,7 +1301,7 @@ def save_runtime_settings(
     model_name_or_path: str | None,
     selected_recipe_preset: str | None = None,
     gif_frame_count: int | None = None,
-    backend_name: str = "qwen3-vl",
+    backend_name: str | None = None,
 ) -> RuntimeSettings:
     init_result = initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
@@ -1231,6 +1313,12 @@ def save_runtime_settings(
     if frame_count <= 0:
         raise ValueError("gif_frame_count must be positive")
     _validate_recipe_preset_for_profile(profile.profile_id, recipe_preset)
+    selected_backend = backend_name or profile.backend_name
+    if selected_backend != profile.backend_name:
+        raise ValueError(
+            f"Runtime profile {profile.profile_id} requires backend "
+            f"{profile.backend_name}, not {selected_backend}"
+        )
 
     settings = RuntimeSettings(
         selected_profile=profile.profile_id,
@@ -1238,7 +1326,7 @@ def save_runtime_settings(
         model_name_or_path=model_name_or_path,
         selected_recipe_preset=recipe_preset,
         gif_frame_count=frame_count,
-        backend_name=backend_name,
+        backend_name=selected_backend,
         library_root=str(library_root_path),
     )
 
@@ -1337,15 +1425,15 @@ def _resolve_runtime_model_source_for_backend(
     selected_model_key: str | None = None,
     allow_download: bool = False,
 ) -> str | None:
-    if backend_name != "qwen3-vl":
-        return model_name_or_path
-
     if selected_model_key is not None:
-        return resolve_effective_model_source(
+        return resolve_effective_model_source_for_backend(
+            backend_name,
             selected_model_key,
             model_name_or_path,
             allow_download=allow_download,
         )
+    if backend_name != "qwen3-vl":
+        return _configured_model_source(model_name_or_path)
 
     configured_source = _configured_model_source(model_name_or_path)
     if configured_source and not _is_local_model_path(configured_source) and allow_download:
@@ -1748,7 +1836,7 @@ def apply_runtime_selection(
     selected_model_key: str,
     model_name_or_path: str | None,
     gif_frame_count: int | None = None,
-    backend_name: str = "qwen3-vl",
+    backend_name: str | None = None,
 ) -> ApplyRuntimeSelectionResult:
     from .runtime_service import apply_runtime_selection as _apply_runtime_selection
 
@@ -1769,7 +1857,7 @@ def run_first_run_flow(
     model_name_or_path: str | None,
     import_path: str | None = None,
     gif_frame_count: int | None = None,
-    backend_name: str = "qwen3-vl",
+    backend_name: str | None = None,
 ) -> FirstRunFlowResult:
     from .runtime_service import run_first_run_flow as _run_first_run_flow
 

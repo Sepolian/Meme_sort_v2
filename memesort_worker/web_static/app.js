@@ -165,10 +165,18 @@ function selectedModelVariant() {
 
 function syncSetupSelections(force = false) {
   const profile = selectedProfile();
-  const modelVariant = selectedModelVariant();
   if (!profile) {
     return;
   }
+  const supportedModels = profile.supported_model_keys || state.modelVariants.map((item) => item.model_key);
+  [...byId("modelVariantSelect").options].forEach((option) => {
+    option.disabled = !supportedModels.includes(option.value);
+  });
+  if (!supportedModels.includes(byId("modelVariantSelect").value)) {
+    byId("modelVariantSelect").value = supportedModels[0] || "";
+    byId("modelPathInput").value = "";
+  }
+  const modelVariant = selectedModelVariant();
   const frameInput = byId("gifFrameCountInput");
   if (force || Number(frameInput.value) !== Number(profile.gif_frame_count)) {
     frameInput.value = String(profile.gif_frame_count);
@@ -177,7 +185,9 @@ function syncSetupSelections(force = false) {
   renderModelVariantSummary();
   const input = byId("modelPathInput");
   if (force && modelVariant) {
-    input.placeholder = modelVariant.model_id;
+    input.placeholder = selectedBackendName() === "llama.cpp"
+      ? "Local folder with main Q4_K_M GGUF + mmproj GGUF"
+      : modelVariant.model_id;
     const configuredPath = state.runtimeSettings?.model_name_or_path || "";
     const recommendedSource = state.setupState?.runtime_readiness?.recommended_model_source || "";
     if (!configuredPath && recommendedSource) {
@@ -248,8 +258,12 @@ function renderProfileSummary() {
     <div class="small"><strong>${escapeHtml(profile.label)}</strong></div>
     <div class="small muted">${escapeHtml(profile.notes || "")}</div>
     <div class="small mono">${escapeHtml(summarizeProfile(profile))}</div>
-    <div class="small muted">Default recipe: ${escapeHtml(profile.recipe_preset)} | dtype ${escapeHtml(profile.torch_dtype)}</div>
+    <div class="small muted">Default recipe: ${escapeHtml(profile.recipe_preset)} | ${escapeHtml(profile.backend_name || "qwen3-vl")} | ${escapeHtml(profile.torch_dtype)}</div>
   `;
+}
+
+function selectedBackendName() {
+  return selectedProfile()?.backend_name || "qwen3-vl";
 }
 
 function renderModelVariantSummary() {
@@ -299,10 +313,25 @@ function renderRuntimeSummary() {
 
 function renderModelPathHint() {
   const node = byId("modelPathHint");
-  const configuredPath = state.runtimeSettings?.model_name_or_path || "";
+  const configuredPath = byId("modelPathInput").value.trim();
   const suggestedPath = state.setupState?.suggested_model_path || "";
   const recommendedSource = state.setupState?.runtime_readiness?.recommended_model_source || "";
   const variant = selectedModelVariant();
+  const llamaCpp = selectedBackendName() === "llama.cpp";
+
+  if (llamaCpp) {
+    node.innerHTML = configuredPath
+      ? `
+        <div class="small"><strong>Configured GGUF bundle</strong></div>
+        <div class="small muted">This must be a local folder containing one Q4_K_M main GGUF and one mmproj*.gguf, or the exact main GGUF file.</div>
+        <div class="small mono">${escapeHtml(configuredPath)}</div>
+      `
+      : `
+        <div class="small"><strong>Local GGUF bundle required</strong></div>
+        <div class="small muted">GGUF auto-download is intentionally disabled in this first version. Choose a prepared Q4_K_M model folder; MemeSort also checks .models/gguf/${escapeHtml(variant?.model_key || "qwen3-2b")}-q4_k_m.</div>
+      `;
+    return;
+  }
 
   if (configuredPath) {
     const configuredIsRepoId = !looksLikeLocalModelPath(configuredPath);
@@ -683,11 +712,17 @@ function renderAssetDetail() {
   const ocrRows = (asset.ocr_results || [])
     .map((result) => {
       const confidence = result.confidence == null ? "n/a" : Number(result.confidence).toFixed(3);
+      const ocrText = result.text || "No OCR text detected.";
+      const hasEncodingDamage = String(result.text || "").includes("\uFFFD");
       return `
-        <div class="runtime-summary">
-          <div class="small muted">${escapeHtml(result.engine)} ${escapeHtml(result.engine_version || "")} | confidence ${escapeHtml(confidence)}</div>
-          <pre class="console">${escapeHtml(result.text || "No OCR text detected.")}</pre>
-        </div>
+        <article class="ocr-result-card">
+          <div class="ocr-result-meta">
+            <span>${escapeHtml(result.engine)} ${escapeHtml(result.engine_version || "")}</span>
+            <span class="chip">confidence ${escapeHtml(confidence)}</span>
+          </div>
+          ${hasEncodingDamage ? `<div class="ocr-encoding-warning">This stored result was damaged by the previous Windows text encoding. OCR repair has been queued.</div>` : ""}
+          <pre class="ocr-text">${escapeHtml(ocrText)}</pre>
+        </article>
       `;
     })
     .join("");
@@ -786,7 +821,7 @@ function renderAssetDetail() {
         <div class="detail-inline-list">${jobRows || `<div class="detail-empty">No jobs recorded.</div>`}</div>
       </div>
 
-      <details class="detail-section technical-info">
+      <details class="detail-section technical-info detail-disclosure">
           <summary>Technical Information</summary>
           <div class="technical-grid">
             <div>
@@ -808,7 +843,7 @@ function renderAssetDetail() {
           </div>
       </details>
 
-      <details class="detail-section technical-info">
+      <details class="detail-section technical-info detail-disclosure">
         <summary>OCR Text</summary>
         <div>${ocrRows || `<div class="detail-empty">No OCR text available for this asset.</div>`}</div>
       </details>
@@ -1212,7 +1247,7 @@ async function saveSettings() {
     selected_model_key: byId("modelVariantSelect").value,
     model_name_or_path: byId("modelPathInput").value.trim() || null,
     gif_frame_count: Number(byId("gifFrameCountInput").value),
-    backend_name: "qwen3-vl",
+    backend_name: selectedBackendName(),
   };
   const result = await api("/api/runtime-settings", {
     method: "POST",
@@ -1229,7 +1264,7 @@ function buildFirstRunPayload(importPath = null) {
     model_name_or_path: byId("modelPathInput").value.trim() || null,
     gif_frame_count: Number(byId("gifFrameCountInput").value),
     import_path: importPath,
-    backend_name: "qwen3-vl",
+    backend_name: selectedBackendName(),
   };
 }
 
@@ -1257,6 +1292,7 @@ async function completeFirstRun() {
 }
 
 async function runHealthCheck() {
+  await saveSettings();
   const payload = {
     profile_id: byId("profileSelect").value,
     model_key: byId("modelVariantSelect").value,
@@ -1396,7 +1432,7 @@ async function runJobs() {
     method: "POST",
     body: JSON.stringify({
       max_jobs: 50,
-      backend_name: "qwen3-vl",
+      backend_name: state.runtimeSettings?.backend_name || selectedBackendName(),
     }),
   });
   byId("importResult").textContent = JSON.stringify(result, null, 2);
@@ -1407,7 +1443,7 @@ async function runSearch() {
   const query = byId("searchInput").value.trim();
   renderSkeletonCards("searchResults", 4);
   const result = await api(
-    `/api/search?query=${encodeURIComponent(query)}&top_k=18&backend_name=${encodeURIComponent("qwen3-vl")}`
+    `/api/search?query=${encodeURIComponent(query)}&top_k=18`
   );
   renderResults("searchResults", result.results || [], "No matches yet.");
 }
@@ -1419,7 +1455,7 @@ async function runImageSearch() {
     body: JSON.stringify({
       path: byId("imageSearchPathInput").value.trim(),
       top_k: 18,
-      backend_name: "qwen3-vl",
+      backend_name: state.runtimeSettings?.backend_name || selectedBackendName(),
     }),
   });
   renderResults("imageSearchResults", result.results || [], "No image matches found.");
@@ -1625,9 +1661,15 @@ function wireEvents() {
     clearSelectedAsset();
   });
   byId("profileSelect").addEventListener("change", () => {
+    if (selectedBackendName() !== (state.runtimeSettings?.backend_name || "qwen3-vl")) {
+      byId("modelPathInput").value = "";
+    }
     syncSetupSelections(true);
   });
   byId("modelVariantSelect").addEventListener("change", () => {
+    if (byId("modelVariantSelect").value !== state.runtimeSettings?.selected_model_key) {
+      byId("modelPathInput").value = "";
+    }
     syncSetupSelections(true);
   });
   byId("saveSettingsBtn").addEventListener("click", async () => {

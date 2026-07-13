@@ -895,6 +895,36 @@ class LibraryTests(unittest.TestCase):
 
             self.assertEqual(1, ocr_jobs)
 
+    def test_initialize_library_requeues_encoding_damaged_ocr_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_demo_image(source_root / "damaged.png", (255, 0, 0))
+
+            import_folder(library_root, source_root)
+            run_pending_jobs(library_root, backend_name="debug")
+            conn = sqlite3.connect(library_root / DATABASE_NAME)
+            try:
+                conn.execute("UPDATE ocr_result SET text = ?, searchable_text = ?", ("��", "��"))
+                conn.execute("DELETE FROM job WHERE type = 'ocr_asset'")
+                conn.commit()
+            finally:
+                conn.close()
+
+            initialize_library(library_root)
+
+            conn = sqlite3.connect(library_root / DATABASE_NAME)
+            try:
+                pending_ocr_jobs = conn.execute(
+                    "SELECT COUNT(*) FROM job WHERE type = 'ocr_asset' AND status = 'pending'"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+            self.assertEqual(1, pending_ocr_jobs)
+
     def test_run_jobs_respects_recipe_preprocess_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1462,15 +1492,15 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(str(downloaded_snapshot.resolve()), result)
         download_mock.assert_called_once()
 
-    def test_runtime_settings_default_to_cpu_profile(self) -> None:
+    def test_runtime_settings_default_to_vulkan_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             settings = get_runtime_settings(Path(temp_dir) / "library")
 
-            self.assertEqual("cpu-low-memory", settings.selected_profile)
+            self.assertEqual("vulkan-balanced", settings.selected_profile)
             self.assertEqual("qwen3-2b", settings.selected_model_key)
-            self.assertEqual("qwen3-2b-cpu", settings.selected_recipe_preset)
+            self.assertEqual("qwen3-2b-vulkan-balanced", settings.selected_recipe_preset)
             self.assertEqual(4, settings.gif_frame_count)
-            self.assertEqual("qwen3-vl", settings.backend_name)
+            self.assertEqual("llama.cpp", settings.backend_name)
 
     def test_runtime_settings_can_be_saved(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

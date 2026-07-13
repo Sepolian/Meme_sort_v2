@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -87,13 +88,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--backend",
         default="debug",
-        choices=("debug", "qwen3-vl"),
+        choices=("debug", "qwen3-vl", "llama.cpp"),
         help="Embedding backend to use",
     )
     parser.add_argument(
         "--model-name-or-path",
         default=None,
-        help="Required for qwen3-vl",
+        help="Required for qwen3-vl and llama.cpp",
+    )
+    parser.add_argument(
+        "--llama-server",
+        default=None,
+        help="Path to llama-server.exe (or set MEMESORT_LLAMA_SERVER)",
     )
     parser.add_argument(
         "--torch-dtype",
@@ -276,10 +282,19 @@ def main() -> None:
     labels_path = Path(args.labels_path).resolve()
     labels = json.loads(labels_path.read_text(encoding="utf-8"))
 
+    if args.llama_server:
+        os.environ["MEMESORT_LLAMA_SERVER"] = str(Path(args.llama_server).resolve())
+    if args.backend == "llama.cpp" and not args.model_name_or_path:
+        parser.error("--model-name-or-path is required for llama.cpp")
+
+    recipe_preset = args.recipe_preset
+    if args.backend == "llama.cpp" and recipe_preset is None:
+        recipe_preset = "qwen3-2b-vulkan-balanced"
+
     temp_root = Path(tempfile.mkdtemp(prefix="memesort_eval_"))
     library_root = temp_root / "library"
     recipe_selection = prepare_recipe_for_eval(
-        recipe_preset=args.recipe_preset,
+        recipe_preset=recipe_preset,
         recipe_runtime_profile=args.recipe_runtime_profile,
         preprocess_version=args.preprocess_version,
         still_max_side=args.still_max_side,

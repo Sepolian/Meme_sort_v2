@@ -893,21 +893,101 @@ h4 {
 }
 
 .technical-info {
-  padding: 12px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #fffaf0;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .technical-info summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 13px 14px;
   cursor: pointer;
   font-weight: 700;
+  list-style: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.technical-info summary::-webkit-details-marker {
+  display: none;
+}
+
+.technical-info summary::before {
+  content: ">";
+  color: var(--muted);
+  font-family: var(--mono);
+  transition: transform 120ms ease;
+}
+
+.technical-info[open] summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.technical-info[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.technical-info summary:hover {
+  background: var(--surface-muted);
+}
+
+.technical-info summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .technical-grid {
   display: grid;
   gap: 12px;
-  margin-top: 12px;
+  padding: 14px;
+}
+
+.ocr-result-card {
+  margin: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 3px);
+  background: var(--surface-muted);
+}
+
+.ocr-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.ocr-text {
+  max-height: 300px;
+  margin: 10px 0 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--surface-deep);
+  color: #f4f3f8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.ocr-encoding-warning {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  color: var(--danger);
+  font-size: 0.78rem;
 }
 
 .rail-section {

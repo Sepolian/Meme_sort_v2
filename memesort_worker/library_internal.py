@@ -41,6 +41,7 @@ __all__ = [
     "_set_worker_state_json",
     "_utc_now",
     "discover_local_model_path",
+    "discover_local_gguf_model_path",
     "ensure_project_local_model_snapshot",
     "get_embedding_backend",
     "get_model_variant",
@@ -53,7 +54,9 @@ __all__ = [
     "list_assets",
     "project_model_store_root",
     "resolve_effective_model_source",
+    "resolve_effective_model_source_for_backend",
     "resolve_recipe_preset",
+    "runtime_health_matches_settings",
     "save_runtime_settings",
     "switch_active_recipe",
 ]

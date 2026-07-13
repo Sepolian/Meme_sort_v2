@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 from .asset_browse import list_asset_summaries
 from . import library_internal as library
 from .library_store import LibraryStore
+
+
+_HEALTH_CHECK_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUB"
+    "AScY42YAAAAASUVORK5CYII="
+)
 
 
 def _persist_resolved_model_source(
@@ -90,6 +97,15 @@ def _resolve_runtime_model_source_for_backend(
     selected_model_key: str | None = None,
     allow_download: bool = False,
 ) -> str | None:
+    if backend_name == "llama.cpp":
+        if selected_model_key is None:
+            return library._configured_model_source(model_name_or_path)
+        return library.resolve_effective_model_source_for_backend(
+            backend_name,
+            selected_model_key,
+            model_name_or_path,
+            allow_download=False,
+        )
     if backend_name != "qwen3-vl":
         return model_name_or_path
 
@@ -138,6 +154,7 @@ def run_runtime_health_check(
 ) -> library.RuntimeHealthResult:
     profile = library.get_runtime_profile(profile_id)
     model_variant = library.get_model_variant(model_key)
+    library.resolve_recipe_preset(profile.profile_id, model_variant.model_key)
     resolved_model_source = model_name_or_path
     diagnostic_steps: list[dict[str, object]] = [
         {
@@ -151,6 +168,15 @@ def run_runtime_health_check(
             "detail": model_variant.model_id,
         },
     ]
+
+    if profile.backend_name == "llama.cpp":
+        return _run_llama_cpp_runtime_health_check(
+            profile=profile,
+            model_variant=model_variant,
+            model_name_or_path=model_name_or_path,
+            library_root=library_root,
+            diagnostic_steps=diagnostic_steps,
+        )
 
     try:
         import torch  # type: ignore
@@ -388,13 +414,200 @@ def run_runtime_health_check(
     return result
 
 
+def _run_llama_cpp_runtime_health_check(
+    profile,
+    model_variant,
+    model_name_or_path: str | None,
+    library_root: Path | str | None,
+    diagnostic_steps: list[dict[str, object]],
+) -> library.RuntimeHealthResult:
+    resolved_model_source = _resolve_runtime_model_source_for_backend(
+        "llama.cpp",
+        model_name_or_path,
+        selected_model_key=model_variant.model_key,
+        allow_download=False,
+    )
+    if not resolved_model_source:
+        result = library.RuntimeHealthResult(
+            profile_id=profile.profile_id,
+            backend_name="llama.cpp",
+            model_name_or_path=None,
+            selected_model_key=model_variant.model_key,
+            selected_model_label=model_variant.label,
+            device=profile.device,
+            torch_dtype=profile.torch_dtype,
+            torch_available=False,
+            cuda_available=False,
+            gpu_name=None,
+            model_source_origin=None,
+            model_downloaded=False,
+            text_smoke_vector_dim=None,
+            diagnostic_steps=[
+                *diagnostic_steps,
+                {
+                    "step": "resolve-gguf-bundle",
+                    "status": "error",
+                    "detail": (
+                        "Configure a local folder containing the Q4_K_M main GGUF and "
+                        "one mmproj*.gguf file. GGUF is not downloaded automatically yet."
+                    ),
+                },
+            ],
+            smoke_test_ok=False,
+            error="Local GGUF model bundle is not configured or was not discovered.",
+        )
+        if library_root is not None:
+            _save_last_health_check(library_root, result=result)
+        return result
+
+    failure_step = "resolve-gguf-bundle"
+    gpu_name: str | None = None
+    try:
+        from .llama_cpp_backend import (
+            discover_llama_server,
+            probe_llama_devices,
+            resolve_gguf_bundle,
+            verify_qwen3_vl_embedding_2b_bundle,
+        )
+
+        main_model, mmproj = resolve_gguf_bundle(resolved_model_source)
+        verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj)
+        diagnostic_steps.append(
+            {
+                "step": "resolve-gguf-bundle",
+                "status": "ok",
+                "detail": f"{main_model.name} + {mmproj.name}",
+            }
+        )
+        failure_step = "llama-server"
+        runtime_config = library.get_runtime_config_for_profile(
+            profile.profile_id,
+            model_name_or_path=resolved_model_source,
+        )
+        if runtime_config.llama_server_url:
+            server_detail = runtime_config.llama_server_url
+            gpu_name = "External llama.cpp server (device unverified)"
+        else:
+            executable = discover_llama_server(runtime_config.llama_server_path)
+            server_detail = str(executable)
+            device_output = probe_llama_devices(executable)
+            vulkan_lines = [
+                line.strip()
+                for line in device_output.splitlines()
+                if "vulkan" in line.lower()
+            ]
+            if not vulkan_lines:
+                raise RuntimeError(
+                    "The configured llama.cpp binary did not enumerate a Vulkan device. "
+                    "Use the official Windows Vulkan build and update the GPU driver."
+                )
+            gpu_name = vulkan_lines[0]
+        diagnostic_steps.append(
+            {
+                "step": "llama-server",
+                "status": "ok",
+                "detail": server_detail,
+            }
+        )
+        failure_step = "text-embedding-smoke"
+        backend = library.get_embedding_backend("llama.cpp", runtime_config)
+        vector = backend.embed_text(
+            "confused reaction image",
+            output_dimension=model_variant.output_dimension,
+            instruction=library.INSTRUCTION_TEXT_BY_KEY[
+                "qwen3vl-text-to-image-default-v1"
+            ],
+        )
+        diagnostic_steps.append(
+            {
+                "step": "text-embedding-smoke",
+                "status": "ok",
+                "detail": f"llama.cpp text embedding passed at {int(vector.shape[0])}d.",
+            }
+        )
+        failure_step = "image-embedding-smoke"
+        image_vector = backend.embed_image_bytes(
+            _HEALTH_CHECK_PNG,
+            output_dimension=model_variant.output_dimension,
+            instruction=library.INSTRUCTION_TEXT_BY_KEY[
+                "qwen3vl-text-to-image-default-v1"
+            ],
+        )
+    except Exception as exc:
+        result = library.RuntimeHealthResult(
+            profile_id=profile.profile_id,
+            backend_name="llama.cpp",
+            model_name_or_path=resolved_model_source,
+            selected_model_key=model_variant.model_key,
+            selected_model_label=model_variant.label,
+            device=profile.device,
+            torch_dtype=profile.torch_dtype,
+            torch_available=False,
+            cuda_available=False,
+            gpu_name=gpu_name,
+            model_source_origin=_infer_model_source_origin(
+                model_name_or_path,
+                resolved_model_source,
+                model_variant.model_key,
+            ),
+            model_downloaded=False,
+            text_smoke_vector_dim=None,
+            diagnostic_steps=[
+                *diagnostic_steps,
+                {
+                    "step": failure_step,
+                    "status": "error",
+                    "detail": str(exc),
+                },
+            ],
+            smoke_test_ok=False,
+            error=str(exc),
+        )
+        if library_root is not None:
+            _save_last_health_check(library_root, result=result)
+        return result
+
+    diagnostic_steps.append(
+        {
+            "step": "image-embedding-smoke",
+            "status": "ok",
+            "detail": f"llama.cpp image embedding passed at {int(image_vector.shape[0])}d.",
+        }
+    )
+    result = library.RuntimeHealthResult(
+        profile_id=profile.profile_id,
+        backend_name="llama.cpp",
+        model_name_or_path=resolved_model_source,
+        selected_model_key=model_variant.model_key,
+        selected_model_label=model_variant.label,
+        device=profile.device,
+        torch_dtype=profile.torch_dtype,
+        torch_available=False,
+        cuda_available=False,
+        gpu_name=gpu_name,
+        model_source_origin=_infer_model_source_origin(
+            model_name_or_path,
+            resolved_model_source,
+            model_variant.model_key,
+        ),
+        model_downloaded=False,
+        text_smoke_vector_dim=int(vector.shape[0]),
+        diagnostic_steps=diagnostic_steps,
+        smoke_test_ok=True,
+        error=None,
+    )
+    if library_root is not None:
+        _save_last_health_check(library_root, result=result)
+    return result
+
+
 def apply_runtime_selection(
     library_root: Path | str,
     selected_profile: str,
     selected_model_key: str,
     model_name_or_path: str | None,
     gif_frame_count: int | None = None,
-    backend_name: str = "qwen3-vl",
+    backend_name: str | None = None,
 ) -> library.ApplyRuntimeSelectionResult:
     settings = library.save_runtime_settings(
         library_root,
@@ -426,7 +639,7 @@ def run_first_run_flow(
     model_name_or_path: str | None,
     import_path: str | None = None,
     gif_frame_count: int | None = None,
-    backend_name: str = "qwen3-vl",
+    backend_name: str | None = None,
 ) -> library.FirstRunFlowResult:
     runtime_selection = apply_runtime_selection(
         library_root,
@@ -474,8 +687,13 @@ def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
     settings = library.get_runtime_settings(library_root)
     assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
-    suggested_model_path = library.discover_local_model_path(settings.selected_model_key)
-    effective_model_source = library.resolve_effective_model_source(
+    suggested_model_path = (
+        library.discover_local_gguf_model_path(settings.selected_model_key)
+        if settings.backend_name == "llama.cpp"
+        else library.discover_local_model_path(settings.selected_model_key)
+    )
+    effective_model_source = library.resolve_effective_model_source_for_backend(
+        settings.backend_name,
         settings.selected_model_key,
         settings.model_name_or_path,
     )
@@ -489,7 +707,12 @@ def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
     model_path_configured = bool(effective_model_source)
     runtime_backend_selected = bool(settings.backend_name)
     health_check_has_run = last_health_check is not None
-    health_check_ok = bool(last_health_check.smoke_test_ok) if last_health_check is not None else False
+    health_check_ok = (
+        bool(last_health_check.smoke_test_ok)
+        and library.runtime_health_matches_settings(settings, last_health_check)
+        if last_health_check is not None
+        else False
+    )
 
     if last_health_check is None:
         health_check_summary = "Health check has not been run yet."

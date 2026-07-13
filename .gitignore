@@ -1,6 +1,7 @@
 .venv/
 .venv-ocr/
 .models/
+.runtime/
 
 __pycache__/
 *.py[cod]

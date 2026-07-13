@@ -46,8 +46,20 @@ class PaddleOcrWorkerBackend:
         worker_script: Path,
         *,
         lang: str = "ch",
-        device: str = "gpu:0",
+        device: str = "cpu",
     ) -> None:
+        worker_env = os.environ.copy()
+        worker_env.setdefault(
+            "PADDLE_PDX_CACHE_HOME",
+            str(_project_root() / ".models" / "paddleocr"),
+        )
+        worker_env.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+        # The parent and worker exchange one JSON object per line.  On Windows a
+        # redirected Python stdout can otherwise inherit the active ANSI code
+        # page while this process decodes the pipe as UTF-8, silently damaging
+        # CJK OCR text before it reaches SQLite.
+        worker_env["PYTHONIOENCODING"] = "utf-8"
+        worker_env["PYTHONUTF8"] = "1"
         self._process = subprocess.Popen(
             [
                 str(python_executable),
@@ -62,7 +74,8 @@ class PaddleOcrWorkerBackend:
             stderr=subprocess.DEVNULL,
             text=True,
             encoding="utf-8",
-            errors="replace",
+            errors="strict",
+            env=worker_env,
             creationflags=(
                 subprocess.CREATE_NO_WINDOW
                 if sys.platform.startswith("win")
@@ -140,7 +153,7 @@ def get_ocr_backend(library_root: Path, embedding_backend_name: str) -> OcrBacke
             python_executable,
             worker_script,
             lang=os.environ.get("MEMESORT_OCR_LANG", "ch"),
-            device=os.environ.get("MEMESORT_OCR_DEVICE", "gpu:0"),
+            device=os.environ.get("MEMESORT_OCR_DEVICE", "cpu"),
         )
 
     if embedding_backend_name == "debug" or requested_backend in {"", "debug"}:

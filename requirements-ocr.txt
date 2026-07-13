@@ -1,0 +1,4 @@
+# Keep OCR isolated from the main Python 3.13 environment.
+# Paddle GPU wheels target CUDA/NVIDIA; Windows AMD systems should use this CPU runtime.
+paddlepaddle==3.2.2
+paddleocr==3.6.0

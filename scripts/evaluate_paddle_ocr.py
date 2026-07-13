@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import tempfile
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Iterable
+
+os.environ.setdefault(
+    "PADDLE_PDX_CACHE_HOME",
+    str(Path(__file__).resolve().parents[1] / ".models" / "paddleocr"),
+)
+os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
 from PIL import Image
 from paddleocr import PaddleOCR
@@ -213,7 +220,18 @@ def main() -> None:
     generated_labels_path = Path(args.generated_labels_path)
 
     labels = json.loads(labels_path.read_text(encoding="utf-8")) if labels_path.exists() else {}
-    ocr_kwargs = {"lang": args.lang}
+    ocr_kwargs = {
+        "use_doc_orientation_classify": False,
+        "use_doc_unwarping": False,
+        "use_textline_orientation": False,
+    }
+    if args.lang.lower() == "ch":
+        ocr_kwargs.update(
+            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_recognition_model_name="PP-OCRv5_mobile_rec",
+        )
+    else:
+        ocr_kwargs["lang"] = args.lang
     if args.device:
         ocr_kwargs["device"] = args.device
     ocr = PaddleOCR(**ocr_kwargs)
@@ -245,7 +263,7 @@ def main() -> None:
             "ocr_text": str(result.get("text") or ""),
             "ocr_lines": result.get("texts", []),
             "ocr_scores": result.get("scores", []),
-            "source": "paddleocr-3.6.0+paddlepaddle-3.2.2-cpu",
+            "source": "paddleocr-3.6.0+paddlepaddle-3.2.2-cpu-mobile",
         }
         for filename, result in sorted(still_results.items())
     }
@@ -258,13 +276,14 @@ def main() -> None:
                 for line in frame.get("texts", [])
             ],
             "frames": result.get("frames", []),
-            "source": "paddleocr-3.6.0+paddlepaddle-3.2.2-cpu",
+            "source": "paddleocr-3.6.0+paddlepaddle-3.2.2-cpu-mobile",
         }
 
     report = {
         "engine": "paddleocr",
         "paddleocr_version": "3.6.0",
         "paddlepaddle_version": "3.2.2",
+        "model_profile": "PP-OCRv5-mobile-no-document-preprocessing",
         "lang": args.lang,
         "still_image_count": len(still_results),
         "gif_count": len(gif_results),

@@ -8,10 +8,16 @@ import time
 from pathlib import Path
 
 
+def configure_jsonl_stdio() -> None:
+    """Keep the worker protocol UTF-8 regardless of the Windows code page."""
+    sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+    sys.stdout.reconfigure(encoding="utf-8", errors="strict")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="JSONL PaddleOCR worker for MemeSort.")
     parser.add_argument("--lang", default="ch")
-    parser.add_argument("--device", default="gpu:0")
+    parser.add_argument("--device", default="cpu")
     return parser.parse_args()
 
 
@@ -19,7 +25,20 @@ def load_ocr(lang: str, device: str):
     with contextlib.redirect_stdout(sys.stderr):
         from paddleocr import PaddleOCR
 
-        return PaddleOCR(lang=lang, device=device)
+        options = {
+            "device": device,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+        }
+        if lang.lower() == "ch":
+            options.update(
+                text_detection_model_name="PP-OCRv5_mobile_det",
+                text_recognition_model_name="PP-OCRv5_mobile_rec",
+            )
+        else:
+            options["lang"] = lang
+        return PaddleOCR(**options)
 
 
 def predict_path(ocr, path: Path) -> dict[str, object]:
@@ -56,6 +75,7 @@ def predict_path(ocr, path: Path) -> dict[str, object]:
 
 
 def main() -> int:
+    configure_jsonl_stdio()
     args = parse_args()
     try:
         ocr = load_ocr(args.lang, args.device)

@@ -211,9 +211,9 @@ def ensure_missing_ocr_jobs(
     jobs_created = 0
     for asset_row in asset_rows:
         asset_id = str(asset_row["id"])
-        has_ocr_result = conn.execute(
+        existing_ocr_result = conn.execute(
             """
-            SELECT 1
+            SELECT text
             FROM ocr_result
             WHERE asset_id = ?
               AND ocr_recipe_id = ?
@@ -221,7 +221,13 @@ def ensure_missing_ocr_jobs(
             """,
             (asset_id, ocr_recipe_id),
         ).fetchone()
-        if has_ocr_result is not None:
+        # U+FFFD means bytes were already lost while crossing the historical
+        # Windows worker pipe.  Treat that result as missing so initialization
+        # schedules a one-time repair with the corrected UTF-8 protocol.
+        if (
+            existing_ocr_result is not None
+            and "\ufffd" not in str(existing_ocr_result["text"])
+        ):
             continue
 
         if job_queue.has_incomplete_job(

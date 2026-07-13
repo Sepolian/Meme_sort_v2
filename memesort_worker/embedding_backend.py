@@ -47,6 +47,10 @@ class EmbeddingRuntimeConfig:
     low_cpu_mem_usage: bool = True
     num_threads: int | None = None
     num_interop_threads: int | None = None
+    llama_server_path: str | None = None
+    llama_server_url: str | None = None
+    llama_gpu_layers: int = 99
+    llama_context_size: int = 4096
 
 
 @dataclass
@@ -353,10 +357,88 @@ def get_embedding_backend(
         return DebugHashEmbeddingBackend()
     if backend_name == "qwen3-vl":
         return _get_cached_qwen_backend(runtime_config or EmbeddingRuntimeConfig())
+    if backend_name == "llama.cpp":
+        return _get_cached_llama_cpp_backend(runtime_config or EmbeddingRuntimeConfig())
     raise EmbeddingBackendError(
         "Unsupported embedding backend: "
-        f"{backend_name}. Supported backends: debug, qwen3-vl"
+        f"{backend_name}. Supported backends: debug, qwen3-vl, llama.cpp"
     )
+
+
+class LlamaCppEmbeddingBackend(EmbeddingBackend):
+    def __init__(self, runtime_config: EmbeddingRuntimeConfig) -> None:
+        if not runtime_config.model_name_or_path:
+            raise EmbeddingBackendError("llama.cpp backend requires a local GGUF model source")
+        from .llama_cpp_backend import (
+            LlamaCppBackendError,
+            LlamaCppEmbeddingAdapter,
+            LlamaCppServerConfig,
+        )
+
+        self._adapter_error = LlamaCppBackendError
+        self._adapter = LlamaCppEmbeddingAdapter(
+            LlamaCppServerConfig(
+                model_path=runtime_config.model_name_or_path,
+                executable_path=runtime_config.llama_server_path,
+                server_url=runtime_config.llama_server_url,
+                gpu_layers=runtime_config.llama_gpu_layers,
+                context_size=runtime_config.llama_context_size,
+            )
+        )
+        super().__init__(
+            backend_id=(
+                f"llama.cpp::{runtime_config.model_name_or_path}::"
+                f"gpu-layers={runtime_config.llama_gpu_layers}"
+            )
+        )
+
+    def embed_text(
+        self,
+        text: str,
+        output_dimension: int,
+        instruction: str | None = None,
+    ) -> np.ndarray:
+        try:
+            vector = self._adapter.embed_text(text, instruction=instruction)
+        except self._adapter_error as exc:
+            raise EmbeddingBackendError(str(exc)) from exc
+        return _coerce_normalized_dimension(vector, output_dimension)
+
+    def embed_image_bytes(
+        self,
+        image_bytes: bytes,
+        output_dimension: int,
+        instruction: str | None = None,
+    ) -> np.ndarray:
+        try:
+            vector = self._adapter.embed_image_bytes(image_bytes, instruction=instruction)
+        except self._adapter_error as exc:
+            raise EmbeddingBackendError(str(exc)) from exc
+        return _coerce_normalized_dimension(vector, output_dimension)
+
+
+@lru_cache(maxsize=8)
+def _get_cached_llama_cpp_backend(
+    runtime_config: EmbeddingRuntimeConfig,
+) -> LlamaCppEmbeddingBackend:
+    return LlamaCppEmbeddingBackend(runtime_config)
+
+
+def _coerce_normalized_dimension(vector: np.ndarray, output_dimension: int) -> np.ndarray:
+    if output_dimension <= 0:
+        raise EmbeddingBackendError(f"Invalid output dimension: {output_dimension}")
+    vector = np.asarray(vector, dtype=np.float32)
+    if vector.ndim != 1:
+        raise EmbeddingBackendError(f"Expected a 1D embedding, got shape {vector.shape}")
+    if vector.shape[0] < output_dimension:
+        raise EmbeddingBackendError(
+            f"Model returned dim {vector.shape[0]}, smaller than requested {output_dimension}"
+        )
+    result = vector[:output_dimension]
+    norm = np.linalg.norm(result)
+    if norm == 0:
+        raise EmbeddingBackendError("Model returned zero vector")
+    return result / norm
 
 
 def _hash_to_unit_vector(payload: bytes, output_dimension: int) -> np.ndarray:

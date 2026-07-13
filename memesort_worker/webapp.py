@@ -168,7 +168,11 @@ def create_app(library_root: str):
                         if payload.get("gif_frame_count") is not None
                         else None
                     ),
-                    backend_name=str(payload.get("backend_name", "qwen3-vl")),
+                    backend_name=(
+                        str(payload["backend_name"])
+                        if payload.get("backend_name")
+                        else None
+                    ),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/library-status" and method == "GET":
@@ -320,7 +324,11 @@ def create_app(library_root: str):
                             if payload.get("gif_frame_count") is not None
                             else None
                         ),
-                        backend_name=str(payload.get("backend_name", "qwen3-vl")),
+                        backend_name=(
+                            str(payload["backend_name"])
+                            if payload.get("backend_name")
+                            else None
+                        ),
                         worker_loop=worker_loop,
                     ),
                 )
