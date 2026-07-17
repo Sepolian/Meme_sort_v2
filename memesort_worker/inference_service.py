@@ -68,6 +68,10 @@ class InferenceScheduler:
             while True:
                 if item.cancelled:
                     self._remove_pending(item)
+                    # A different waiter may have observed this cancelled item
+                    # at the head of the queue and gone back to sleep.  Wake it
+                    # after removal so the next eligible request can proceed.
+                    self._condition.notify_all()
                     raise InferenceCancelledError(
                         f"Inference request {context.request_id} was cancelled"
                     )
