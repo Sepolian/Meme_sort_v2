@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+import time
 import unittest
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -26,6 +28,7 @@ from memesort_worker.llama_cpp_backend import (
     LlamaCppBackendError,
     LlamaCppEmbeddingAdapter,
     LlamaCppServer,
+    _close_runtime_loggers,
     load_server_config,
     resolve_gguf_bundle,
     verify_qwen3_vl_embedding_2b_bundle,
@@ -94,6 +97,7 @@ class LlamaCppBackendTests(unittest.TestCase):
             load_runtime_manifest().model.request_model,
             request.call_args.kwargs["payload"]["model"],
         )
+        server.close()
 
     def test_server_config_is_fully_derived_from_manifest(self) -> None:
         manifest = load_runtime_manifest()
@@ -105,6 +109,9 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertEqual("Vulkan0", config.device)
         self.assertEqual(manifest.llama_cpp.server.parallel_slots, config.parallel_slots)
         self.assertEqual(manifest.model.request_model, config.request_model)
+        self.assertEqual(manifest.llama_cpp.server.idle_timeout_seconds, config.idle_timeout_seconds)
+        self.assertEqual(manifest.logging.file_count, config.log_file_count)
+        self.assertEqual(manifest.logging.max_bytes_per_file, config.log_max_bytes)
 
     def test_embedding_backend_rejects_dimension_mismatch(self) -> None:
         config = EmbeddingRuntimeConfig()
@@ -172,7 +179,77 @@ class LlamaCppBackendTests(unittest.TestCase):
             )
             self.assertEqual(config.pooling, command[command.index("--pooling") + 1])
             self.assertEqual("2", command[command.index("--embd-normalize") + 1])
+            self.assertIn("--log-disable", command)
+            self.assertEqual(
+                subprocess.DEVNULL,
+                popen.call_args.kwargs["stdout"],
+            )
             server.close()
+
+    def test_request_failure_restarts_and_retries_only_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = replace(load_server_config(), log_dir=Path(temp_dir))
+            server = LlamaCppServer(config)
+            server._base_url = "http://127.0.0.1:8080"
+            with patch.object(server, "_ensure_ready"), patch.object(
+                server,
+                "_request_json",
+                side_effect=[
+                    LlamaCppBackendError("connection failed"),
+                    {"data": [{"embedding": [1.0, 2.0]}]},
+                ],
+            ) as request:
+                vector = server.request_embedding("private prompt")
+
+            np.testing.assert_allclose(np.array([1.0, 2.0], dtype=np.float32), vector)
+            self.assertEqual(2, request.call_count)
+            failing_server = LlamaCppServer(config)
+            with patch.object(failing_server, "_ensure_ready"), patch.object(
+                failing_server,
+                "_request_json",
+                side_effect=LlamaCppBackendError("still failed"),
+            ) as failed_request:
+                with self.assertRaisesRegex(LlamaCppBackendError, "still failed"):
+                    failing_server.request_embedding("another private prompt")
+            self.assertEqual(2, failed_request.call_count)
+            for handler in server._logger.handlers:
+                handler.flush()
+            log_text = (Path(temp_dir) / "inference.log").read_text(encoding="utf-8")
+            self.assertIn("restarting_once", log_text)
+            self.assertNotIn("private prompt", log_text)
+            server.close()
+            failing_server.close()
+            _close_runtime_loggers()
+
+    def test_server_unloads_after_manifest_idle_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = [root / "llama-server.exe", root / "model.gguf", root / "mmproj.gguf"]
+            for path in paths:
+                path.write_bytes(b"test")
+            config = replace(
+                load_server_config(),
+                executable_path=paths[0],
+                model_path=paths[1],
+                mmproj_path=paths[2],
+                idle_timeout_seconds=0.05,
+                log_dir=root / "logs",
+            )
+            server = LlamaCppServer(config)
+            with patch(
+                "memesort_worker.llama_cpp_backend._validate_manifest_runtime"
+            ), patch(
+                "memesort_worker.llama_cpp_backend.subprocess.Popen"
+            ) as popen, patch.object(server, "_wait_until_healthy"):
+                popen.return_value.poll.return_value = None
+                _ = server.base_url
+                deadline = time.monotonic() + 1
+                while not popen.return_value.terminate.called and time.monotonic() < deadline:
+                    time.sleep(0.01)
+
+            self.assertTrue(popen.return_value.terminate.called)
+            self.assertIsNone(server._process)
+            _close_runtime_loggers()
 
     def test_vulkan_profile_selects_llama_cpp_and_distinct_recipe(self) -> None:
         profiles = {profile.profile_id: profile for profile in list_runtime_profiles()}

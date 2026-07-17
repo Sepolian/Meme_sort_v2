@@ -4,10 +4,11 @@ import atexit
 import base64
 import hashlib
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import socket
 import subprocess
-import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -42,7 +43,11 @@ class LlamaCppServerConfig:
     startup_timeout_seconds: float
     request_timeout_seconds: float
     device_probe_timeout_seconds: float
+    idle_timeout_seconds: float
     shutdown_grace_seconds: float
+    log_dir: Path
+    log_file_count: int
+    log_max_bytes: int
 
     @classmethod
     def from_manifest(cls, manifest: RuntimeManifest) -> "LlamaCppServerConfig":
@@ -64,7 +69,11 @@ class LlamaCppServerConfig:
             device_probe_timeout_seconds=(
                 manifest.llama_cpp.server.device_probe_timeout_seconds
             ),
+            idle_timeout_seconds=manifest.llama_cpp.server.idle_timeout_seconds,
             shutdown_grace_seconds=manifest.shutdown_grace_seconds,
+            log_dir=manifest.log_dir,
+            log_file_count=manifest.logging.file_count,
+            log_max_bytes=manifest.logging.max_bytes_per_file,
         )
 
 
@@ -161,9 +170,11 @@ class LlamaCppServer:
     def __init__(self, config: LlamaCppServerConfig) -> None:
         self.config = config
         self._process: subprocess.Popen[bytes] | None = None
-        self._log_file: Any | None = None
         self._base_url: str | None = None
         self._lock = threading.RLock()
+        self._idle_timer: threading.Timer | None = None
+        self._last_activity = 0.0
+        self._logger = _runtime_logger(config)
 
     @property
     def base_url(self) -> str:
@@ -175,8 +186,10 @@ class LlamaCppServer:
 
     def close(self) -> None:
         with self._lock:
+            self._cancel_idle_timer()
             process = self._process
             self._process = None
+            self._base_url = None
             if process is not None and process.poll() is None:
                 process.terminate()
                 try:
@@ -184,35 +197,35 @@ class LlamaCppServer:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=self.config.shutdown_grace_seconds)
-            if self._log_file is not None:
-                self._log_file.close()
-                self._log_file = None
+            if process is not None:
+                self._logger.info("llama_server_stopped")
 
     def request_embedding(self, request_input: Any) -> np.ndarray:
-        _ = self.base_url
-        payload = {
-            "input": request_input,
-            "model": self.config.request_model,
-            "encoding_format": "float",
-        }
-        response = self._request_json(
-            "/v1/embeddings",
-            method="POST",
-            payload=payload,
-            timeout=self.config.request_timeout_seconds,
-        )
-        try:
-            embedding = response["data"][0]["embedding"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LlamaCppBackendError(
-                f"llama-server returned an unexpected embeddings response: {response!r}"
-            ) from exc
-        vector = np.asarray(embedding, dtype=np.float32)
-        if vector.ndim != 1 or vector.size == 0:
-            raise LlamaCppBackendError(
-                f"llama-server returned an invalid embedding shape: {vector.shape}"
-            )
-        return vector
+        for attempt in range(2):
+            try:
+                with _ACTIVE_SERVER_LOCK:
+                    with self._lock:
+                        self._ensure_ready()
+                        response = self._request_json(
+                            "/v1/embeddings",
+                            method="POST",
+                            payload={
+                                "input": request_input,
+                                "model": self.config.request_model,
+                                "encoding_format": "float",
+                            },
+                            timeout=self.config.request_timeout_seconds,
+                        )
+                        vector = _embedding_from_response(response)
+                        self._touch_activity()
+                        return vector
+            except LlamaCppBackendError:
+                if attempt == 1:
+                    self._logger.error("embedding_request_failed_after_retry")
+                    raise
+                self._logger.warning("embedding_request_failed_restarting_once")
+                self.close()
+        raise AssertionError("unreachable")
 
     def _ensure_ready(self) -> None:
         if self._process is not None and self._process.poll() is None:
@@ -252,26 +265,26 @@ class LlamaCppServer:
             str(self.config.context_size),
             "--parallel",
             str(self.config.parallel_slots),
+            "--log-disable",
         ]
         env = os.environ.copy()
         env["LLAMA_MEDIA_MARKER"] = self.config.media_marker
         creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-        self._log_file = tempfile.TemporaryFile(mode="w+b")
         try:
             self._process = subprocess.Popen(
                 command,
                 stdin=subprocess.DEVNULL,
-                stdout=self._log_file,
-                stderr=subprocess.STDOUT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 env=env,
                 creationflags=creation_flags,
             )
         except OSError as exc:
-            self._log_file.close()
-            self._log_file = None
             raise LlamaCppBackendError(f"Failed to start llama-server: {exc}") from exc
+        self._logger.info("llama_server_started")
         try:
             self._wait_until_healthy()
+            self._touch_activity()
         except Exception:
             self.close()
             raise
@@ -283,7 +296,7 @@ class LlamaCppServer:
             if self._process is not None and self._process.poll() is not None:
                 raise LlamaCppBackendError(
                     "llama-server exited during startup with code "
-                    f"{self._process.returncode}. Log tail: {self._read_log_tail()}"
+                    f"{self._process.returncode}."
                 )
             try:
                 response = self._request_json("/health", method="GET", timeout=2.0)
@@ -294,20 +307,34 @@ class LlamaCppServer:
             time.sleep(0.2)
         raise LlamaCppBackendError(
             "llama-server did not become healthy within "
-            f"{self.config.startup_timeout_seconds:g}s: {last_error or 'unknown error'}. "
-            f"Log tail: {self._read_log_tail()}"
+            f"{self.config.startup_timeout_seconds:g}s: {last_error or 'unknown error'}."
         )
 
-    def _read_log_tail(self, max_bytes: int = 4096) -> str:
-        if self._log_file is None:
-            return "unavailable"
-        try:
-            self._log_file.flush()
-            size = self._log_file.seek(0, 2)
-            self._log_file.seek(max(0, size - max_bytes))
-            return self._log_file.read().decode("utf-8", errors="replace").strip() or "empty"
-        except OSError:
-            return "unavailable"
+    def _touch_activity(self) -> None:
+        self._last_activity = time.monotonic()
+        self._cancel_idle_timer()
+        timer = threading.Timer(
+            self.config.idle_timeout_seconds,
+            self._close_if_idle,
+        )
+        timer.daemon = True
+        self._idle_timer = timer
+        timer.start()
+
+    def _close_if_idle(self) -> None:
+        with self._lock:
+            idle_for = time.monotonic() - self._last_activity
+            if idle_for >= self.config.idle_timeout_seconds:
+                self._logger.info("llama_server_idle_unload")
+                self.close()
+            elif self._process is not None:
+                self._touch_activity()
+
+    def _cancel_idle_timer(self) -> None:
+        timer = self._idle_timer
+        self._idle_timer = None
+        if timer is not None and timer is not threading.current_thread():
+            timer.cancel()
 
     def _request_json(
         self,
@@ -365,6 +392,53 @@ def _format_text_prompt(content: str, instruction: str | None) -> str:
     if instruction:
         return f"{instruction.strip()}\n{content}"
     return content
+
+
+def _embedding_from_response(response: dict[str, Any]) -> np.ndarray:
+    try:
+        embedding = response["data"][0]["embedding"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise LlamaCppBackendError(
+            "llama-server returned an unexpected embeddings response"
+        ) from exc
+    vector = np.asarray(embedding, dtype=np.float32)
+    if vector.ndim != 1 or vector.size == 0:
+        raise LlamaCppBackendError(
+            f"llama-server returned an invalid embedding shape: {vector.shape}"
+        )
+    return vector
+
+
+def _runtime_logger(config: LlamaCppServerConfig) -> logging.Logger:
+    log_path = (config.log_dir / "inference.log").resolve()
+    key = str(log_path).casefold()
+    with _LOGGER_LOCK:
+        existing = _RUNTIME_LOGGERS.get(key)
+        if existing is not None:
+            return existing
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        logger = logging.getLogger(f"memesort.inference.{len(_RUNTIME_LOGGERS)}")
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        handler = RotatingFileHandler(
+            log_path,
+            maxBytes=config.log_max_bytes,
+            backupCount=max(0, config.log_file_count - 1),
+            encoding="utf-8",
+        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(handler)
+        _RUNTIME_LOGGERS[key] = logger
+        return logger
+
+
+def _close_runtime_loggers() -> None:
+    with _LOGGER_LOCK:
+        for logger in _RUNTIME_LOGGERS.values():
+            for handler in list(logger.handlers):
+                handler.close()
+                logger.removeHandler(handler)
+        _RUNTIME_LOGGERS.clear()
 
 
 def _sha256_file(path: Path) -> str:
@@ -435,6 +509,8 @@ def _find_available_local_port() -> int:
         return int(sock.getsockname()[1])
 
 
+_LOGGER_LOCK = threading.Lock()
+_RUNTIME_LOGGERS: dict[str, logging.Logger] = {}
 _MANAGED_SERVERS: set[LlamaCppServer] = set()
 _ACTIVE_SERVER_LOCK = threading.RLock()
 
@@ -450,3 +526,4 @@ def _activate_managed_server(server: LlamaCppServer) -> None:
 def _close_managed_servers() -> None:
     for server in list(_MANAGED_SERVERS):
         server.close()
+    _close_runtime_loggers()
