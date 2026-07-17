@@ -36,7 +36,6 @@ __all__ = [
     "_recipe_label",
     "_set_worker_state_json",
     "_utc_now",
-    "discover_local_gguf_model_path",
     "get_embedding_backend",
     "get_model_variant",
     "get_runtime_profile",
@@ -46,7 +45,7 @@ __all__ = [
     "is_runtime_ready_for_indexing",
     "list_assets",
     "resolve_recipe_preset",
-    "runtime_health_matches_settings",
+    "runtime_health_matches_manifest",
     "switch_active_recipe",
 ]
 

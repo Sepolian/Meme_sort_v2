@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import threading
 from pathlib import Path
 
 from .asset_browse import list_asset_summaries
@@ -19,6 +20,12 @@ _HEALTH_CHECK_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUB"
     "AScY42YAAAAASUVORK5CYII="
 )
+_SESSION_HEALTH_LOCK = threading.Lock()
+_SESSION_HEALTH: dict[str, library.RuntimeHealthResult] = {}
+
+
+def _library_key(library_root: Path | str) -> str:
+    return str(Path(library_root).expanduser().resolve()).casefold()
 
 
 def _save_last_health_check(
@@ -27,6 +34,20 @@ def _save_last_health_check(
 ) -> None:
     with LibraryStore(library_root) as store:
         store.set_worker_state_json("last_runtime_health_check", result.to_dict())
+    with _SESSION_HEALTH_LOCK:
+        _SESSION_HEALTH[_library_key(library_root)] = result
+
+
+def get_current_health_check(
+    library_root: Path | str,
+) -> library.RuntimeHealthResult | None:
+    with _SESSION_HEALTH_LOCK:
+        return _SESSION_HEALTH.get(_library_key(library_root))
+
+
+def _clear_current_health_checks() -> None:
+    with _SESSION_HEALTH_LOCK:
+        _SESSION_HEALTH.clear()
 
 
 def get_last_health_check(
@@ -34,40 +55,29 @@ def get_last_health_check(
 ) -> library.RuntimeHealthResult | None:
     with LibraryStore(library_root) as store:
         payload = store.get_worker_state_json("last_runtime_health_check")
-        if payload is None:
+        if payload is None or not payload.get("runtime_fingerprint"):
             return None
         return library.RuntimeHealthResult(
-            profile_id=str(payload["profile_id"]),
+            runtime_fingerprint=str(payload["runtime_fingerprint"]),
             backend_name=str(payload["backend_name"]),
-            model_name_or_path=(
-                str(payload["model_name_or_path"])
-                if payload.get("model_name_or_path")
-                else None
-            ),
-            selected_model_key=(
-                str(payload["selected_model_key"])
-                if payload.get("selected_model_key")
-                else None
-            ),
-            selected_model_label=(
-                str(payload["selected_model_label"])
-                if payload.get("selected_model_label")
-                else None
-            ),
             device=str(payload["device"]),
-            torch_dtype=str(payload["torch_dtype"]),
-            torch_available=bool(payload["torch_available"]),
-            cuda_available=bool(payload["cuda_available"]),
             gpu_name=str(payload["gpu_name"]) if payload.get("gpu_name") else None,
-            model_source_origin=(
-                str(payload["model_source_origin"])
-                if payload.get("model_source_origin")
+            gpu_vendor=(
+                str(payload["gpu_vendor"]) if payload.get("gpu_vendor") else None
+            ),
+            gpu_vendor_id=(
+                str(payload["gpu_vendor_id"])
+                if payload.get("gpu_vendor_id")
                 else None
             ),
-            model_downloaded=bool(payload.get("model_downloaded", False)),
             text_smoke_vector_dim=(
                 int(payload["text_smoke_vector_dim"])
                 if payload.get("text_smoke_vector_dim") is not None
+                else None
+            ),
+            image_smoke_vector_dim=(
+                int(payload["image_smoke_vector_dim"])
+                if payload.get("image_smoke_vector_dim") is not None
                 else None
             ),
             diagnostic_steps=list(payload.get("diagnostic_steps", [])),
@@ -77,60 +87,39 @@ def get_last_health_check(
 
 
 def run_runtime_health_check(
-    profile_id: str,
-    model_key: str = library.MANIFEST_MODEL_KEY,
-    model_name_or_path: str | None = None,
     library_root: Path | str | None = None,
 ) -> library.RuntimeHealthResult:
-    if model_name_or_path is not None:
-        raise ValueError("Vulkan model path is owned by runtime-manifest.json")
-    profile = library.get_runtime_profile(profile_id)
-    model_variant = library.get_model_variant(model_key)
-    library.resolve_recipe_preset(profile.profile_id, model_variant.model_key)
+    manifest = load_runtime_manifest()
     diagnostic_steps: list[dict[str, object]] = [
         {
-            "step": "runtime-profile",
+            "step": "runtime-manifest",
             "status": "ok",
-            "detail": profile.profile_id,
-        },
-        {
-            "step": "embedding-model",
-            "status": "ok",
-            "detail": model_variant.model_id,
+            "detail": manifest.runtime_fingerprint,
         },
     ]
 
     return _run_llama_cpp_runtime_health_check(
-        profile=profile,
-        model_variant=model_variant,
+        manifest=manifest,
         library_root=library_root,
         diagnostic_steps=diagnostic_steps,
     )
 
 
 def _run_llama_cpp_runtime_health_check(
-    profile,
-    model_variant,
+    manifest,
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
 ) -> library.RuntimeHealthResult:
-    manifest = load_runtime_manifest()
-    resolved_model_source = str(manifest.model_install_dir)
     if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
         result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
+            runtime_fingerprint=manifest.runtime_fingerprint,
             backend_name="llama.cpp",
-            model_name_or_path=resolved_model_source,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=False,
-            cuda_available=False,
+            device=manifest.platform.device,
             gpu_name=None,
-            model_source_origin=None,
-            model_downloaded=False,
+            gpu_vendor=None,
+            gpu_vendor_id=None,
             text_smoke_vector_dim=None,
+            image_smoke_vector_dim=None,
             diagnostic_steps=[
                 *diagnostic_steps,
                 {
@@ -151,6 +140,8 @@ def _run_llama_cpp_runtime_health_check(
 
     failure_step = "resolve-gguf-bundle"
     gpu_name: str | None = None
+    gpu_vendor: str | None = None
+    gpu_vendor_id: str | None = None
     try:
         from .llama_cpp_backend import (
             discover_llama_server,
@@ -172,6 +163,8 @@ def _run_llama_cpp_runtime_health_check(
         )
         failure_step = "vulkan-device"
         vulkan_device = probe_vulkan0(manifest)
+        gpu_vendor = vulkan_device.vendor_name
+        gpu_vendor_id = vulkan_device.vendor_id_hex
         diagnostic_steps.append(
             {
                 "step": "vulkan-device",
@@ -224,19 +217,14 @@ def _run_llama_cpp_runtime_health_check(
         )
     except Exception as exc:
         result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
+            runtime_fingerprint=manifest.runtime_fingerprint,
             backend_name="llama.cpp",
-            model_name_or_path=resolved_model_source,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=False,
-            cuda_available=False,
+            device=manifest.platform.device,
             gpu_name=gpu_name,
-            model_source_origin="project-local-model-store",
-            model_downloaded=False,
+            gpu_vendor=gpu_vendor,
+            gpu_vendor_id=gpu_vendor_id,
             text_smoke_vector_dim=None,
+            image_smoke_vector_dim=None,
             diagnostic_steps=[
                 *diagnostic_steps,
                 {
@@ -260,19 +248,14 @@ def _run_llama_cpp_runtime_health_check(
         }
     )
     result = library.RuntimeHealthResult(
-        profile_id=profile.profile_id,
+        runtime_fingerprint=manifest.runtime_fingerprint,
         backend_name="llama.cpp",
-        model_name_or_path=resolved_model_source,
-        selected_model_key=model_variant.model_key,
-        selected_model_label=model_variant.label,
-        device=profile.device,
-        torch_dtype=profile.torch_dtype,
-        torch_available=False,
-        cuda_available=False,
+        device=manifest.platform.device,
         gpu_name=gpu_name,
-        model_source_origin="project-local-model-store",
-        model_downloaded=False,
+        gpu_vendor=gpu_vendor,
+        gpu_vendor_id=gpu_vendor_id,
         text_smoke_vector_dim=int(vector.shape[0]),
+        image_smoke_vector_dim=int(image_vector.shape[0]),
         diagnostic_steps=diagnostic_steps,
         smoke_test_ok=True,
         error=None,
@@ -283,108 +266,95 @@ def _run_llama_cpp_runtime_health_check(
 
 
 def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
-    settings = library.get_runtime_settings(library_root)
+    manifest = load_runtime_manifest()
     assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
-    suggested_model_path = library.discover_local_gguf_model_path(
-        settings.selected_model_key
-    )
-    effective_model_source = library.resolve_effective_model_source_for_backend(
-        settings.backend_name,
-        settings.selected_model_key,
-        settings.model_name_or_path,
-    )
+    current_health_check = get_current_health_check(library_root)
     runtime_ready, runtime_ready_detail = library.is_runtime_ready_for_indexing(library_root)
 
     assets_present = bool(assets_result.assets)
     indexed_assets_present = any(asset["status"] == "indexed" for asset in assets_result.assets)
     pending_assets_present = any(asset["status"] != "indexed" for asset in assets_result.assets)
-    runtime_profile_selected = bool(settings.selected_profile)
-    embedding_model_selected = bool(settings.selected_model_key)
-    model_path_configured = bool(effective_model_source)
-    runtime_backend_selected = bool(settings.backend_name)
-    health_check_has_run = last_health_check is not None
+    runtime_files_installed = (
+        manifest.llama_server_path.is_file()
+        and manifest.main_model_path.is_file()
+        and manifest.projector_path.is_file()
+    )
+    health_check_has_run = current_health_check is not None
     health_check_ok = (
-        bool(last_health_check.smoke_test_ok)
-        and library.runtime_health_matches_settings(settings, last_health_check)
-        if last_health_check is not None
+        bool(current_health_check.smoke_test_ok)
+        and library.runtime_health_matches_manifest(current_health_check)
+        if current_health_check is not None
         else False
     )
 
-    if last_health_check is None:
-        health_check_summary = "Health check has not been run yet."
-    elif last_health_check.smoke_test_ok:
+    if current_health_check is None:
+        health_check_summary = "Vulkan health has not been checked in this app session."
+    elif current_health_check.smoke_test_ok:
         health_check_summary = (
-            f"Last health check passed for {last_health_check.profile_id} on "
-            f"{last_health_check.device}."
+            f"This session passed on {current_health_check.device}: "
+            f"{current_health_check.gpu_name or 'GPU name unavailable'}."
         )
     else:
-        health_check_summary = last_health_check.error or "Last health check failed."
+        health_check_summary = current_health_check.error or "This session's health check failed."
+
+    if last_health_check is None:
+        historical_summary = "No compatible persisted health result is available."
+    elif last_health_check.smoke_test_ok:
+        historical_summary = (
+            f"Last recorded check passed on {last_health_check.device}: "
+            f"{last_health_check.gpu_name or 'GPU name unavailable'}."
+        )
+    else:
+        historical_summary = last_health_check.error or "Last recorded health check failed."
+
+    displayed_health = current_health_check or last_health_check
 
     runtime_readiness = {
-        "backend_name": settings.backend_name,
-        "selected_profile": settings.selected_profile,
-        "selected_model_key": settings.selected_model_key,
-        "selected_model_label": library.get_model_variant(settings.selected_model_key).label,
-        "suggested_model_path": suggested_model_path,
-        "recommended_model_source": effective_model_source,
+        "backend_name": "llama.cpp",
+        "device": manifest.platform.device,
+        "model_id": manifest.model.id,
+        "model_label": manifest.model.base_model_id.split("/")[-1],
+        "model_source": str(manifest.model_install_dir),
+        "runtime_fingerprint": manifest.runtime_fingerprint,
+        "runtime_files_installed": runtime_files_installed,
         "ready": runtime_ready,
         "ready_detail": runtime_ready_detail,
-        "last_health_check_ok": health_check_ok if last_health_check is not None else False,
-        "last_health_check_summary": (
-            health_check_summary
-            if last_health_check is not None
-            else "Health check has not been run yet."
-        ),
-        "last_health_model_source_origin": (
-            last_health_check.model_source_origin
-            if last_health_check is not None
+        "current_health_check_ok": health_check_ok,
+        "current_health_check_summary": health_check_summary,
+        "last_health_check_summary": historical_summary,
+        "last_health_text_smoke_vector_dim": (
+            displayed_health.text_smoke_vector_dim
+            if displayed_health is not None
             else None
         ),
-        "last_health_model_downloaded": (
-            last_health_check.model_downloaded
-            if last_health_check is not None
-            else False
-        ),
-        "last_health_text_smoke_vector_dim": (
-            last_health_check.text_smoke_vector_dim
-            if last_health_check is not None
+        "last_health_image_smoke_vector_dim": (
+            displayed_health.image_smoke_vector_dim
+            if displayed_health is not None
             else None
         ),
         "last_health_gpu_name": (
-            last_health_check.gpu_name
-            if last_health_check is not None
-            else None
+            displayed_health.gpu_name if displayed_health is not None else None
+        ),
+        "last_health_gpu_vendor": (
+            displayed_health.gpu_vendor if displayed_health is not None else None
+        ),
+        "last_health_gpu_vendor_id": (
+            displayed_health.gpu_vendor_id if displayed_health is not None else None
         ),
         "last_health_diagnostic_steps": (
-            last_health_check.diagnostic_steps
-            if last_health_check is not None
+            displayed_health.diagnostic_steps
+            if displayed_health is not None
             else []
         ),
     }
 
     checklist = [
         {
-            "id": "runtime-profile",
-            "label": "Choose runtime profile",
-            "done": runtime_profile_selected,
-            "detail": settings.selected_profile,
-        },
-        {
-            "id": "embedding-model",
-            "label": "Choose embedding model",
-            "done": embedding_model_selected,
-            "detail": settings.selected_model_key,
-        },
-        {
-            "id": "model-path",
-            "label": "Resolve model source",
-            "done": model_path_configured,
-            "detail": (
-                effective_model_source
-                or suggested_model_path
-                or "Not ready"
-            ),
+            "id": "runtime-files",
+            "label": "Install pinned Vulkan runtime",
+            "done": runtime_files_installed,
+            "detail": str(manifest.model_install_dir) if runtime_files_installed else "Run setup",
         },
         {
             "id": "health-check",
@@ -412,10 +382,6 @@ def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
 
     return library.SetupStateResult(
         library_root=str(Path(library_root).expanduser().resolve()),
-        runtime_profile_selected=runtime_profile_selected,
-        embedding_model_selected=embedding_model_selected,
-        model_path_configured=model_path_configured,
-        runtime_backend_selected=runtime_backend_selected,
         health_check_has_run=health_check_has_run,
         health_check_ok=health_check_ok,
         health_check_summary=health_check_summary,
@@ -424,7 +390,6 @@ def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
         indexed_assets_present=indexed_assets_present,
         pending_assets_present=pending_assets_present,
         active_recipe_label=assets_result.active_recipe_label,
-        suggested_model_path=suggested_model_path,
         runtime_readiness=runtime_readiness,
         checklist=checklist,
     )

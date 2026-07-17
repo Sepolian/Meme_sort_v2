@@ -76,14 +76,6 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function looksLikeLocalModelPath(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return false;
-  }
-  return /^[A-Za-z]:[\\/]/.test(text) || text.startsWith("\\\\") || text.startsWith("/") || text.startsWith(".");
-}
-
 function setText(id, value) {
   const node = byId(id);
   if (node) {
@@ -158,97 +150,19 @@ function summarizeProfile(profile) {
 }
 
 function selectedProfile() {
-  const profileId = byId("profileSelect").value;
-  return state.runtimeProfiles.find((profile) => profile.profile_id === profileId) || null;
+  return state.runtimeProfiles[0] || null;
 }
 
 function selectedModelVariant() {
-  const modelKey = byId("modelVariantSelect").value;
-  return state.modelVariants.find((variant) => variant.model_key === modelKey) || null;
-}
-
-function syncSetupSelections(force = false) {
-  const profile = selectedProfile();
-  if (!profile) {
-    return;
-  }
-  const supportedModels = profile.supported_model_keys || state.modelVariants.map((item) => item.model_key);
-  [...byId("modelVariantSelect").options].forEach((option) => {
-    option.disabled = !supportedModels.includes(option.value);
-  });
-  if (!supportedModels.includes(byId("modelVariantSelect").value)) {
-    byId("modelVariantSelect").value = supportedModels[0] || "";
-    byId("modelPathInput").value = "";
-  }
-  const modelVariant = selectedModelVariant();
-  const frameInput = byId("gifFrameCountInput");
-  if (force || Number(frameInput.value) !== Number(profile.gif_frame_count)) {
-    frameInput.value = String(profile.gif_frame_count);
-  }
-  renderProfileSummary();
-  renderModelVariantSummary();
-  const input = byId("modelPathInput");
-  if (force && modelVariant) {
-    input.placeholder = selectedBackendName() === "llama.cpp"
-      ? "Local folder with main Q4_K_M GGUF + mmproj GGUF"
-      : modelVariant.model_id;
-    const configuredPath = state.runtimeSettings?.model_name_or_path || "";
-    const recommendedSource = state.setupState?.runtime_readiness?.recommended_model_source || "";
-    if (!configuredPath && recommendedSource) {
-      input.value = recommendedSource;
-    }
-  }
-  renderModelPathHint();
+  return state.modelVariants[0] || null;
 }
 
 function renderProfiles() {
-  const select = byId("profileSelect");
-  const previous = select.value;
-  select.innerHTML = "";
-
-  state.runtimeProfiles.forEach((profile) => {
-    const option = document.createElement("option");
-    option.value = profile.profile_id;
-    option.textContent = profile.label;
-    if (
-      (state.runtimeSettings && state.runtimeSettings.selected_profile === profile.profile_id) ||
-      (!state.runtimeSettings && previous === profile.profile_id)
-    ) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  });
-
-  if (!select.value && state.runtimeProfiles[0]) {
-    select.value = state.runtimeProfiles[0].profile_id;
-  }
-
-  syncSetupSelections(true);
+  renderProfileSummary();
 }
 
 function renderModelVariants() {
-  const select = byId("modelVariantSelect");
-  const previous = select.value;
-  select.innerHTML = "";
-
-  state.modelVariants.forEach((variant) => {
-    const option = document.createElement("option");
-    option.value = variant.model_key;
-    option.textContent = variant.label;
-    if (
-      (state.runtimeSettings && state.runtimeSettings.selected_model_key === variant.model_key) ||
-      (!state.runtimeSettings && previous === variant.model_key)
-    ) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  });
-
-  if (!select.value && state.modelVariants[0]) {
-    select.value = state.modelVariants[0].model_key;
-  }
-
-  syncSetupSelections(true);
+  renderModelVariantSummary();
 }
 
 function renderProfileSummary() {
@@ -262,7 +176,7 @@ function renderProfileSummary() {
     <div class="small"><strong>${escapeHtml(profile.label)}</strong></div>
     <div class="small muted">${escapeHtml(profile.notes || "")}</div>
     <div class="small mono">${escapeHtml(summarizeProfile(profile))}</div>
-    <div class="small muted">Default recipe: ${escapeHtml(profile.recipe_preset)} | ${escapeHtml(profile.backend_name || "qwen3-vl")} | ${escapeHtml(profile.torch_dtype)}</div>
+    <div class="small muted">Pinned recipe: ${escapeHtml(profile.recipe_preset)} | ${escapeHtml(profile.backend_name || "llama.cpp")}</div>
   `;
 }
 
@@ -277,10 +191,6 @@ async function cancelActiveSearches() {
       })
     )
   );
-}
-
-function selectedBackendName() {
-  return selectedProfile()?.backend_name || "qwen3-vl";
 }
 
 function renderModelVariantSummary() {
@@ -308,73 +218,25 @@ function renderRuntimeSummary() {
       state.runtimeSettings.selected_profile,
       state.runtimeSettings.selected_model_key,
       state.runtimeSettings.selected_recipe_preset,
-      state.runtimeSettings.backend_name || "qwen3-vl",
+      state.runtimeSettings.backend_name || "llama.cpp",
       `gif-f${state.runtimeSettings.gif_frame_count}`,
     ].join(" / ")
   );
   setText("activeRecipe", state.assetSummary?.active_recipe_label || "No active index yet");
 
-  const suggestedModelPath = state.setupState?.suggested_model_path || "";
-  byId("modelPathInput").value = "";
-  byId("gifFrameCountInput").value = String(state.runtimeSettings.gif_frame_count);
-  if (state.runtimeSettings.selected_profile) {
-    byId("profileSelect").value = state.runtimeSettings.selected_profile;
-  }
-  if (state.runtimeSettings.selected_model_key) {
-    byId("modelVariantSelect").value = state.runtimeSettings.selected_model_key;
-  }
   renderProfileSummary();
   renderModelVariantSummary();
-  renderModelPathHint();
+  renderPinnedRuntimeHint();
 }
 
-function renderModelPathHint() {
-  const node = byId("modelPathHint");
-  const configuredPath = byId("modelPathInput").value.trim();
-  const suggestedPath = state.setupState?.suggested_model_path || "";
-  const recommendedSource = state.setupState?.runtime_readiness?.recommended_model_source || "";
-  const variant = selectedModelVariant();
-  const llamaCpp = selectedBackendName() === "llama.cpp";
-
-  if (llamaCpp) {
-    node.innerHTML = configuredPath
-      ? `
-        <div class="small"><strong>Configured GGUF bundle</strong></div>
-        <div class="small muted">This must be a local folder containing one Q4_K_M main GGUF and one mmproj*.gguf, or the exact main GGUF file.</div>
-        <div class="small mono">${escapeHtml(configuredPath)}</div>
-      `
-      : `
-        <div class="small"><strong>Local GGUF bundle required</strong></div>
-        <div class="small muted">GGUF auto-download is intentionally disabled in this first version. Choose a prepared Q4_K_M model folder; MemeSort also checks .models/gguf/${escapeHtml(variant?.model_key || "qwen3-2b")}-q4_k_m.</div>
-      `;
-    return;
-  }
-
-  if (configuredPath) {
-    const configuredIsRepoId = !looksLikeLocalModelPath(configuredPath);
-    const usingSuggested = configuredIsRepoId && suggestedPath && recommendedSource && recommendedSource === suggestedPath;
-    node.innerHTML = `
-      <div class="small"><strong>Configured model source</strong></div>
-      <div class="small muted">${usingSuggested ? "Configured with a repo id; runtime will use the local project snapshot that matches it." : "Using the configured override path or repo id."}</div>
-      <div class="small mono">${escapeHtml(configuredPath)}</div>
-      ${usingSuggested ? `<div class="small mono">${escapeHtml(recommendedSource)}</div>` : ""}
-    `;
-    return;
-  }
-
-  if (suggestedPath) {
-    node.innerHTML = `
-      <div class="small"><strong>Local model ready</strong></div>
-      <div class="small muted">A local snapshot was found for this model variant. Health check and indexing will use it automatically.</div>
-      <div class="small mono">${escapeHtml(suggestedPath)}</div>
-    `;
-    return;
-  }
-
+function renderPinnedRuntimeHint() {
+  const node = byId("pinnedRuntimeHint");
+  const readiness = state.setupState?.runtime_readiness || {};
+  const installed = Boolean(readiness.runtime_files_installed);
   node.innerHTML = `
-    <div class="small"><strong>Model will be prepared on demand</strong></div>
-    <div class="small muted">Leave this blank to auto-download the selected model into the project-local .models folder during health check.</div>
-    <div class="small mono">${escapeHtml(variant?.model_id || "Qwen/Qwen3-VL-Embedding-2B")}</div>
+    <div class="small"><strong>${installed ? "Pinned runtime files installed" : "Pinned runtime files missing"}</strong></div>
+    <div class="small muted">Only the repository setup script installs or upgrades llama.cpp and the GGUF bundle. The app never downloads or accepts a custom model path.</div>
+    <div class="small mono">${escapeHtml(readiness.model_source || "Run scripts/setup_windows_llama.ps1")}</div>
   `;
 }
 
@@ -389,9 +251,9 @@ function renderRuntimeReadiness() {
   node.innerHTML = `
     <div class="small"><strong>Runtime readiness</strong></div>
     <div class="small muted">${escapeHtml(readiness.ready_detail || readiness.last_health_check_summary || "Health check has not been run yet.")}</div>
-    <div class="small mono">${escapeHtml(readiness.selected_profile || "")} / ${escapeHtml(readiness.selected_model_label || readiness.selected_model_key || "")} / ${escapeHtml(readiness.backend_name || "")}</div>
+    <div class="small mono">${escapeHtml(readiness.device || "")} / ${escapeHtml(readiness.model_label || "")} / ${escapeHtml(readiness.backend_name || "")}</div>
     <div class="small mono">${escapeHtml(readiness.ready ? "Ready for indexing" : "Not ready for indexing")}</div>
-    <div class="small mono">${escapeHtml(readiness.recommended_model_source || "No local model source discovered yet.")}</div>
+    <div class="small mono">${escapeHtml(readiness.model_source || "Pinned model bundle is not installed.")}</div>
   `;
 }
 
@@ -403,13 +265,11 @@ function renderSetupGuide() {
     return;
   }
 
-  let title = "First-run guide";
-  let detail = "Choose a runtime profile and embedding model to begin.";
+  let title = "Setup guide";
+  let detail = "Install and verify the pinned Vulkan runtime to begin.";
 
-  if (!setupState.runtime_profile_selected || !setupState.embedding_model_selected) {
-    detail = "Pick the runtime profile and embedding model that should own the active index recipe.";
-  } else if (!setupState.health_check_has_run) {
-    detail = "Run health check next. This will verify the runtime and auto-download the selected model into the project-local .models folder if needed.";
+  if (!setupState.health_check_has_run) {
+    detail = "Run the Vulkan health check in this app session. Setup is the only process that installs runtime or model files.";
   } else if (!setupState.health_check_ok) {
     detail = "Fix the runtime issue shown below, then rerun health check before importing or indexing.";
   } else if (!setupState.assets_present) {
@@ -1265,7 +1125,6 @@ async function runHealthCheck() {
   });
   state.lastHealthDiagnosticSteps = result.diagnostic_steps || [];
   byId("healthResult").textContent = JSON.stringify(result, null, 2);
-  byId("modelPathInput").value = "";
   await loadState();
 }
 
@@ -1616,18 +1475,6 @@ function wireEvents() {
   });
   byId("closeAssetDetailBtn").addEventListener("click", () => {
     clearSelectedAsset();
-  });
-  byId("profileSelect").addEventListener("change", () => {
-    if (selectedBackendName() !== (state.runtimeSettings?.backend_name || "qwen3-vl")) {
-      byId("modelPathInput").value = "";
-    }
-    syncSetupSelections(true);
-  });
-  byId("modelVariantSelect").addEventListener("change", () => {
-    if (byId("modelVariantSelect").value !== state.runtimeSettings?.selected_model_key) {
-      byId("modelPathInput").value = "";
-    }
-    syncSetupSelections(true);
   });
   byId("healthCheckBtn").addEventListener("click", async () => {
     try {

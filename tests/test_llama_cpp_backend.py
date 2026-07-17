@@ -28,12 +28,16 @@ from memesort_worker.llama_cpp_backend import (
     LlamaCppServer,
     _close_runtime_loggers,
     load_server_config,
-    resolve_gguf_bundle,
     verify_qwen3_vl_embedding_2b_bundle,
 )
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_admission import VulkanDeviceInfo
 from memesort_worker.runtime_service import run_runtime_health_check
+from memesort_worker.runtime_service import (
+    _clear_current_health_checks,
+    _save_last_health_check,
+    get_last_health_check,
+)
 
 
 class LlamaCppBackendTests(unittest.TestCase):
@@ -43,24 +47,6 @@ class LlamaCppBackendTests(unittest.TestCase):
         main_model.write_bytes(b"gguf-main")
         mmproj.write_bytes(b"gguf-mmproj")
         return main_model, mmproj
-
-    def test_resolve_gguf_bundle_finds_main_and_mmproj(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            expected_main, expected_mmproj = self._write_bundle(root)
-
-            main_model, mmproj = resolve_gguf_bundle(str(root))
-
-        self.assertEqual(expected_main, main_model)
-        self.assertEqual(expected_mmproj, mmproj)
-
-    def test_resolve_gguf_bundle_rejects_missing_mmproj(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            main_model = Path(temp_dir) / "model.Q4_K_M.gguf"
-            main_model.write_bytes(b"gguf-main")
-
-            with self.assertRaisesRegex(LlamaCppBackendError, "mmproj"):
-                resolve_gguf_bundle(str(main_model))
 
     def test_verified_recipe_rejects_different_gguf_conversion(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -276,38 +262,35 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertEqual("llama.cpp", settings.backend_name)
         self.assertEqual("vulkan-manifest", settings.selected_recipe_preset)
 
-    def test_old_transformers_health_check_cannot_authorize_vulkan_indexing(self) -> None:
+    def test_persisted_health_cannot_authorize_a_new_app_session(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            bundle = Path(temp_dir) / "bundle"
-            bundle.mkdir()
-            self._write_bundle(bundle)
-            stale = RuntimeHealthResult(
-                profile_id="legacy-cpu",
-                backend_name="qwen3-vl",
-                model_name_or_path=str(bundle),
-                selected_model_key="legacy-model",
-                selected_model_label="Qwen3 2B",
-                device="cpu",
-                torch_dtype="auto",
-                torch_available=True,
-                cuda_available=False,
-                gpu_name=None,
-                model_source_origin="explicit-local-path",
-                model_downloaded=False,
+            get_runtime_settings(library_root)
+            passed = RuntimeHealthResult(
+                runtime_fingerprint=load_runtime_manifest().runtime_fingerprint,
+                backend_name="llama.cpp",
+                device="Vulkan0",
+                gpu_name="Vulkan0: Test GPU",
+                gpu_vendor="amd",
+                gpu_vendor_id="0x1002",
                 text_smoke_vector_dim=2048,
+                image_smoke_vector_dim=2048,
                 diagnostic_steps=[],
                 smoke_test_ok=True,
                 error=None,
             )
-            with patch(
-                "memesort_worker.library.get_last_health_check",
-                return_value=stale,
-            ):
+            _save_last_health_check(library_root, passed)
+            with patch.object(Path, "is_file", return_value=True):
+                ready_in_session, _ = is_runtime_ready_for_indexing(library_root)
+            _clear_current_health_checks()
+            with patch.object(Path, "is_file", return_value=True):
                 ready, detail = is_runtime_ready_for_indexing(library_root)
+            persisted = get_last_health_check(library_root)
 
+        self.assertTrue(ready_in_session)
         self.assertFalse(ready)
-        self.assertIn("stale", detail.lower())
+        self.assertIn("session", detail.lower())
+        self.assertIsNotNone(persisted)
 
     def test_vulkan_health_check_does_not_download_missing_gguf(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -319,11 +302,7 @@ class LlamaCppBackendTests(unittest.TestCase):
                 "memesort_worker.runtime_service.load_runtime_manifest",
                 return_value=missing_manifest,
             ):
-                result = run_runtime_health_check(
-                    "vulkan",
-                    model_key="manifest",
-                    model_name_or_path=None,
-                )
+                result = run_runtime_health_check()
 
         self.assertFalse(result.smoke_test_ok)
         self.assertEqual("llama.cpp", result.backend_name)
@@ -361,14 +340,13 @@ class LlamaCppBackendTests(unittest.TestCase):
                                     backend = factory.return_value
                                     backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
                                     backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
-                                    result = run_runtime_health_check(
-                                        "vulkan",
-                                        model_key="manifest",
-                                        model_name_or_path=None,
-                                    )
+                                    result = run_runtime_health_check()
 
         self.assertTrue(result.smoke_test_ok)
         self.assertEqual("Vulkan0: Test GPU", result.gpu_name)
+        self.assertEqual("amd", result.gpu_vendor)
+        self.assertEqual("0x1002", result.gpu_vendor_id)
+        self.assertEqual(2048, result.image_smoke_vector_dim)
         self.assertEqual("image-embedding-smoke", result.diagnostic_steps[-1]["step"])
         backend.embed_text.assert_called_once()
         backend.embed_image_bytes.assert_called_once()

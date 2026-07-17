@@ -83,60 +83,8 @@ def load_server_config(
     return LlamaCppServerConfig.from_manifest(load_runtime_manifest(manifest_path))
 
 
-def resolve_gguf_bundle(model_name_or_path: str) -> tuple[Path, Path]:
-    """Resolve a main GGUF and its multimodal projector from a file or folder."""
-    source = Path(model_name_or_path).expanduser().resolve()
-    if not source.exists():
-        raise LlamaCppBackendError(f"GGUF model source does not exist: {source}")
-
-    if source.is_file():
-        if source.suffix.lower() != ".gguf" or source.name.lower().startswith("mmproj"):
-            raise LlamaCppBackendError(
-                "GGUF model source must be the main .gguf file, not the mmproj file."
-            )
-        main_model = source
-        bundle_dir = source.parent
-    else:
-        bundle_dir = source
-        candidates = sorted(
-            path
-            for path in bundle_dir.glob("*.gguf")
-            if not path.name.lower().startswith("mmproj")
-        )
-        if not candidates:
-            raise LlamaCppBackendError(f"No main .gguf model found in: {bundle_dir}")
-        if len(candidates) > 1:
-            q4_candidates = [path for path in candidates if "q4_k_m" in path.name.lower()]
-            if len(q4_candidates) == 1:
-                candidates = q4_candidates
-            else:
-                names = ", ".join(path.name for path in candidates)
-                raise LlamaCppBackendError(
-                    "Multiple main GGUF files found. Configure the exact main file instead: "
-                    f"{names}"
-                )
-        main_model = candidates[0]
-
-    mmproj_candidates = sorted(bundle_dir.glob("mmproj*.gguf"))
-    if not mmproj_candidates:
-        raise LlamaCppBackendError(
-            f"No mmproj*.gguf multimodal projector found beside: {main_model}"
-        )
-    if len(mmproj_candidates) > 1:
-        f16_candidates = [path for path in mmproj_candidates if "f16" in path.name.lower()]
-        if len(f16_candidates) == 1:
-            mmproj_candidates = f16_candidates
-        else:
-            names = ", ".join(path.name for path in mmproj_candidates)
-            raise LlamaCppBackendError(
-                "Multiple mmproj GGUF files found. Keep one projector beside the model: "
-                f"{names}"
-            )
-    return main_model, mmproj_candidates[0]
-
-
-def discover_llama_server(executable_path: str | Path | None = None) -> Path:
-    candidate = Path(executable_path or load_server_config().executable_path).resolve()
+def discover_llama_server() -> Path:
+    candidate = load_server_config().executable_path.resolve()
     if candidate.is_file():
         return candidate
     raise LlamaCppBackendError(
@@ -238,7 +186,11 @@ class LlamaCppServer:
             raise LlamaCppBackendError(f"Pinned main GGUF does not exist: {main_model}")
         if not mmproj.is_file():
             raise LlamaCppBackendError(f"Pinned multimodal projector does not exist: {mmproj}")
-        executable = discover_llama_server(self.config.executable_path)
+        executable = self.config.executable_path.resolve()
+        if not executable.is_file():
+            raise LlamaCppBackendError(
+                f"Pinned llama-server executable does not exist: {executable}. Run setup."
+            )
         _activate_managed_server(self)
         port = _find_available_local_port()
         self._base_url = f"http://127.0.0.1:{port}"

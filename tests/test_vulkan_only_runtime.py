@@ -50,7 +50,6 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         self.assertEqual("manifest", settings.selected_model_key)
         self.assertEqual("vulkan-manifest", settings.selected_recipe_preset)
         self.assertEqual("llama.cpp", settings.backend_name)
-        self.assertIsNone(settings.model_name_or_path)
         self.assertIn(" / vulkan", assets.active_recipe_label)
 
     def test_runtime_has_no_mutable_settings_api_or_persisted_selection(self) -> None:

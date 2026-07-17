@@ -378,23 +378,24 @@ class DesktopAppShell:
         runtime_readiness = setup_state.get("runtime_readiness", {})
         if not isinstance(runtime_readiness, dict):
             runtime_readiness = {}
-        selected_profile = str(runtime_readiness.get("selected_profile") or "n/a")
-        selected_model_label = str(runtime_readiness.get("selected_model_label") or "n/a")
+        device = str(runtime_readiness.get("device") or "n/a")
+        model_label = str(runtime_readiness.get("model_label") or "n/a")
         backend_name = str(runtime_readiness.get("backend_name") or "n/a")
         ready_detail = str(runtime_readiness.get("ready_detail") or "No runtime readiness summary.")
         self.runtime_detail_var.set(
-            f"Runtime: {selected_profile} / {selected_model_label} / {backend_name} | {ready_detail}"
+            f"Runtime: {device} / {model_label} / {backend_name} | {ready_detail}"
         )
 
-        recommended_source = str(runtime_readiness.get("recommended_model_source") or "No model source ready yet.")
-        model_origin = str(runtime_readiness.get("last_health_model_source_origin") or "unknown")
-        model_downloaded = bool(runtime_readiness.get("last_health_model_downloaded"))
+        model_source = str(runtime_readiness.get("model_source") or "No model source ready yet.")
+        gpu_vendor = str(runtime_readiness.get("last_health_gpu_vendor") or "unknown vendor")
+        gpu_vendor_id = str(runtime_readiness.get("last_health_gpu_vendor_id") or "unknown id")
         vector_dim = runtime_readiness.get("last_health_text_smoke_vector_dim")
-        model_detail = f"Model source: {recommended_source} | origin {model_origin}"
+        image_dim = runtime_readiness.get("last_health_image_smoke_vector_dim")
+        model_detail = f"Model source: {model_source} | GPU {gpu_vendor} ({gpu_vendor_id})"
         if vector_dim is not None:
-            model_detail += f" | smoke {vector_dim}d"
-        if model_downloaded:
-            model_detail += " | downloaded during health check"
+            model_detail += f" | text smoke {vector_dim}d"
+        if image_dim is not None:
+            model_detail += f" | image smoke {image_dim}d"
         self.model_detail_var.set(model_detail)
 
         rows: list[tuple[str, str]] = []

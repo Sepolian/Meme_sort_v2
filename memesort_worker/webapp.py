@@ -193,9 +193,6 @@ def create_app(library_root: str):
             elif path == "/api/health" and method == "POST":
                 _read_json_body(environ)
                 result = run_runtime_health_check(
-                    profile_id="vulkan",
-                    model_key="manifest",
-                    model_name_or_path=None,
                     library_root=library_root_path,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())

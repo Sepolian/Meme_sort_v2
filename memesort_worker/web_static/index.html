@@ -81,11 +81,7 @@
               <div class="card"><h2>Vulkan runtime</h2><p class="muted small">The local llama.cpp runtime, Vulkan0 device, and GGUF model are pinned by <span class="mono">runtime-manifest.json</span>. Run the repository setup script after a developer changes that manifest.</p>
                 <div id="profileSummary" class="runtime-summary"></div>
                 <div id="modelVariantSummary" class="runtime-summary"></div>
-                <div id="modelPathHint" class="runtime-summary"></div>
-                <select id="profileSelect" hidden><option value="vulkan">Vulkan0</option></select>
-                <select id="modelVariantSelect" hidden><option value="manifest">Manifest model</option></select>
-                <input id="modelPathInput" type="hidden" value="" />
-                <input id="gifFrameCountInput" type="hidden" value="4" />
+                <div id="pinnedRuntimeHint" class="runtime-summary"></div>
                 <div class="actions"><button id="healthCheckBtn" class="ghost">Run Vulkan health check</button></div><div id="setupGuide" class="runtime-summary"></div><div id="runtimeReadiness" class="runtime-summary"></div><div id="setupChecklist" class="checklist"></div><div id="healthDiagnostics" class="checklist"></div><pre id="healthResult" class="console"></pre>
               </div>
               <div class="card"><h2>Import and index</h2><p class="muted small">Import copies files into the managed library. Matching content becomes another source record.</p>

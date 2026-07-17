@@ -276,9 +276,6 @@ class RuntimeProfileSpec:
     recipe_preset: str
     model_id: str
     device: str
-    torch_dtype: str
-    num_threads: int | None
-    num_interop_threads: int | None
     still_max_side: int
     gif_max_side: int
     gif_frame_count: int
@@ -306,7 +303,6 @@ class ModelVariantSpec:
 class RuntimeSettings:
     selected_profile: str
     selected_model_key: str
-    model_name_or_path: str | None
     selected_recipe_preset: str
     gif_frame_count: int
     backend_name: str
@@ -318,19 +314,14 @@ class RuntimeSettings:
 
 @dataclass
 class RuntimeHealthResult:
-    profile_id: str
+    runtime_fingerprint: str
     backend_name: str
-    model_name_or_path: str | None
-    selected_model_key: str | None
-    selected_model_label: str | None
     device: str
-    torch_dtype: str
-    torch_available: bool
-    cuda_available: bool
     gpu_name: str | None
-    model_source_origin: str | None
-    model_downloaded: bool
+    gpu_vendor: str | None
+    gpu_vendor_id: str | None
     text_smoke_vector_dim: int | None
+    image_smoke_vector_dim: int | None
     diagnostic_steps: list[dict[str, object]]
     smoke_test_ok: bool
     error: str | None
@@ -357,10 +348,6 @@ class LibraryStatusResult:
 @dataclass
 class SetupStateResult:
     library_root: str
-    runtime_profile_selected: bool
-    embedding_model_selected: bool
-    model_path_configured: bool
-    runtime_backend_selected: bool
     health_check_has_run: bool
     health_check_ok: bool
     health_check_summary: str
@@ -369,7 +356,6 @@ class SetupStateResult:
     indexed_assets_present: bool
     pending_assets_present: bool
     active_recipe_label: str
-    suggested_model_path: str | None
     runtime_readiness: dict[str, object]
     checklist: list[dict[str, object]]
 
@@ -384,9 +370,6 @@ RUNTIME_PROFILES: dict[str, RuntimeProfileSpec] = {
         recipe_preset=MANIFEST_RECIPE_PRESET,
         model_id=_RUNTIME_MANIFEST.model.id,
         device=_RUNTIME_MANIFEST.platform.device,
-        torch_dtype="gguf-q4_k_m",
-        num_threads=None,
-        num_interop_threads=None,
         still_max_side=_RUNTIME_MANIFEST.preprocessing.still_max_side,
         gif_max_side=_RUNTIME_MANIFEST.preprocessing.gif_max_side,
         gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
@@ -421,61 +404,28 @@ def _resolve(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def discover_local_gguf_model_path(model_key: str) -> str | None:
-    get_model_variant(model_key)
-    if not _RUNTIME_MANIFEST.main_model_path.is_file():
-        return None
-    if not _RUNTIME_MANIFEST.projector_path.is_file():
-        return None
-    return str(_RUNTIME_MANIFEST.model_install_dir)
-
-
-def resolve_effective_model_source_for_backend(
-    backend_name: str,
-    selected_model_key: str,
-    configured_model_name_or_path: str | None,
-    allow_download: bool = False,
-) -> str | None:
-    del allow_download
-    if backend_name != "llama.cpp":
-        raise ValueError("MemeSort supports only the llama.cpp Vulkan backend")
-    if selected_model_key != MANIFEST_MODEL_KEY:
-        raise ValueError("Embedding model is owned by runtime-manifest.json")
-    if configured_model_name_or_path is not None:
-        raise ValueError("Embedding model path is owned by runtime-manifest.json")
-    return str(_RUNTIME_MANIFEST.model_install_dir)
-
-
 def is_runtime_ready_for_indexing(library_root: Path | str) -> tuple[bool, str]:
-    settings = get_runtime_settings(library_root)
-    effective_model_source = resolve_effective_model_source_for_backend(
-        settings.backend_name,
-        settings.selected_model_key,
-        settings.model_name_or_path,
-    )
-    if settings.backend_name != "llama.cpp":
-        return False, f"Unsupported runtime backend: {settings.backend_name}."
-    if not effective_model_source:
-        return False, "Model source is not ready yet."
-    last_health_check = get_last_health_check(library_root)
-    if last_health_check is None:
-        return False, "Runtime health check has not been run yet."
-    if not runtime_health_matches_settings(settings, last_health_check):
-        return False, "Runtime health check is stale for the current profile, model, or backend."
-    if not last_health_check.smoke_test_ok:
-        return False, last_health_check.error or "Runtime health check failed."
+    initialize_library(library_root)
+    if not _RUNTIME_MANIFEST.llama_server_path.is_file():
+        return False, "Pinned llama-server is not installed. Run setup."
+    if not _RUNTIME_MANIFEST.main_model_path.is_file():
+        return False, "Pinned main GGUF is not installed. Run setup."
+    if not _RUNTIME_MANIFEST.projector_path.is_file():
+        return False, "Pinned multimodal projector is not installed. Run setup."
+    from .runtime_service import get_current_health_check
+
+    current_health = get_current_health_check(library_root)
+    if current_health is None:
+        return False, "Vulkan runtime health has not been checked in this app session."
+    if not runtime_health_matches_manifest(current_health):
+        return False, "This session's runtime health check is stale for the active manifest."
+    if not current_health.smoke_test_ok:
+        return False, current_health.error or "Vulkan runtime health check failed."
     return True, "Runtime is ready for indexing."
 
 
-def runtime_health_matches_settings(
-    settings: RuntimeSettings,
-    health_check: RuntimeHealthResult,
-) -> bool:
-    return (
-        health_check.profile_id == settings.selected_profile
-        and health_check.backend_name == settings.backend_name
-        and health_check.selected_model_key == settings.selected_model_key
-    )
+def runtime_health_matches_manifest(health_check: RuntimeHealthResult) -> bool:
+    return health_check.runtime_fingerprint == _RUNTIME_MANIFEST.runtime_fingerprint
 
 
 def _database_path(library_root: Path) -> Path:
@@ -1012,93 +962,10 @@ def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
     return RuntimeSettings(
         selected_profile=VULKAN_PROFILE_ID,
         selected_model_key=MANIFEST_MODEL_KEY,
-        model_name_or_path=None,
         selected_recipe_preset=MANIFEST_RECIPE_PRESET,
         gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
         backend_name="llama.cpp",
         library_root=str(library_root_path),
-    )
-
-
-def _save_last_health_check(
-    library_root: Path | str,
-    result: RuntimeHealthResult,
-) -> None:
-    init_result = initialize_library(library_root)
-    library_root_path = Path(init_result.library_root)
-    conn = _connect(_database_path(library_root_path))
-    try:
-        with conn:
-            _set_worker_state_json(conn, "last_runtime_health_check", result.to_dict())
-    finally:
-        conn.close()
-
-
-def get_last_health_check(
-    library_root: Path | str,
-) -> RuntimeHealthResult | None:
-    init_result = initialize_library(library_root)
-    library_root_path = Path(init_result.library_root)
-    conn = _connect(_database_path(library_root_path))
-    try:
-        payload = _get_worker_state_json(conn, "last_runtime_health_check")
-        if payload is None:
-            return None
-        return RuntimeHealthResult(
-            profile_id=str(payload["profile_id"]),
-            backend_name=str(payload["backend_name"]),
-            model_name_or_path=(
-                str(payload["model_name_or_path"])
-                if payload.get("model_name_or_path")
-                else None
-            ),
-            selected_model_key=(
-                str(payload["selected_model_key"])
-                if payload.get("selected_model_key")
-                else None
-            ),
-            selected_model_label=(
-                str(payload["selected_model_label"])
-                if payload.get("selected_model_label")
-                else None
-            ),
-            device=str(payload["device"]),
-            torch_dtype=str(payload["torch_dtype"]),
-            torch_available=bool(payload["torch_available"]),
-            cuda_available=bool(payload["cuda_available"]),
-            gpu_name=str(payload["gpu_name"]) if payload.get("gpu_name") else None,
-            model_source_origin=(
-                str(payload["model_source_origin"])
-                if payload.get("model_source_origin")
-                else None
-            ),
-            model_downloaded=bool(payload.get("model_downloaded", False)),
-            text_smoke_vector_dim=(
-                int(payload["text_smoke_vector_dim"])
-                if payload.get("text_smoke_vector_dim") is not None
-                else None
-            ),
-            diagnostic_steps=list(payload.get("diagnostic_steps", [])),
-            smoke_test_ok=bool(payload["smoke_test_ok"]),
-            error=str(payload["error"]) if payload.get("error") else None,
-        )
-    finally:
-        conn.close()
-
-
-def run_runtime_health_check(
-    profile_id: str,
-    model_key: str = MANIFEST_MODEL_KEY,
-    model_name_or_path: str | None = None,
-    library_root: Path | str | None = None,
-) -> RuntimeHealthResult:
-    from .runtime_service import run_runtime_health_check as _run_runtime_health_check
-
-    return _run_runtime_health_check(
-        profile_id,
-        model_key=model_key,
-        model_name_or_path=model_name_or_path,
-        library_root=library_root,
     )
 
 
