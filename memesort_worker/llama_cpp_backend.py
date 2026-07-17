@@ -27,6 +27,7 @@ class LlamaCppBackendError(RuntimeError):
 
 @dataclass(frozen=True)
 class LlamaCppServerConfig:
+    manifest_path: Path
     executable_path: Path
     model_path: Path
     mmproj_path: Path
@@ -46,6 +47,7 @@ class LlamaCppServerConfig:
     @classmethod
     def from_manifest(cls, manifest: RuntimeManifest) -> "LlamaCppServerConfig":
         return cls(
+            manifest_path=manifest.source_path,
             executable_path=manifest.llama_server_path,
             model_path=manifest.main_model_path,
             mmproj_path=manifest.projector_path,
@@ -216,6 +218,7 @@ class LlamaCppServer:
         if self._process is not None and self._process.poll() is None:
             return
 
+        _validate_manifest_runtime(self.config)
         main_model = self.config.model_path.resolve()
         mmproj = self.config.mmproj_path.resolve()
         if not main_model.is_file():
@@ -410,6 +413,20 @@ def _llama_normalization_value(normalization: str) -> str:
     raise LlamaCppBackendError(
         f"Unsupported llama.cpp embedding normalization: {normalization}"
     )
+
+
+def _validate_manifest_runtime(config: LlamaCppServerConfig) -> None:
+    from .runtime_activation import validate_runtime_activation
+    from .runtime_admission import validate_pinned_runtime_files
+
+    manifest = load_runtime_manifest(config.manifest_path)
+    expected = LlamaCppServerConfig.from_manifest(manifest)
+    if config != expected:
+        raise LlamaCppBackendError(
+            "llama.cpp configuration diverged from runtime-manifest.json."
+        )
+    validate_runtime_activation(manifest)
+    validate_pinned_runtime_files(manifest)
 
 
 def _find_available_local_port() -> int:

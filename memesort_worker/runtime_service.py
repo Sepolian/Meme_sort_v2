@@ -11,6 +11,7 @@ from .runtime_admission import (
     probe_vulkan0,
     validate_pinned_runtime_files,
 )
+from .runtime_activation import validate_runtime_activation
 from .runtime_manifest import load_runtime_manifest
 
 
@@ -474,6 +475,7 @@ def _run_llama_cpp_runtime_health_check(
 
         main_model = manifest.main_model_path
         mmproj = manifest.projector_path
+        validate_runtime_activation(manifest)
         validate_pinned_runtime_files(manifest)
         verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj, manifest)
         diagnostic_steps.append(

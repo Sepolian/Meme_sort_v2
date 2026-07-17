@@ -232,6 +232,51 @@ class RuntimeManifest:
     def recipe_display_id(self) -> str:
         return f"vulkan-{self.recipe_fingerprint[:8]}"
 
+    @property
+    def runtime_payload(self) -> dict[str, Any]:
+        """Return fields whose change requires setup to reactivate the runtime."""
+        return {
+            "runtime_schema_version": 1,
+            "platform": {
+                "os": self.platform.os,
+                "architecture": self.platform.architecture,
+                "device": self.platform.device,
+                "vendor_ids": dict(self.platform.vendor_ids),
+            },
+            "toolchain": {
+                "uv_version": self.toolchain.uv.version,
+                "uv_archive_sha256": self.toolchain.uv.archive.sha256,
+                "uv_archive_size_bytes": self.toolchain.uv.archive.size_bytes,
+                "python_main_version": self.toolchain.python.main_version,
+                "python_ocr_version": self.toolchain.python.ocr_version,
+            },
+            "llama_cpp": {
+                "build": self.llama_cpp.build,
+                "archive_filename": self.llama_cpp.archive.filename,
+                "archive_sha256": self.llama_cpp.archive.sha256,
+                "archive_size_bytes": self.llama_cpp.archive.size_bytes,
+                "executable": self.llama_cpp.executable,
+            },
+            "model": {
+                "main_filename": self.model.main.filename,
+                "main_sha256": self.model.main.sha256,
+                "main_size_bytes": self.model.main.size_bytes,
+                "projector_filename": self.model.projector.filename,
+                "projector_sha256": self.model.projector.sha256,
+                "projector_size_bytes": self.model.projector.size_bytes,
+            },
+        }
+
+    @property
+    def runtime_fingerprint(self) -> str:
+        payload = json.dumps(
+            self.runtime_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
 
 def default_manifest_path() -> Path:
     return Path(__file__).resolve().parents[1] / MANIFEST_FILENAME

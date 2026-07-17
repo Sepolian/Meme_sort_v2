@@ -71,6 +71,18 @@ class RuntimeManifestTests(unittest.TestCase):
             self._load_raw(modified).recipe_fingerprint,
         )
 
+    def test_pinned_artifact_change_changes_runtime_fingerprint(self) -> None:
+        raw = self._raw_manifest()
+        modified = copy.deepcopy(raw)
+        llama_cpp = modified["llama_cpp"]
+        assert isinstance(llama_cpp, dict)
+        llama_cpp["build"] = "b9999"
+
+        self.assertNotEqual(
+            self._load_raw(raw).runtime_fingerprint,
+            self._load_raw(modified).runtime_fingerprint,
+        )
+
     def test_compatibility_changes_change_recipe_fingerprint(self) -> None:
         raw = self._raw_manifest()
         modified = copy.deepcopy(raw)
