@@ -16,6 +16,7 @@ from .library import (
     initialize_library,
     list_assets,
 )
+from .runtime_service import run_runtime_health_check
 from .retrieval_service import find_similar_assets
 from .webapp import run_web_app
 
@@ -108,6 +109,12 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-jobs":
+        health_check = run_runtime_health_check(args.library_root)
+        if not health_check.smoke_test_ok:
+            parser.error(
+                health_check.error
+                or "Vulkan runtime health check failed; indexing was not started."
+            )
         result = run_pending_jobs_for_active_runtime(
             args.library_root,
             max_jobs=args.max_jobs,

@@ -19,6 +19,14 @@ def run_pending_jobs(
     library_root: Path | str,
     max_jobs: int | None = None,
 ) -> library.RunJobsResult:
+    runtime_ready, runtime_message = library.is_runtime_ready_for_indexing(
+        library_root
+    )
+    if not runtime_ready:
+        raise RuntimeError(
+            "Vulkan runtime is not authorized for indexing in this app session: "
+            f"{runtime_message}"
+        )
     init_result = library.initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
     backend: EmbeddingBackend | None = None

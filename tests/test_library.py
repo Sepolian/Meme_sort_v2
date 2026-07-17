@@ -143,6 +143,9 @@ class LibraryTests(unittest.TestCase):
         with patch(
             "memesort_worker.library.get_embedding_backend", return_value=backend
         ), patch(
+            "memesort_worker.library.is_runtime_ready_for_indexing",
+            return_value=(True, "test health passed"),
+        ), patch(
             "memesort_worker.indexing_pipeline.get_ocr_backend",
             return_value=StubOcrBackend(),
         ):
@@ -308,6 +311,26 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual([], result.results)
         backend_factory.assert_not_called()
 
+    def test_pending_jobs_require_current_session_vulkan_health(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            with patch(
+                "memesort_worker.library.is_runtime_ready_for_indexing",
+                return_value=(False, "Vulkan runtime health has not been checked in this app session."),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "not authorized"):
+                    run_pending_jobs(library_root)
+
+            conn = sqlite3.connect(library_root / DATABASE_NAME)
+            try:
+                claimed_jobs = conn.execute(
+                    "SELECT COUNT(*) FROM job WHERE status != 'pending'"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+        self.assertEqual(0, claimed_jobs)
+
     def test_remove_last_source_record_deletes_managed_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, source_root = self._import_one_image(Path(temp_dir))
@@ -431,6 +454,30 @@ class LibraryTests(unittest.TestCase):
 
         self.assertEqual(0, exit_code)
         self.assertIn("created_recipe_id", payload)
+
+    def test_cli_run_jobs_performs_a_session_health_check_first(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            output = io.StringIO()
+            try:
+                with patch(
+                    "memesort_worker.cli.run_runtime_health_check"
+                ) as health_check, patch(
+                    "memesort_worker.cli.run_pending_jobs_for_active_runtime"
+                ) as run_jobs, redirect_stdout(output):
+                    health_check.return_value.smoke_test_ok = True
+                    health_check.return_value.error = None
+                    run_jobs.return_value.to_dict.return_value = {"processed_jobs": 0}
+
+                    exit_code = run(["run-jobs", "--library-root", str(library_root)])
+            finally:
+                output_value = output.getvalue()
+                output.close()
+
+        self.assertEqual(0, exit_code)
+        health_check.assert_called_once_with(str(library_root))
+        run_jobs.assert_called_once_with(str(library_root), max_jobs=None)
+        self.assertEqual({"processed_jobs": 0}, json.loads(output_value))
 
     def test_app_state_exposes_one_manifest_runtime_descriptor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

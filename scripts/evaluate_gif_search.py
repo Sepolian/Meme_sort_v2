@@ -17,6 +17,7 @@ from memesort_worker.library import (
     search_text,
 )
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from memesort_worker.runtime_service import run_runtime_health_check
 
 
 DEFAULT_QUERY_FIELDS = (
@@ -89,6 +90,12 @@ def main() -> None:
 
     try:
         initialize_library(library_root)
+        health_check = run_runtime_health_check(library_root)
+        if not health_check.smoke_test_ok:
+            raise RuntimeError(
+                health_check.error
+                or "Vulkan runtime health check failed; evaluation indexing was not started."
+            )
         import_started_at = time.perf_counter()
         import_folder(library_root, dataset_dir)
         import_seconds = time.perf_counter() - import_started_at
