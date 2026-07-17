@@ -12,6 +12,27 @@ STATIC_ROOT = Path(__file__).resolve().parents[1] / "memesort_worker" / "web_sta
 
 
 class AssetDetailStylesTests(unittest.TestCase):
+    def test_empty_library_message_spans_the_masonry_wall(self) -> None:
+        styles = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn(
+            ".asset-grid > .state-message { column-span: all; }",
+            styles,
+        )
+
+    def test_queue_monitor_can_shrink_without_horizontal_overflow(self) -> None:
+        styles = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn(
+            ".queue-monitor { display: grid; grid-template-columns: minmax(150px, 1fr) auto auto minmax(0, 1.6fr) auto;",
+            styles,
+        )
+        self.assertIn(".queue-monitor > * { min-width: 0; }", styles)
+        self.assertIn(
+            ".queue-progress p { margin: 5px 0 0; overflow-wrap: anywhere; }",
+            styles,
+        )
+
     def test_leaving_search_tab_cancels_each_active_search_request(self) -> None:
         app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
