@@ -6,6 +6,11 @@ from pathlib import Path
 from .asset_browse import list_asset_summaries
 from . import library_internal as library
 from .library_store import LibraryStore
+from .runtime_admission import (
+    crosscheck_llama_vulkan0,
+    probe_vulkan0,
+    validate_pinned_runtime_files,
+)
 from .runtime_manifest import load_runtime_manifest
 
 
@@ -469,12 +474,26 @@ def _run_llama_cpp_runtime_health_check(
 
         main_model = manifest.main_model_path
         mmproj = manifest.projector_path
+        validate_pinned_runtime_files(manifest)
         verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj, manifest)
         diagnostic_steps.append(
             {
                 "step": "resolve-gguf-bundle",
                 "status": "ok",
                 "detail": f"{main_model.name} + {mmproj.name}",
+            }
+        )
+        failure_step = "vulkan-device"
+        vulkan_device = probe_vulkan0(manifest)
+        diagnostic_steps.append(
+            {
+                "step": "vulkan-device",
+                "status": "ok",
+                "detail": (
+                    f"Vulkan0: {vulkan_device.device_name}; "
+                    f"vendor={vulkan_device.vendor_name} "
+                    f"({vulkan_device.vendor_id_hex})"
+                ),
             }
         )
         failure_step = "llama-server"
@@ -488,17 +507,11 @@ def _run_llama_cpp_runtime_health_check(
             executable,
             timeout_seconds=manifest.llama_cpp.server.device_probe_timeout_seconds,
         )
-        vulkan_lines = [
-            line.strip()
-            for line in device_output.splitlines()
-            if "vulkan" in line.lower()
-        ]
-        if not vulkan_lines:
-            raise RuntimeError(
-                "The pinned llama.cpp binary did not enumerate Vulkan0. "
-                "Update the GPU driver and rerun setup."
-            )
-        gpu_name = vulkan_lines[0]
+        gpu_name = crosscheck_llama_vulkan0(
+            vulkan_device,
+            device_output,
+            manifest.platform.device,
+        )
         diagnostic_steps.append(
             {
                 "step": "llama-server",

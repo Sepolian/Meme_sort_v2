@@ -31,6 +31,7 @@ from memesort_worker.llama_cpp_backend import (
     verify_qwen3_vl_embedding_2b_bundle,
 )
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from memesort_worker.runtime_admission import VulkanDeviceInfo
 from memesort_worker.runtime_service import run_runtime_health_check
 
 
@@ -279,17 +280,27 @@ class LlamaCppBackendTests(unittest.TestCase):
                     return_value="Vulkan0: Test GPU",
                 ):
                     with patch(
-                        "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
+                        "memesort_worker.runtime_service.probe_vulkan0",
+                        return_value=VulkanDeviceInfo(
+                            index=0,
+                            vendor_id=0x1002,
+                            vendor_name="amd",
+                            device_id=1,
+                            device_name="Test GPU",
+                        ),
                     ):
-                        with patch("memesort_worker.library.get_embedding_backend") as factory:
-                            backend = factory.return_value
-                            backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
-                            backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
-                            result = run_runtime_health_check(
-                                "vulkan-balanced",
-                                model_key="qwen3-2b",
-                                model_name_or_path=str(bundle),
-                            )
+                        with patch(
+                            "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
+                        ):
+                            with patch("memesort_worker.library.get_embedding_backend") as factory:
+                                backend = factory.return_value
+                                backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
+                                backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
+                                result = run_runtime_health_check(
+                                    "vulkan-balanced",
+                                    model_key="qwen3-2b",
+                                    model_name_or_path=str(bundle),
+                                )
 
         self.assertTrue(result.smoke_test_ok)
         self.assertEqual("Vulkan0: Test GPU", result.gpu_name)
