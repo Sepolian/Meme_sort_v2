@@ -21,7 +21,6 @@ from memesort_worker.library import (
     is_runtime_ready_for_indexing,
     list_runtime_profiles,
     resolve_recipe_preset,
-    save_runtime_settings,
 )
 from memesort_worker.llama_cpp_backend import (
     LlamaCppBackendError,
@@ -272,12 +271,6 @@ class LlamaCppBackendTests(unittest.TestCase):
     def test_runtime_settings_infer_backend_from_vulkan_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            save_runtime_settings(
-                library_root,
-                selected_profile="vulkan",
-                selected_model_key="manifest",
-                model_name_or_path=None,
-            )
             settings = get_runtime_settings(library_root)
 
         self.assertEqual("llama.cpp", settings.backend_name)
@@ -289,12 +282,6 @@ class LlamaCppBackendTests(unittest.TestCase):
             bundle = Path(temp_dir) / "bundle"
             bundle.mkdir()
             self._write_bundle(bundle)
-            save_runtime_settings(
-                library_root,
-                selected_profile="vulkan",
-                selected_model_key="manifest",
-                model_name_or_path=None,
-            )
             stale = RuntimeHealthResult(
                 profile_id="legacy-cpu",
                 backend_name="qwen3-vl",

@@ -20,9 +20,9 @@ from memesort_worker.library import (
     list_assets,
     list_model_variants,
     list_runtime_profiles,
-    save_runtime_settings,
     _preprocess_image_bytes,
 )
+from memesort_worker import library as library_module
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
@@ -53,23 +53,21 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         self.assertIsNone(settings.model_name_or_path)
         self.assertIn(" / vulkan", assets.active_recipe_label)
 
-    def test_custom_model_path_and_legacy_backend_are_rejected(self) -> None:
+    def test_runtime_has_no_mutable_settings_api_or_persisted_selection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "library"
-            with self.assertRaisesRegex(ValueError, "owned by runtime-manifest"):
-                save_runtime_settings(
-                    root,
-                    selected_profile="vulkan",
-                    selected_model_key="manifest",
-                    model_name_or_path=r"C:\custom\model.gguf",
-                )
-            with self.assertRaisesRegex(ValueError, "Unknown runtime profile"):
-                save_runtime_settings(
-                    root,
-                    selected_profile="cpu-low-memory",
-                    selected_model_key="manifest",
-                    model_name_or_path=None,
-                )
+            initialize_library(root)
+            get_runtime_settings(root)
+            conn = sqlite3.connect(root / "library.sqlite")
+            try:
+                persisted = conn.execute(
+                    "SELECT 1 FROM worker_state WHERE key = 'runtime_settings'"
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertIsNone(persisted)
+        self.assertFalse(hasattr(library_module, "save_runtime_settings"))
 
     def test_search_api_has_no_backend_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch(

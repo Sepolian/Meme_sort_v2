@@ -1258,64 +1258,10 @@ async function revealAssetFile(assetId, target = "managed", sourcePath = null) {
   });
 }
 
-async function saveSettings() {
-  const payload = {
-    selected_profile: byId("profileSelect").value,
-    selected_model_key: byId("modelVariantSelect").value,
-    model_name_or_path: byId("modelPathInput").value.trim() || null,
-    gif_frame_count: Number(byId("gifFrameCountInput").value),
-    backend_name: selectedBackendName(),
-  };
-  const result = await api("/api/runtime-settings", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  state.runtimeSettings = result.runtime_settings || null;
-  renderRuntimeSummary();
-}
-
-function buildFirstRunPayload(importPath = null) {
-  return {
-    selected_profile: byId("profileSelect").value,
-    selected_model_key: byId("modelVariantSelect").value,
-    model_name_or_path: byId("modelPathInput").value.trim() || null,
-    gif_frame_count: Number(byId("gifFrameCountInput").value),
-    import_path: importPath,
-    backend_name: selectedBackendName(),
-  };
-}
-
-async function runFirstRunFlow(importPath = null) {
-  const result = await api("/api/first-run", {
-    method: "POST",
-    body: JSON.stringify(buildFirstRunPayload(importPath)),
-  });
-  state.lastHealthDiagnosticSteps = result.health_check?.diagnostic_steps || [];
-  state.workerLoop = result.worker_loop || state.workerLoop;
-  byId("modelPathInput").value = "";
-  byId("healthResult").textContent = JSON.stringify(result.health_check || result, null, 2);
-  byId("importResult").textContent = JSON.stringify(result, null, 2);
-  await loadState();
-}
-
-async function prepareRuntime() {
-  await runFirstRunFlow(null);
-}
-
-async function completeFirstRun() {
-  await runFirstRunFlow(byId("importPathInput").value.trim() || null);
-}
-
 async function runHealthCheck() {
-  await saveSettings();
-  const payload = {
-    profile_id: byId("profileSelect").value,
-    model_key: byId("modelVariantSelect").value,
-    model_name_or_path: byId("modelPathInput").value.trim() || null,
-  };
   const result = await api("/api/health", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({}),
   });
   state.lastHealthDiagnosticSteps = result.diagnostic_steps || [];
   byId("healthResult").textContent = JSON.stringify(result, null, 2);
@@ -1397,19 +1343,6 @@ async function pickImportFolder() {
   });
   if (result.selected_path) {
     byId("importPathInput").value = result.selected_path;
-  }
-}
-
-async function pickModelPath() {
-  const result = await api("/api/pick-folder", {
-    method: "POST",
-    body: JSON.stringify({
-      title: "Choose a local model folder",
-      initial_path: byId("modelPathInput").value.trim() || null,
-    }),
-  });
-  if (result.selected_path) {
-    byId("modelPathInput").value = result.selected_path;
   }
 }
 
@@ -1696,21 +1629,6 @@ function wireEvents() {
     }
     syncSetupSelections(true);
   });
-  byId("saveSettingsBtn").addEventListener("click", async () => {
-    try {
-      await saveSettings();
-      await loadState();
-    } catch (error) {
-      showError("healthResult", error);
-    }
-  });
-  byId("prepareRuntimeBtn").addEventListener("click", async () => {
-    try {
-      await prepareRuntime();
-    } catch (error) {
-      showError("healthResult", error);
-    }
-  });
   byId("healthCheckBtn").addEventListener("click", async () => {
     try {
       await runHealthCheck();
@@ -1728,20 +1646,6 @@ function wireEvents() {
   byId("pickImportFolderBtn").addEventListener("click", async () => {
     try {
       await pickImportFolder();
-    } catch (error) {
-      showError("importResult", error);
-    }
-  });
-  byId("pickModelPathBtn").addEventListener("click", async () => {
-    try {
-      await pickModelPath();
-    } catch (error) {
-      showError("healthResult", error);
-    }
-  });
-  byId("completeFirstRunBtn").addEventListener("click", async () => {
-    try {
-      await completeFirstRun();
     } catch (error) {
       showError("importResult", error);
     }

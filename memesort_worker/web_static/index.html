@@ -86,14 +86,11 @@
                 <select id="modelVariantSelect" hidden><option value="manifest">Manifest model</option></select>
                 <input id="modelPathInput" type="hidden" value="" />
                 <input id="gifFrameCountInput" type="hidden" value="4" />
-                <button id="pickModelPathBtn" type="button" hidden>Unavailable</button>
-                <button id="saveSettingsBtn" type="button" hidden>Unavailable</button>
-                <button id="prepareRuntimeBtn" type="button" hidden>Unavailable</button>
                 <div class="actions"><button id="healthCheckBtn" class="ghost">Run Vulkan health check</button></div><div id="setupGuide" class="runtime-summary"></div><div id="runtimeReadiness" class="runtime-summary"></div><div id="setupChecklist" class="checklist"></div><div id="healthDiagnostics" class="checklist"></div><pre id="healthResult" class="console"></pre>
               </div>
               <div class="card"><h2>Import and index</h2><p class="muted small">Import copies files into the managed library. Matching content becomes another source record.</p>
                 <label for="importPathInput">Import folder</label><input id="importPathInput" placeholder="F:\Pictures\memes" />
-                <div class="actions"><button id="completeFirstRunBtn">Complete first run</button><button id="pickImportFolderBtn" class="ghost">Browse folder</button><button id="importBtn">Import folder</button><button id="importAndIndexBtn" class="ghost">Import and start indexing</button><button id="runJobsBtn" class="ghost">Run pending jobs</button><button id="pauseImportBtn" class="ghost" disabled>Pause import</button><button id="resumeImportBtn" class="ghost" disabled>Resume import</button></div>
+                <div class="actions"><button id="pickImportFolderBtn" class="ghost">Browse folder</button><button id="importBtn">Import folder</button><button id="importAndIndexBtn" class="ghost">Import and start indexing</button><button id="runJobsBtn" class="ghost">Run pending jobs</button><button id="pauseImportBtn" class="ghost" disabled>Pause import</button><button id="resumeImportBtn" class="ghost" disabled>Resume import</button></div>
                 <p id="importTaskStatus" class="muted small" aria-live="polite">No import is running.</p><div class="runtime-summary"><span class="section-title">Current runtime</span><p id="runtimeSummary" class="small"></p></div><pre id="importResult" class="console"></pre>
               </div>
             </div>

@@ -139,18 +139,6 @@ class SwitchRecipeResult:
 
 
 @dataclass
-class ApplyRuntimeSelectionResult:
-    runtime_settings: dict[str, object]
-    active_recipe_id: str
-    active_recipe_label: str
-    reindex_jobs_created: int
-    assets_seen: int
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
 class AssetListResult:
     library_root: str
     active_recipe_id: str
@@ -384,19 +372,6 @@ class SetupStateResult:
     suggested_model_path: str | None
     runtime_readiness: dict[str, object]
     checklist: list[dict[str, object]]
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
-class FirstRunFlowResult:
-    runtime_selection: dict[str, object]
-    health_check: dict[str, object]
-    import_result: dict[str, object] | None
-    setup_state: dict[str, object]
-    should_resume_worker_loop: bool
-    next_step: str
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -1034,74 +1009,15 @@ def resolve_recipe_preset(profile_id: str, model_key: str) -> str:
 def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
     init_result = initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
-    conn = _connect(_database_path(library_root_path))
-    try:
-        payload = _get_worker_state_json(conn, "runtime_settings")
-        profile = get_runtime_profile(VULKAN_PROFILE_ID)
-        settings = RuntimeSettings(
-            selected_profile=VULKAN_PROFILE_ID,
-            selected_model_key=MANIFEST_MODEL_KEY,
-            model_name_or_path=None,
-            selected_recipe_preset=MANIFEST_RECIPE_PRESET,
-            gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-            backend_name=profile.backend_name,
-            library_root=str(library_root_path),
-        )
-        if payload != settings.to_dict():
-            with conn:
-                _set_worker_state_json(conn, "runtime_settings", settings.to_dict())
-        return settings
-    finally:
-        conn.close()
-
-
-def save_runtime_settings(
-    library_root: Path | str,
-    selected_profile: str,
-    selected_model_key: str | None,
-    model_name_or_path: str | None,
-    selected_recipe_preset: str | None = None,
-    gif_frame_count: int | None = None,
-    backend_name: str | None = None,
-) -> RuntimeSettings:
-    init_result = initialize_library(library_root)
-    library_root_path = Path(init_result.library_root)
-    profile = get_runtime_profile(selected_profile)
-    model_key = selected_model_key or MANIFEST_MODEL_KEY
-    get_model_variant(model_key)
-    recipe_preset = selected_recipe_preset or MANIFEST_RECIPE_PRESET
-    frame_count = (
-        gif_frame_count
-        if gif_frame_count is not None
-        else _RUNTIME_MANIFEST.preprocessing.gif_frame_count
-    )
-    selected_backend = backend_name or profile.backend_name
-    if model_name_or_path is not None:
-        raise ValueError("Vulkan model paths are owned by runtime-manifest.json")
-    if recipe_preset != MANIFEST_RECIPE_PRESET:
-        raise ValueError("Vulkan recipe is owned by runtime-manifest.json")
-    if frame_count != _RUNTIME_MANIFEST.preprocessing.gif_frame_count:
-        raise ValueError("Vulkan GIF frame count is owned by runtime-manifest.json")
-    if selected_backend != "llama.cpp":
-        raise ValueError("MemeSort supports only the llama.cpp Vulkan backend")
-
-    settings = RuntimeSettings(
-        selected_profile=profile.profile_id,
-        selected_model_key=model_key,
+    return RuntimeSettings(
+        selected_profile=VULKAN_PROFILE_ID,
+        selected_model_key=MANIFEST_MODEL_KEY,
         model_name_or_path=None,
-        selected_recipe_preset=recipe_preset,
-        gif_frame_count=frame_count,
-        backend_name=selected_backend,
+        selected_recipe_preset=MANIFEST_RECIPE_PRESET,
+        gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
+        backend_name="llama.cpp",
         library_root=str(library_root_path),
     )
-
-    conn = _connect(_database_path(library_root_path))
-    try:
-        with conn:
-            _set_worker_state_json(conn, "runtime_settings", settings.to_dict())
-    finally:
-        conn.close()
-    return settings
 
 
 def _save_last_health_check(
@@ -1532,48 +1448,6 @@ def switch_active_recipe(
         )
     finally:
         conn.close()
-
-
-def apply_runtime_selection(
-    library_root: Path | str,
-    selected_profile: str,
-    selected_model_key: str,
-    model_name_or_path: str | None,
-    gif_frame_count: int | None = None,
-    backend_name: str | None = None,
-) -> ApplyRuntimeSelectionResult:
-    from .runtime_service import apply_runtime_selection as _apply_runtime_selection
-
-    return _apply_runtime_selection(
-        library_root,
-        selected_profile=selected_profile,
-        selected_model_key=selected_model_key,
-        model_name_or_path=model_name_or_path,
-        gif_frame_count=gif_frame_count,
-        backend_name=backend_name,
-    )
-
-
-def run_first_run_flow(
-    library_root: Path | str,
-    selected_profile: str,
-    selected_model_key: str,
-    model_name_or_path: str | None,
-    import_path: str | None = None,
-    gif_frame_count: int | None = None,
-    backend_name: str | None = None,
-) -> FirstRunFlowResult:
-    from .runtime_service import run_first_run_flow as _run_first_run_flow
-
-    return _run_first_run_flow(
-        library_root,
-        selected_profile=selected_profile,
-        selected_model_key=selected_model_key,
-        model_name_or_path=model_name_or_path,
-        import_path=import_path,
-        gif_frame_count=gif_frame_count,
-        backend_name=backend_name,
-    )
 
 
 def _delete_asset_rows(

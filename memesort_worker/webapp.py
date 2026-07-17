@@ -18,7 +18,6 @@ from .app_state import build_app_state
 from .asset_browse import get_library_status, list_pending_jobs
 from .app_commands import (
     import_and_start_indexing,
-    run_first_run_command,
     run_jobs_for_active_runtime,
     search_image_for_active_runtime,
     search_text_for_active_runtime,
@@ -40,7 +39,6 @@ from .library import (
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
 from .retrieval_service import find_similar_assets
 from .runtime_service import (
-    apply_runtime_selection,
     get_setup_state,
     run_runtime_health_check,
 )
@@ -161,29 +159,6 @@ def create_app(library_root: str):
                     import_task_snapshot=import_controller.snapshot().to_dict(),
                 ).to_dict()
                 status_line, headers, body = _json_response(HTTPStatus.OK, payload)
-            elif path == "/api/runtime-settings" and method == "POST":
-                payload = _read_json_body(environ)
-                result = apply_runtime_selection(
-                    library_root_path,
-                    selected_profile=str(payload["selected_profile"]),
-                    selected_model_key=str(payload.get("selected_model_key") or "manifest"),
-                    model_name_or_path=(
-                        str(payload["model_name_or_path"])
-                        if payload.get("model_name_or_path")
-                        else None
-                    ),
-                    gif_frame_count=(
-                        int(payload["gif_frame_count"])
-                        if payload.get("gif_frame_count") is not None
-                        else None
-                    ),
-                    backend_name=(
-                        str(payload["backend_name"])
-                        if payload.get("backend_name")
-                        else None
-                    ),
-                )
-                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/library-status" and method == "GET":
                 result = get_library_status(library_root_path)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
@@ -301,37 +276,6 @@ def create_app(library_root: str):
                         worker_loop,
                     ),
                 )
-            elif path == "/api/first-run" and method == "POST":
-                payload = _read_json_body(environ)
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    run_first_run_command(
-                        library_root_path,
-                        selected_profile=str(payload["selected_profile"]),
-                        selected_model_key=str(payload.get("selected_model_key") or "manifest"),
-                        model_name_or_path=(
-                            str(payload["model_name_or_path"])
-                            if payload.get("model_name_or_path")
-                            else None
-                        ),
-                        import_path=(
-                            str(payload["import_path"])
-                            if payload.get("import_path")
-                            else None
-                        ),
-                        gif_frame_count=(
-                            int(payload["gif_frame_count"])
-                            if payload.get("gif_frame_count") is not None
-                            else None
-                        ),
-                        backend_name=(
-                            str(payload["backend_name"])
-                            if payload.get("backend_name")
-                            else None
-                        ),
-                        worker_loop=worker_loop,
-                    ),
-                )
             elif path == "/api/assets" and method == "GET":
                 result = list_assets(library_root_path)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
@@ -434,6 +378,11 @@ def create_app(library_root: str):
             elif path.startswith("/media/") and method == "GET":
                 media_path = path.removeprefix("/media/")
                 status_line, headers, body = _serve_library_file(library_root_path, media_path)
+            elif path.startswith("/api/"):
+                status_line, headers, body = _json_response(
+                    HTTPStatus.NOT_FOUND,
+                    {"error": "NotFound", "detail": f"Unknown API endpoint: {path}"},
+                )
             else:
                 status_line, headers, body = _serve_static(path)
         except InferenceCancelledError as exc:
