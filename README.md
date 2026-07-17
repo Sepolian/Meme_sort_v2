@@ -54,15 +54,7 @@ Changing the manifest is a developer upgrade, not an in-app setting. Update all 
 
 Semantic embeddings use Vulkan. OCR intentionally uses CPU in `.venv-ocr` so it remains independent of the GPU vendor and the Vulkan inference path.
 
-The default OCR stack is PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) with document orientation, unwarping, and text-line orientation disabled. OCR model data is cached under `.models\paddleocr`; the worker protocol is UTF-8 on Windows.
-
-Optional OCR environment settings are limited to its isolated worker:
-
-```powershell
-$env:MEMESORT_OCR_PYTHON = "$PWD\.venv-ocr\Scripts\python.exe"
-$env:MEMESORT_OCR_DEVICE = "cpu"
-$env:MEMESORT_OCR_LANG = "ch"
-```
+The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) on CPU, with document orientation, unwarping, and text-line orientation disabled. Its worker always runs from the repository-local `.venv-ocr`; a missing environment is an explicit setup error, never a debug OCR fallback. OCR model data is cached under `.models\paddleocr`, and the worker protocol is UTF-8 on Windows.
 
 ## Validation and evaluation
 

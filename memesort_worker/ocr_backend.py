@@ -19,24 +19,6 @@ class OcrBackend(Protocol):
         ...
 
 
-class DebugOcrBackend:
-    backend_id = "debug-ocr"
-
-    def recognize_image(self, image_path: Path) -> dict[str, object]:
-        text = image_path.stem.replace("_", " ").replace("-", " ")
-        return {
-            "engine": self.backend_id,
-            "texts": [text] if text else [],
-            "scores": [1.0] if text else [],
-            "boxes": [[]] if text else [],
-            "text": text,
-            "language_hint": "debug",
-        }
-
-    def close(self) -> None:
-        return
-
-
 class PaddleOcrWorkerBackend:
     backend_id = "paddleocr-worker"
 
@@ -132,31 +114,21 @@ def _project_root() -> Path:
 
 
 def _ocr_python_path() -> Path:
-    configured = os.environ.get("MEMESORT_OCR_PYTHON")
-    if configured:
-        return Path(configured).expanduser().resolve()
     root = _project_root()
     return root / ".venv-ocr" / "Scripts" / "python.exe"
 
 
-def get_ocr_backend(library_root: Path, embedding_backend_name: str) -> OcrBackend:
-    requested_backend = os.environ.get("MEMESORT_OCR_BACKEND", "").strip().lower()
+def get_ocr_backend(library_root: Path, _embedding_backend_name: str) -> OcrBackend:
+    del library_root
     python_executable = _ocr_python_path()
     worker_script = _project_root() / "scripts" / "paddle_ocr_worker.py"
-    should_use_paddle = requested_backend in {"paddleocr", "paddleocr-worker"} or (
-        requested_backend == ""
-        and embedding_backend_name != "debug"
-        and python_executable.exists()
-    )
-    if should_use_paddle and python_executable.exists():
-        return PaddleOcrWorkerBackend(
-            python_executable,
-            worker_script,
-            lang=os.environ.get("MEMESORT_OCR_LANG", "ch"),
-            device=os.environ.get("MEMESORT_OCR_DEVICE", "cpu"),
+    if not python_executable.is_file():
+        raise RuntimeError(
+            "Pinned OCR environment is missing. Run scripts/setup_windows_llama.ps1."
         )
-
-    if embedding_backend_name == "debug" or requested_backend in {"", "debug"}:
-        return DebugOcrBackend()
-
-    return DebugOcrBackend()
+    return PaddleOcrWorkerBackend(
+        python_executable,
+        worker_script,
+        lang="ch",
+        device="cpu",
+    )
