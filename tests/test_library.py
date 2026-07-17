@@ -23,6 +23,7 @@ from PIL import Image
 from memesort_worker.app_state import build_app_state
 from memesort_worker.cli import run
 from memesort_worker.library import (
+    BatchAssetActionResult,
     DATABASE_NAME,
     delete_asset,
     delete_pending_jobs,
@@ -31,6 +32,7 @@ from memesort_worker.library import (
     initialize_library,
     list_assets,
     remove_source_record,
+    rebuild_active_indexes,
     retry_failed_jobs,
     run_pending_jobs,
     search_text,
@@ -131,7 +133,12 @@ class LibraryTests(unittest.TestCase):
         import_folder(library_root, source_root)
         return library_root, source_root
 
-    def _run_all_jobs_with_stubs(self, library_root: Path) -> StubEmbeddingBackend:
+    def _run_all_jobs_with_stubs(
+        self,
+        library_root: Path,
+        *,
+        expected_completed_jobs: int = 3,
+    ) -> StubEmbeddingBackend:
         backend = StubEmbeddingBackend()
         with patch(
             "memesort_worker.library.get_embedding_backend", return_value=backend
@@ -142,7 +149,7 @@ class LibraryTests(unittest.TestCase):
             result = run_pending_jobs(library_root)
 
         self.assertEqual(0, result.failed_jobs)
-        self.assertEqual(3, result.completed_jobs)
+        self.assertEqual(expected_completed_jobs, result.completed_jobs)
         self.assertEqual(backend.backend_id, result.backend)
         return backend
 
@@ -363,6 +370,59 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(1, result.retried_jobs)
         self.assertEqual(0, result.failed_jobs_remaining)
 
+    def test_rebuild_active_index_only_requeues_selected_asset_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            self._write_image(source_root / "first.png", (255, 0, 0))
+            self._write_image(source_root / "second.png", (0, 255, 0))
+            import_folder(library_root, source_root)
+            self._run_all_jobs_with_stubs(library_root, expected_completed_jobs=6)
+            before_by_id = {
+                str(asset["asset_id"]): asset for asset in list_assets(library_root).assets
+            }
+            selected_id, retained_id = sorted(before_by_id)
+
+            result = rebuild_active_indexes(library_root, [selected_id])
+            after_by_id = {
+                str(asset["asset_id"]): asset for asset in list_assets(library_root).assets
+            }
+            conn = sqlite3.connect(library_root / DATABASE_NAME)
+            try:
+                selected_embeddings = conn.execute(
+                    "SELECT COUNT(*) FROM embedding_item WHERE asset_id = ?",
+                    (selected_id,),
+                ).fetchone()[0]
+                retained_embeddings = conn.execute(
+                    "SELECT COUNT(*) FROM embedding_item WHERE asset_id = ?",
+                    (retained_id,),
+                ).fetchone()[0]
+                selected_ocr = conn.execute(
+                    "SELECT COUNT(*) FROM ocr_result WHERE asset_id = ?",
+                    (selected_id,),
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+        self.assertEqual([selected_id], result.affected_asset_ids)
+        self.assertEqual(1, result.removed_embeddings)
+        self.assertEqual(1, result.reindex_jobs_created)
+        self.assertEqual("pending_initial_index", after_by_id[selected_id]["status"])
+        self.assertEqual("indexed", after_by_id[retained_id]["status"])
+        self.assertEqual(
+            before_by_id[selected_id]["thumbnail_url"],
+            after_by_id[selected_id]["thumbnail_url"],
+        )
+        self.assertEqual(
+            before_by_id[selected_id]["source_record_count"],
+            after_by_id[selected_id]["source_record_count"],
+        )
+        self.assertEqual(0, selected_embeddings)
+        self.assertEqual(1, retained_embeddings)
+        self.assertEqual(1, selected_ocr)
+
     def test_cli_init_library_prints_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, io.StringIO() as output:
             with redirect_stdout(output):
@@ -394,6 +454,40 @@ class LibraryTests(unittest.TestCase):
         self.assertNotIn("runtime_profiles", payload)
         self.assertNotIn("model_variants", payload)
         self.assertNotIn("runtime_settings", payload)
+
+    def test_web_batch_rebuild_routes_selected_assets_to_active_index_service(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            app = create_app(str(library_root))
+            expected = BatchAssetActionResult(
+                library_root=str(library_root.resolve()),
+                action="rebuild-active-index",
+                requested_asset_ids=["asset-a"],
+                affected_asset_ids=["asset-a"],
+                skipped_running_asset_ids=[],
+                removed_source_records=0,
+                removed_jobs=0,
+                removed_renditions=0,
+                removed_embeddings=1,
+                reindex_jobs_created=0,
+            )
+            try:
+                with patch(
+                    "memesort_worker.webapp.rebuild_active_indexes",
+                    return_value=expected,
+                ) as rebuild:
+                    status, payload = self._request(
+                        app,
+                        "POST",
+                        "/api/assets/batch-action",
+                        {"action": "rebuild-active-index", "asset_ids": ["asset-a"]},
+                    )
+            finally:
+                app.shutdown()
+
+        self.assertEqual("200 OK", status)
+        self.assertEqual(expected.to_dict(), payload)
+        rebuild.assert_called_once_with(library_root.resolve(), ["asset-a"])
 
     def test_http_search_cancellation_only_cancels_its_own_queued_request(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
