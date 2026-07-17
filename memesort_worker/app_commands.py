@@ -40,12 +40,14 @@ def search_text_for_active_runtime(
     query: str,
     top_k: int,
     backend_name: str | None = None,
+    request_id: str | None = None,
 ):
     return _search_text_for_active_runtime(
         library_root,
         query=query,
         top_k=top_k,
         backend_name=backend_name,
+        request_id=request_id,
     )
 
 
@@ -54,12 +56,14 @@ def search_image_for_active_runtime(
     image_path: Path | str,
     top_k: int,
     backend_name: str | None = None,
+    request_id: str | None = None,
 ):
     return _search_image_for_active_runtime(
         library_root,
         image_path=image_path,
         top_k=top_k,
         backend_name=backend_name,
+        request_id=request_id,
     )
 
 

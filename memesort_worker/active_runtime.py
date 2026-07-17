@@ -71,6 +71,7 @@ def search_text_for_active_runtime(
     query: str,
     top_k: int,
     backend_name: str | None = None,
+    request_id: str | None = None,
 ):
     runtime = resolve_active_runtime(library_root)
     _reject_backend_override(backend_name, runtime.backend_name)
@@ -84,6 +85,7 @@ def search_text_for_active_runtime(
         device=runtime.embedding_config.device,
         num_threads=runtime.embedding_config.num_threads,
         num_interop_threads=runtime.embedding_config.num_interop_threads,
+        request_id=request_id,
     )
 
 
@@ -92,6 +94,7 @@ def search_image_for_active_runtime(
     image_path: Path | str,
     top_k: int,
     backend_name: str | None = None,
+    request_id: str | None = None,
 ):
     runtime = resolve_active_runtime(library_root)
     _reject_backend_override(backend_name, runtime.backend_name)
@@ -105,6 +108,7 @@ def search_image_for_active_runtime(
         device=runtime.embedding_config.device,
         num_threads=runtime.embedding_config.num_threads,
         num_interop_threads=runtime.embedding_config.num_interop_threads,
+        request_id=request_id,
     )
 
 

@@ -14,6 +14,7 @@ const state = {
   selectedAssetIds: new Set(),
   duplicatePairs: [],
   lastHealthDiagnosticSteps: [],
+  activeSearchRequestIds: new Set(),
 };
 
 const LIBRARY_DETAIL_WIDTH_KEY = "memesort.libraryDetailWidth";
@@ -99,6 +100,9 @@ function isStackedSidebarLayout() {
 }
 
 function switchTab(tabId) {
+  if (tabId !== "searchTab") {
+    cancelActiveSearches();
+  }
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === tabId);
   });
@@ -260,6 +264,19 @@ function renderProfileSummary() {
     <div class="small mono">${escapeHtml(summarizeProfile(profile))}</div>
     <div class="small muted">Default recipe: ${escapeHtml(profile.recipe_preset)} | ${escapeHtml(profile.backend_name || "qwen3-vl")} | ${escapeHtml(profile.torch_dtype)}</div>
   `;
+}
+
+async function cancelActiveSearches() {
+  const requestIds = [...state.activeSearchRequestIds];
+  state.activeSearchRequestIds.clear();
+  await Promise.allSettled(
+    requestIds.map((requestId) =>
+      api("/api/search/cancel", {
+        method: "POST",
+        body: JSON.stringify({ request_id: requestId }),
+      })
+    )
+  );
 }
 
 function selectedBackendName() {
@@ -1437,24 +1454,36 @@ async function runJobs() {
 
 async function runSearch() {
   const query = byId("searchInput").value.trim();
+  const requestId = crypto.randomUUID();
+  state.activeSearchRequestIds.add(requestId);
   renderSkeletonCards("searchResults", 4);
-  const result = await api(
-    `/api/search?query=${encodeURIComponent(query)}&top_k=18`
-  );
-  renderResults("searchResults", result.results || [], "No matches yet.");
+  try {
+    const result = await api(
+      `/api/search?query=${encodeURIComponent(query)}&top_k=18&request_id=${encodeURIComponent(requestId)}`
+    );
+    renderResults("searchResults", result.results || [], "No matches yet.");
+  } finally {
+    state.activeSearchRequestIds.delete(requestId);
+  }
 }
 
 async function runImageSearch() {
+  const requestId = crypto.randomUUID();
+  state.activeSearchRequestIds.add(requestId);
   renderSkeletonCards("imageSearchResults", 4);
-  const result = await api("/api/search-image", {
-    method: "POST",
-    body: JSON.stringify({
-      path: byId("imageSearchPathInput").value.trim(),
-      top_k: 18,
-      backend_name: state.runtimeSettings?.backend_name || selectedBackendName(),
-    }),
-  });
-  renderResults("imageSearchResults", result.results || [], "No image matches found.");
+  try {
+    const result = await api("/api/search-image", {
+      method: "POST",
+      body: JSON.stringify({
+        path: byId("imageSearchPathInput").value.trim(),
+        top_k: 18,
+        request_id: requestId,
+      }),
+    });
+    renderResults("imageSearchResults", result.results || [], "No image matches found.");
+  } finally {
+    state.activeSearchRequestIds.delete(requestId);
+  }
 }
 
 async function runSimilar() {

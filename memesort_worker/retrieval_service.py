@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from . import library_internal as library
 from .library_store import LibraryStore
+from .inference_service import search_inference_request
 from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import blob_to_vector, rank_asset_vector_rows
 
@@ -37,6 +39,7 @@ def search_text(
     device: str | None = None,
     num_threads: int | None = None,
     num_interop_threads: int | None = None,
+    request_id: str | None = None,
 ) -> library.SearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -56,11 +59,12 @@ def search_text(
                 num_threads=num_threads,
                 num_interop_threads=num_interop_threads,
             )
-            query_vector = backend.embed_text(
-                query,
-                store.active_recipe.output_dimension,
-                instruction=store.active_recipe.instruction_text,
-            )
+            with search_inference_request(request_id or str(uuid.uuid4())):
+                query_vector = backend.embed_text(
+                    query,
+                    store.active_recipe.output_dimension,
+                    instruction=store.active_recipe.instruction_text,
+                )
             visual_results = rank_asset_vector_rows(
                 query_vector,
                 vector_rows,
@@ -88,6 +92,7 @@ def search_image_path(
     device: str | None = None,
     num_threads: int | None = None,
     num_interop_threads: int | None = None,
+    request_id: str | None = None,
 ) -> library.ImageSearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -113,33 +118,34 @@ def search_image_path(
                 num_threads=num_threads,
                 num_interop_threads=num_interop_threads,
             )
-            image_bytes = query_path.read_bytes()
-            if suffix == ".gif":
-                frame_payloads = library._extract_gif_frame_bytes(
-                    image_bytes,
-                    store.active_recipe.preprocess_version,
-                    frame_count=store.active_recipe.gif_frame_count,
-                )
-                query_vectors = [
-                    backend.embed_image_bytes(
-                        frame_bytes,
-                        store.active_recipe.output_dimension,
-                        instruction=store.active_recipe.instruction_text,
+            with search_inference_request(request_id or str(uuid.uuid4())):
+                image_bytes = query_path.read_bytes()
+                if suffix == ".gif":
+                    frame_payloads = library._extract_gif_frame_bytes(
+                        image_bytes,
+                        store.active_recipe.preprocess_version,
+                        frame_count=store.active_recipe.gif_frame_count,
                     )
-                    for _, frame_bytes in frame_payloads
-                ]
-            else:
-                processed_bytes = library._preprocess_image_bytes(
-                    image_bytes,
-                    store.active_recipe.preprocess_version,
-                )
-                query_vectors = [
-                    backend.embed_image_bytes(
-                        processed_bytes,
-                        store.active_recipe.output_dimension,
-                        instruction=store.active_recipe.instruction_text,
+                    query_vectors = [
+                        backend.embed_image_bytes(
+                            frame_bytes,
+                            store.active_recipe.output_dimension,
+                            instruction=store.active_recipe.instruction_text,
+                        )
+                        for _, frame_bytes in frame_payloads
+                    ]
+                else:
+                    processed_bytes = library._preprocess_image_bytes(
+                        image_bytes,
+                        store.active_recipe.preprocess_version,
                     )
-                ]
+                    query_vectors = [
+                        backend.embed_image_bytes(
+                            processed_bytes,
+                            store.active_recipe.output_dimension,
+                            instruction=store.active_recipe.instruction_text,
+                        )
+                    ]
             vector_query = query_vectors if len(query_vectors) > 1 else query_vectors[0]
             results = rank_asset_vector_rows(vector_query, vector_rows, top_k)
 

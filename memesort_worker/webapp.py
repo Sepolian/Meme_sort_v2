@@ -4,11 +4,16 @@ import json
 import mimetypes
 from http import HTTPStatus
 from pathlib import Path
+from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, urlparse
 from wsgiref.simple_server import WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
 from .import_controller import ImportController
+from .inference_service import (
+    InferenceCancelledError,
+    cancel_inference_request,
+)
 from .app_state import build_app_state
 from .asset_browse import get_library_status, list_pending_jobs
 from .app_commands import (
@@ -42,6 +47,11 @@ from .runtime_service import (
 
 
 STATIC_DIR = Path(__file__).with_name("web_static")
+
+
+class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 
 def _serve_library_file(library_root: Path, media_path: str) -> tuple[str, list[tuple[str, str]], bytes]:
@@ -388,6 +398,7 @@ def create_app(library_root: str):
             elif path == "/api/search" and method == "GET":
                 query_text = str(query.get("query", [""])[0])
                 top_k = int(query.get("top_k", ["12"])[0])
+                request_id = str(query.get("request_id", [""])[0])
                 result = search_text_for_active_runtime(
                     library_root_path,
                     query=query_text,
@@ -397,6 +408,7 @@ def create_app(library_root: str):
                         if query.get("backend_name")
                         else None
                     ),
+                    request_id=request_id,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search-image" and method == "POST":
@@ -410,8 +422,21 @@ def create_app(library_root: str):
                         if payload.get("backend_name")
                         else None
                     ),
+                    request_id=str(payload.get("request_id") or ""),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/search/cancel" and method == "POST":
+                payload = _read_json_body(environ)
+                request_id = str(payload.get("request_id") or "")
+                was_active = cancel_inference_request(request_id)
+                status_line, headers, body = _json_response(
+                    HTTPStatus.OK,
+                    {
+                        "request_id": request_id,
+                        "cancelled": True,
+                        "was_active": was_active,
+                    },
+                )
             elif path == "/api/find-similar" and method == "GET":
                 asset_id = str(query.get("asset_id", [""])[0])
                 top_k = int(query.get("top_k", ["12"])[0])
@@ -426,6 +451,11 @@ def create_app(library_root: str):
                 status_line, headers, body = _serve_library_file(library_root_path, media_path)
             else:
                 status_line, headers, body = _serve_static(path)
+        except InferenceCancelledError as exc:
+            status_line, headers, body = _json_response(
+                HTTPStatus.CONFLICT,
+                {"error": type(exc).__name__, "detail": str(exc)},
+            )
         except Exception as exc:
             status_line, headers, body = _json_response(
                 HTTPStatus.BAD_REQUEST,
@@ -450,8 +480,7 @@ def run_web_app(
     on_started=None,
 ) -> None:
     app = create_app(library_root)
-    server_class = type("ReusableWSGIServer", (WSGIServer,), {"allow_reuse_address": True})
-    with make_server(host, port, app, server_class=server_class) as server:
+    with make_server(host, port, app, server_class=ThreadedWSGIServer) as server:
         socket_host, socket_port = server.socket.getsockname()[:2]
         payload = {
             "host": socket_host,

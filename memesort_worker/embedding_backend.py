@@ -5,6 +5,8 @@ from functools import lru_cache
 
 import numpy as np
 
+from .inference_service import INFERENCE_SCHEDULER
+
 
 class EmbeddingBackendError(RuntimeError):
     pass
@@ -83,7 +85,9 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         instruction: str | None = None,
     ) -> np.ndarray:
         try:
-            vector = self._adapter.embed_text(text, instruction=instruction)
+            vector = INFERENCE_SCHEDULER.submit(
+                lambda: self._adapter.embed_text(text, instruction=instruction)
+            )
         except self._adapter_error as exc:
             raise EmbeddingBackendError(str(exc)) from exc
         return _coerce_normalized_dimension(vector, output_dimension)
@@ -95,7 +99,12 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         instruction: str | None = None,
     ) -> np.ndarray:
         try:
-            vector = self._adapter.embed_image_bytes(image_bytes, instruction=instruction)
+            vector = INFERENCE_SCHEDULER.submit(
+                lambda: self._adapter.embed_image_bytes(
+                    image_bytes,
+                    instruction=instruction,
+                )
+            )
         except self._adapter_error as exc:
             raise EmbeddingBackendError(str(exc)) from exc
         return _coerce_normalized_dimension(vector, output_dimension)
