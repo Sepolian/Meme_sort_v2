@@ -18,6 +18,7 @@ __all__ = [
     "INSTRUCTION_TEXT_BY_KEY",
     "ImageSearchResult",
     "LibraryStatusResult",
+    "MANIFEST_MODEL_KEY",
     "RunJobsResult",
     "RuntimeHealthResult",
     "RuntimeSettings",

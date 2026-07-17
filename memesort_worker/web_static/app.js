@@ -298,7 +298,7 @@ function renderRuntimeSummary() {
   setText("activeRecipe", state.assetSummary?.active_recipe_label || "No active index yet");
 
   const suggestedModelPath = state.setupState?.suggested_model_path || "";
-  byId("modelPathInput").value = state.runtimeSettings.model_name_or_path || suggestedModelPath || "";
+  byId("modelPathInput").value = "";
   byId("gifFrameCountInput").value = String(state.runtimeSettings.gif_frame_count);
   if (state.runtimeSettings.selected_profile) {
     byId("profileSelect").value = state.runtimeSettings.selected_profile;
@@ -1275,9 +1275,7 @@ async function runFirstRunFlow(importPath = null) {
   });
   state.lastHealthDiagnosticSteps = result.health_check?.diagnostic_steps || [];
   state.workerLoop = result.worker_loop || state.workerLoop;
-  if (result.health_check?.model_name_or_path) {
-    byId("modelPathInput").value = result.health_check.model_name_or_path;
-  }
+  byId("modelPathInput").value = "";
   byId("healthResult").textContent = JSON.stringify(result.health_check || result, null, 2);
   byId("importResult").textContent = JSON.stringify(result, null, 2);
   await loadState();
@@ -1304,9 +1302,7 @@ async function runHealthCheck() {
   });
   state.lastHealthDiagnosticSteps = result.diagnostic_steps || [];
   byId("healthResult").textContent = JSON.stringify(result, null, 2);
-  if (result.model_name_or_path) {
-    byId("modelPathInput").value = result.model_name_or_path;
-  }
+  byId("modelPathInput").value = "";
   await loadState();
 }
 

@@ -53,9 +53,10 @@ def run_pending_jobs_for_active_runtime(
     max_jobs: int = 20,
 ):
     runtime = resolve_active_runtime(library_root)
+    _reject_backend_override(backend_name, runtime.backend_name)
     return _run_indexing_jobs(
         library_root,
-        backend_name=backend_name or runtime.backend_name,
+        backend_name=runtime.backend_name,
         model_name_or_path=runtime.model_source,
         torch_dtype=runtime.embedding_config.torch_dtype,
         device=runtime.embedding_config.device,
@@ -72,11 +73,12 @@ def search_text_for_active_runtime(
     backend_name: str | None = None,
 ):
     runtime = resolve_active_runtime(library_root)
+    _reject_backend_override(backend_name, runtime.backend_name)
     return _search_text(
         library_root,
         query=query,
         top_k=top_k,
-        backend_name=backend_name or runtime.backend_name,
+        backend_name=runtime.backend_name,
         model_name_or_path=runtime.model_source,
         torch_dtype=runtime.embedding_config.torch_dtype,
         device=runtime.embedding_config.device,
@@ -92,14 +94,22 @@ def search_image_for_active_runtime(
     backend_name: str | None = None,
 ):
     runtime = resolve_active_runtime(library_root)
+    _reject_backend_override(backend_name, runtime.backend_name)
     return _search_image_path(
         library_root,
         image_path=image_path,
         top_k=top_k,
-        backend_name=backend_name or runtime.backend_name,
+        backend_name=runtime.backend_name,
         model_name_or_path=runtime.model_source,
         torch_dtype=runtime.embedding_config.torch_dtype,
         device=runtime.embedding_config.device,
         num_threads=runtime.embedding_config.num_threads,
         num_interop_threads=runtime.embedding_config.num_interop_threads,
     )
+
+
+def _reject_backend_override(requested: str | None, active: str) -> None:
+    if requested is not None and requested != active:
+        raise ValueError(
+            f"Backend override {requested!r} is not allowed; the active backend is {active}."
+        )

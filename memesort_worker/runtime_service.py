@@ -155,7 +155,7 @@ def _infer_model_source_origin(
 
 def run_runtime_health_check(
     profile_id: str,
-    model_key: str = "qwen3-2b",
+    model_key: str = library.MANIFEST_MODEL_KEY,
     model_name_or_path: str | None = None,
     library_root: Path | str | None = None,
 ) -> library.RuntimeHealthResult:

@@ -51,7 +51,10 @@ SUPPORTED_EXTENSIONS = {
 }
 
 _RUNTIME_MANIFEST = load_runtime_manifest()
-_VULKAN_RECIPE_PRESET = "qwen3-2b-vulkan-balanced"
+VULKAN_PROFILE_ID = "vulkan"
+MANIFEST_MODEL_KEY = "manifest"
+MANIFEST_RECIPE_PRESET = "vulkan-manifest"
+_VULKAN_RECIPE_PRESET = MANIFEST_RECIPE_PRESET
 _VULKAN_POOLING_KEY = (
     f"{_RUNTIME_MANIFEST.embedding.pooling}-"
     f"{_RUNTIME_MANIFEST.embedding.normalization}-"
@@ -59,85 +62,34 @@ _VULKAN_POOLING_KEY = (
 )
 
 DEFAULT_RECIPE = {
-    "family_key": "qwen3-vl-embedding",
-    "model_id": "Qwen/Qwen3-VL-Embedding-2B",
-    "model_revision": "unresolved",
-    "output_dimension": 2048,
-    "runtime_profile": "cpu-low-memory",
-    "preprocess_version": "still-480-longest-side-v1",
-    "instruction_key": "qwen3vl-text-to-image-default-v1",
-    "pooling_key": "matryoshka-default-v1",
+    "family_key": _RUNTIME_MANIFEST.model.protocol,
+    "model_id": _RUNTIME_MANIFEST.model.id,
+    "model_revision": _RUNTIME_MANIFEST.recipe_fingerprint,
+    "output_dimension": _RUNTIME_MANIFEST.model.output_dimension,
+    "runtime_profile": VULKAN_PROFILE_ID,
+    "preprocess_version": _RUNTIME_MANIFEST.preprocessing.version,
+    "instruction_key": _RUNTIME_MANIFEST.embedding.instruction_id,
+    "pooling_key": _VULKAN_POOLING_KEY,
     "normalized": 1,
-    "gif_frame_count": 4,
+    "gif_frame_count": _RUNTIME_MANIFEST.preprocessing.gif_frame_count,
 }
 
 RECIPE_PRESETS: dict[str, dict[str, object]] = {
-    "qwen3-2b-cpu": dict(DEFAULT_RECIPE),
-    "qwen3-8b-cpu": {
-        **DEFAULT_RECIPE,
-        "model_id": "Qwen/Qwen3-VL-Embedding-8B",
-        "output_dimension": 4096,
-    },
-    "qwen3-2b-cuda-balanced": {
-        **DEFAULT_RECIPE,
-        "runtime_profile": "cuda-balanced",
-    },
-    "qwen3-8b-cuda-balanced": {
-        **DEFAULT_RECIPE,
-        "model_id": "Qwen/Qwen3-VL-Embedding-8B",
-        "output_dimension": 4096,
-        "runtime_profile": "cuda-balanced",
-    },
-    "qwen3-2b-cuda-quality": {
-        **DEFAULT_RECIPE,
-        "runtime_profile": "cuda-quality",
-        "preprocess_version": "still-native-up-to-1536-gif-native-up-to-960-v1",
-    },
-    "qwen3-8b-cuda-quality": {
-        **DEFAULT_RECIPE,
-        "model_id": "Qwen/Qwen3-VL-Embedding-8B",
-        "output_dimension": 4096,
-        "runtime_profile": "cuda-quality",
-        "preprocess_version": "still-native-up-to-1536-gif-native-up-to-960-v1",
-    },
-    "qwen3-2b-vulkan-balanced": {
-        **DEFAULT_RECIPE,
-        "family_key": _RUNTIME_MANIFEST.model.protocol,
-        "model_id": _RUNTIME_MANIFEST.model.id,
-        "model_revision": _RUNTIME_MANIFEST.recipe_fingerprint,
-        "output_dimension": _RUNTIME_MANIFEST.model.output_dimension,
-        "runtime_profile": "vulkan-balanced",
-        "preprocess_version": _RUNTIME_MANIFEST.preprocessing.version,
-        "instruction_key": _RUNTIME_MANIFEST.embedding.instruction_id,
-        "pooling_key": _VULKAN_POOLING_KEY,
-        "normalized": 1,
-        "gif_frame_count": _RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-    },
+    MANIFEST_RECIPE_PRESET: dict(DEFAULT_RECIPE),
 }
 
 INSTRUCTION_TEXT_BY_KEY = {
-    "qwen3vl-text-to-image-default-v1": (
-        "Retrieve images that best match the user's text query."
-    ),
     _RUNTIME_MANIFEST.embedding.instruction_id: _RUNTIME_MANIFEST.embedding.instruction,
 }
 
 PREPROCESS_SPECS_BY_VERSION = {
-    "still-480-longest-side-v1": {
-        "still_max_side": 480,
-        "gif_max_side": 480,
-    },
-    "still-native-up-to-1536-gif-native-up-to-960-v1": {
-        "still_max_side": 1536,
-        "gif_max_side": 960,
-    },
     _RUNTIME_MANIFEST.preprocessing.version: {
         "still_max_side": _RUNTIME_MANIFEST.preprocessing.still_max_side,
         "gif_max_side": _RUNTIME_MANIFEST.preprocessing.gif_max_side,
     },
 }
 
-DEFAULT_GIF_FRAME_COUNT = 4
+DEFAULT_GIF_FRAME_COUNT = _RUNTIME_MANIFEST.preprocessing.gif_frame_count
 DEFAULT_OCR_RECIPE = ocr_artifacts.DEFAULT_OCR_RECIPE
 PROJECT_MODEL_STORE_DIRNAME = ".models"
 MODEL_DOWNLOAD_WORKERS = 8
@@ -352,8 +304,8 @@ class RuntimeProfileSpec:
     gif_max_side: int
     gif_frame_count: int
     notes: str
-    backend_name: str = "qwen3-vl"
-    supported_model_keys: tuple[str, ...] = ("qwen3-2b", "qwen3-8b")
+    backend_name: str = "llama.cpp"
+    supported_model_keys: tuple[str, ...] = (MANIFEST_MODEL_KEY,)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -460,94 +412,37 @@ class FirstRunFlowResult:
 
 
 RUNTIME_PROFILES: dict[str, RuntimeProfileSpec] = {
-    "cpu-low-memory": RuntimeProfileSpec(
-        profile_id="cpu-low-memory",
-        label="CPU Low Memory",
-        recipe_preset="qwen3-2b-cpu",
-        model_id="Qwen/Qwen3-VL-Embedding-2B",
-        device="cpu",
-        torch_dtype="auto",
-        num_threads=8,
-        num_interop_threads=2,
-        still_max_side=480,
-        gif_max_side=480,
-        gif_frame_count=4,
-        notes="Stable baseline for all Windows machines.",
-    ),
-    "cuda-balanced": RuntimeProfileSpec(
-        profile_id="cuda-balanced",
-        label="CUDA Balanced",
-        recipe_preset="qwen3-2b-cuda-balanced",
-        model_id="Qwen/Qwen3-VL-Embedding-2B",
-        device="cuda:0",
-        torch_dtype="float16",
-        num_threads=8,
-        num_interop_threads=2,
-        still_max_side=480,
-        gif_max_side=480,
-        gif_frame_count=4,
-        notes="Fastest practical NVIDIA path with the shared 480px baseline.",
-    ),
-    "cuda-quality": RuntimeProfileSpec(
-        profile_id="cuda-quality",
-        label="CUDA Quality",
-        recipe_preset="qwen3-2b-cuda-quality",
-        model_id="Qwen/Qwen3-VL-Embedding-2B",
-        device="cuda:0",
-        torch_dtype="float16",
-        num_threads=8,
-        num_interop_threads=2,
-        still_max_side=1536,
-        gif_max_side=960,
-        gif_frame_count=4,
-        notes="Higher-cost NVIDIA path with capped native-resolution preprocessing.",
-    ),
-    "vulkan-balanced": RuntimeProfileSpec(
-        profile_id="vulkan-balanced",
-        label="Vulkan Balanced (llama.cpp)",
-        recipe_preset="qwen3-2b-vulkan-balanced",
+    VULKAN_PROFILE_ID: RuntimeProfileSpec(
+        profile_id=VULKAN_PROFILE_ID,
+        label="Vulkan0 (llama.cpp)",
+        recipe_preset=MANIFEST_RECIPE_PRESET,
         model_id=_RUNTIME_MANIFEST.model.id,
         device=_RUNTIME_MANIFEST.platform.device,
         torch_dtype="gguf-q4_k_m",
-        num_threads=8,
-        num_interop_threads=2,
+        num_threads=None,
+        num_interop_threads=None,
         still_max_side=_RUNTIME_MANIFEST.preprocessing.still_max_side,
         gif_max_side=_RUNTIME_MANIFEST.preprocessing.gif_max_side,
         gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-        notes="Cross-vendor GPU path for NVIDIA, AMD, and Intel using llama.cpp Vulkan.",
+        notes="Pinned Vulkan0 backend for supported AMD, Intel, and NVIDIA GPUs.",
         backend_name="llama.cpp",
-        supported_model_keys=("qwen3-2b",),
+        supported_model_keys=(MANIFEST_MODEL_KEY,),
     ),
 }
 
 MODEL_VARIANTS: dict[str, ModelVariantSpec] = {
-    "qwen3-2b": ModelVariantSpec(
-        model_key="qwen3-2b",
-        label="Qwen3 2B",
-        model_id="Qwen/Qwen3-VL-Embedding-2B",
+    MANIFEST_MODEL_KEY: ModelVariantSpec(
+        model_key=MANIFEST_MODEL_KEY,
+        label=_RUNTIME_MANIFEST.model.base_model_id.split("/")[-1],
+        model_id=_RUNTIME_MANIFEST.model.id,
         output_dimension=_RUNTIME_MANIFEST.model.output_dimension,
-        notes="Smaller baseline model with lower VRAM and CPU cost.",
-    ),
-    "qwen3-8b": ModelVariantSpec(
-        model_key="qwen3-8b",
-        label="Qwen3 8B",
-        model_id="Qwen/Qwen3-VL-Embedding-8B",
-        output_dimension=4096,
-        notes="Larger model with a separate vector dimension and higher cost.",
+        notes="Developer-controlled by runtime-manifest.json.",
     ),
 }
 
 MODEL_PRESET_BY_PROFILE: dict[str, dict[str, str]] = {
-    "qwen3-2b": {
-        "cpu-low-memory": "qwen3-2b-cpu",
-        "cuda-balanced": "qwen3-2b-cuda-balanced",
-        "cuda-quality": "qwen3-2b-cuda-quality",
-        "vulkan-balanced": "qwen3-2b-vulkan-balanced",
-    },
-    "qwen3-8b": {
-        "cpu-low-memory": "qwen3-8b-cpu",
-        "cuda-balanced": "qwen3-8b-cuda-balanced",
-        "cuda-quality": "qwen3-8b-cuda-quality",
+    MANIFEST_MODEL_KEY: {
+        VULKAN_PROFILE_ID: MANIFEST_RECIPE_PRESET,
     },
 }
 
@@ -703,16 +598,12 @@ def discover_local_model_path(model_key: str) -> str | None:
 
 
 def discover_local_gguf_model_path(model_key: str) -> str | None:
-    model_dir = project_model_store_root() / "gguf" / f"{model_key}-q4_k_m"
-    if not model_dir.is_dir():
+    get_model_variant(model_key)
+    if not _RUNTIME_MANIFEST.main_model_path.is_file():
         return None
-    try:
-        from .llama_cpp_backend import resolve_gguf_bundle
-
-        resolve_gguf_bundle(str(model_dir))
-    except Exception:
+    if not _RUNTIME_MANIFEST.projector_path.is_file():
         return None
-    return str(model_dir.resolve())
+    return str(_RUNTIME_MANIFEST.model_install_dir)
 
 
 def resolve_effective_model_source(
@@ -753,16 +644,14 @@ def resolve_effective_model_source_for_backend(
     configured_model_name_or_path: str | None,
     allow_download: bool = False,
 ) -> str | None:
-    if backend_name == "qwen3-vl":
-        return resolve_effective_model_source(
-            selected_model_key,
-            configured_model_name_or_path,
-            allow_download=allow_download,
-        )
-    if backend_name == "llama.cpp":
-        configured = _existing_local_model_path(configured_model_name_or_path)
-        return configured or discover_local_gguf_model_path(selected_model_key)
-    return _configured_model_source(configured_model_name_or_path)
+    del allow_download
+    if backend_name != "llama.cpp":
+        raise ValueError("MemeSort supports only the llama.cpp Vulkan backend")
+    if selected_model_key != MANIFEST_MODEL_KEY:
+        raise ValueError("Embedding model is owned by runtime-manifest.json")
+    if configured_model_name_or_path is not None:
+        raise ValueError("Embedding model path is owned by runtime-manifest.json")
+    return str(_RUNTIME_MANIFEST.model_install_dir)
 
 
 def is_runtime_ready_for_indexing(library_root: Path | str) -> tuple[bool, str]:
@@ -772,7 +661,7 @@ def is_runtime_ready_for_indexing(library_root: Path | str) -> tuple[bool, str]:
         settings.selected_model_key,
         settings.model_name_or_path,
     )
-    if settings.backend_name not in {"qwen3-vl", "llama.cpp"}:
+    if settings.backend_name != "llama.cpp":
         return False, f"Unsupported runtime backend: {settings.backend_name}."
     if not effective_model_source:
         return False, "Model source is not ready yet."
@@ -1282,48 +1171,20 @@ def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
     conn = _connect(_database_path(library_root_path))
     try:
         payload = _get_worker_state_json(conn, "runtime_settings")
-        if payload is None:
-            default_profile = get_runtime_profile("vulkan-balanced")
-            default_model = get_model_variant("qwen3-2b")
-            settings = RuntimeSettings(
-                selected_profile=default_profile.profile_id,
-                selected_model_key=default_model.model_key,
-                model_name_or_path=None,
-                selected_recipe_preset=resolve_recipe_preset(
-                    default_profile.profile_id,
-                    default_model.model_key,
-                ),
-                gif_frame_count=default_profile.gif_frame_count,
-                backend_name=default_profile.backend_name,
-                library_root=str(library_root_path),
-            )
-            with conn:
-                _set_worker_state_json(conn, "runtime_settings", settings.to_dict())
-            return settings
-
-        selected_recipe_preset = str(payload["selected_recipe_preset"])
-        selected_model_key = (
-            str(payload["selected_model_key"])
-            if payload.get("selected_model_key")
-            else ("qwen3-8b" if "-8b-" in selected_recipe_preset else "qwen3-2b")
-        )
-
-        return RuntimeSettings(
-            selected_profile=str(payload["selected_profile"]),
-            selected_model_key=selected_model_key,
-            model_name_or_path=(
-                str(payload["model_name_or_path"])
-                if payload.get("model_name_or_path")
-                else None
-            ),
-            selected_recipe_preset=selected_recipe_preset,
-            gif_frame_count=int(payload["gif_frame_count"]),
-            backend_name=str(
-                payload.get("backend_name")
-                or get_runtime_profile(str(payload["selected_profile"])).backend_name
-            ),
+        profile = get_runtime_profile(VULKAN_PROFILE_ID)
+        settings = RuntimeSettings(
+            selected_profile=VULKAN_PROFILE_ID,
+            selected_model_key=MANIFEST_MODEL_KEY,
+            model_name_or_path=None,
+            selected_recipe_preset=MANIFEST_RECIPE_PRESET,
+            gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
+            backend_name=profile.backend_name,
             library_root=str(library_root_path),
         )
+        if payload != settings.to_dict():
+            with conn:
+                _set_worker_state_json(conn, "runtime_settings", settings.to_dict())
+        return settings
     finally:
         conn.close()
 
@@ -1340,24 +1201,28 @@ def save_runtime_settings(
     init_result = initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
     profile = get_runtime_profile(selected_profile)
-    model_key = selected_model_key or "qwen3-2b"
+    model_key = selected_model_key or MANIFEST_MODEL_KEY
     get_model_variant(model_key)
-    recipe_preset = selected_recipe_preset or resolve_recipe_preset(profile.profile_id, model_key)
-    frame_count = gif_frame_count if gif_frame_count is not None else profile.gif_frame_count
-    if frame_count <= 0:
-        raise ValueError("gif_frame_count must be positive")
-    _validate_recipe_preset_for_profile(profile.profile_id, recipe_preset)
+    recipe_preset = selected_recipe_preset or MANIFEST_RECIPE_PRESET
+    frame_count = (
+        gif_frame_count
+        if gif_frame_count is not None
+        else _RUNTIME_MANIFEST.preprocessing.gif_frame_count
+    )
     selected_backend = backend_name or profile.backend_name
-    if selected_backend != profile.backend_name:
-        raise ValueError(
-            f"Runtime profile {profile.profile_id} requires backend "
-            f"{profile.backend_name}, not {selected_backend}"
-        )
+    if model_name_or_path is not None:
+        raise ValueError("Vulkan model paths are owned by runtime-manifest.json")
+    if recipe_preset != MANIFEST_RECIPE_PRESET:
+        raise ValueError("Vulkan recipe is owned by runtime-manifest.json")
+    if frame_count != _RUNTIME_MANIFEST.preprocessing.gif_frame_count:
+        raise ValueError("Vulkan GIF frame count is owned by runtime-manifest.json")
+    if selected_backend != "llama.cpp":
+        raise ValueError("MemeSort supports only the llama.cpp Vulkan backend")
 
     settings = RuntimeSettings(
         selected_profile=profile.profile_id,
         selected_model_key=model_key,
-        model_name_or_path=model_name_or_path,
+        model_name_or_path=None,
         selected_recipe_preset=recipe_preset,
         gif_frame_count=frame_count,
         backend_name=selected_backend,
@@ -1501,7 +1366,7 @@ def _infer_model_source_origin(
 
 def run_runtime_health_check(
     profile_id: str,
-    model_key: str = "qwen3-2b",
+    model_key: str = MANIFEST_MODEL_KEY,
     model_name_or_path: str | None = None,
     library_root: Path | str | None = None,
 ) -> RuntimeHealthResult:

@@ -177,15 +177,16 @@ class LlamaCppBackendTests(unittest.TestCase):
     def test_vulkan_profile_selects_llama_cpp_and_distinct_recipe(self) -> None:
         profiles = {profile.profile_id: profile for profile in list_runtime_profiles()}
 
-        self.assertEqual("llama.cpp", profiles["vulkan-balanced"].backend_name)
+        self.assertEqual({"vulkan"}, set(profiles))
+        self.assertEqual("llama.cpp", profiles["vulkan"].backend_name)
         self.assertEqual(
-            "qwen3-2b-vulkan-balanced",
-            resolve_recipe_preset("vulkan-balanced", "qwen3-2b"),
+            "vulkan-manifest",
+            resolve_recipe_preset("vulkan", "manifest"),
         )
 
     def test_vulkan_recipe_identity_is_derived_from_manifest(self) -> None:
         manifest = load_runtime_manifest()
-        recipe = library_module.RECIPE_PRESETS["qwen3-2b-vulkan-balanced"]
+        recipe = library_module.RECIPE_PRESETS["vulkan-manifest"]
 
         self.assertEqual(manifest.model.id, recipe["model_id"])
         self.assertEqual(manifest.recipe_fingerprint, recipe["model_revision"])
@@ -198,14 +199,14 @@ class LlamaCppBackendTests(unittest.TestCase):
             library_root = Path(temp_dir) / "library"
             save_runtime_settings(
                 library_root,
-                selected_profile="vulkan-balanced",
-                selected_model_key="qwen3-2b",
+                selected_profile="vulkan",
+                selected_model_key="manifest",
                 model_name_or_path=None,
             )
             settings = get_runtime_settings(library_root)
 
         self.assertEqual("llama.cpp", settings.backend_name)
-        self.assertEqual("qwen3-2b-vulkan-balanced", settings.selected_recipe_preset)
+        self.assertEqual("vulkan-manifest", settings.selected_recipe_preset)
 
     def test_old_transformers_health_check_cannot_authorize_vulkan_indexing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -215,15 +216,15 @@ class LlamaCppBackendTests(unittest.TestCase):
             self._write_bundle(bundle)
             save_runtime_settings(
                 library_root,
-                selected_profile="vulkan-balanced",
-                selected_model_key="qwen3-2b",
-                model_name_or_path=str(bundle),
+                selected_profile="vulkan",
+                selected_model_key="manifest",
+                model_name_or_path=None,
             )
             stale = RuntimeHealthResult(
-                profile_id="cpu-low-memory",
+                profile_id="legacy-cpu",
                 backend_name="qwen3-vl",
                 model_name_or_path=str(bundle),
-                selected_model_key="qwen3-2b",
+                selected_model_key="legacy-model",
                 selected_model_label="Qwen3 2B",
                 device="cpu",
                 torch_dtype="auto",
@@ -259,8 +260,8 @@ class LlamaCppBackendTests(unittest.TestCase):
                 return_value=missing_manifest,
             ):
                 result = run_runtime_health_check(
-                    "vulkan-balanced",
-                    model_key="qwen3-2b",
+                    "vulkan",
+                    model_key="manifest",
                     model_name_or_path=None,
                 )
 
@@ -302,8 +303,8 @@ class LlamaCppBackendTests(unittest.TestCase):
                                     backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
                                     backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
                                     result = run_runtime_health_check(
-                                        "vulkan-balanced",
-                                        model_key="qwen3-2b",
+                                        "vulkan",
+                                        model_key="manifest",
                                         model_name_or_path=str(bundle),
                                     )
 

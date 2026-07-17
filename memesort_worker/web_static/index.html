@@ -78,12 +78,18 @@
           <section id="setupTab" class="tab-panel">
             <div class="section-heading"><p class="eyebrow">Operations</p><h2>Import &amp; runtime</h2></div>
             <div class="grid-two">
-              <div class="card"><h2>Runtime setup</h2><p class="muted small">Pick a runtime profile and embedding model before importing. Recipes remain isolated by profile and model.</p>
-                <label for="profileSelect">Runtime profile</label><select id="profileSelect"></select><div id="profileSummary" class="runtime-summary"></div>
-                <label for="modelVariantSelect">Embedding model</label><select id="modelVariantSelect"></select><div id="modelVariantSummary" class="runtime-summary"></div>
-                <label for="modelPathInput">Model source override</label><div class="inline-picker"><input id="modelPathInput" placeholder="Leave blank to auto-download into .models" /><button id="pickModelPathBtn" type="button" class="ghost">Browse model folder</button></div><div id="modelPathHint" class="runtime-summary"></div>
-                <label for="gifFrameCountInput">GIF frame count</label><input id="gifFrameCountInput" type="number" min="1" value="4" />
-                <div class="actions"><button id="saveSettingsBtn">Save settings</button><button id="prepareRuntimeBtn">Prepare runtime</button><button id="healthCheckBtn" class="ghost">Run health check</button></div><div id="setupGuide" class="runtime-summary"></div><div id="runtimeReadiness" class="runtime-summary"></div><div id="setupChecklist" class="checklist"></div><div id="healthDiagnostics" class="checklist"></div><pre id="healthResult" class="console"></pre>
+              <div class="card"><h2>Vulkan runtime</h2><p class="muted small">The local llama.cpp runtime, Vulkan0 device, and GGUF model are pinned by <span class="mono">runtime-manifest.json</span>. Run the repository setup script after a developer changes that manifest.</p>
+                <div id="profileSummary" class="runtime-summary"></div>
+                <div id="modelVariantSummary" class="runtime-summary"></div>
+                <div id="modelPathHint" class="runtime-summary"></div>
+                <select id="profileSelect" hidden><option value="vulkan">Vulkan0</option></select>
+                <select id="modelVariantSelect" hidden><option value="manifest">Manifest model</option></select>
+                <input id="modelPathInput" type="hidden" value="" />
+                <input id="gifFrameCountInput" type="hidden" value="4" />
+                <button id="pickModelPathBtn" type="button" hidden>Unavailable</button>
+                <button id="saveSettingsBtn" type="button" hidden>Unavailable</button>
+                <button id="prepareRuntimeBtn" type="button" hidden>Unavailable</button>
+                <div class="actions"><button id="healthCheckBtn" class="ghost">Run Vulkan health check</button></div><div id="setupGuide" class="runtime-summary"></div><div id="runtimeReadiness" class="runtime-summary"></div><div id="setupChecklist" class="checklist"></div><div id="healthDiagnostics" class="checklist"></div><pre id="healthResult" class="console"></pre>
               </div>
               <div class="card"><h2>Import and index</h2><p class="muted small">Import copies files into the managed library. Matching content becomes another source record.</p>
                 <label for="importPathInput">Import folder</label><input id="importPathInput" placeholder="F:\Pictures\memes" />

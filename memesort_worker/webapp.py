@@ -31,7 +31,6 @@ from .library import (
     retry_failed_jobs,
     rebuild_active_indexes,
     scan_duplicate_assets,
-    switch_active_recipe,
 )
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
 from .retrieval_service import find_similar_assets
@@ -157,7 +156,7 @@ def create_app(library_root: str):
                 result = apply_runtime_selection(
                     library_root_path,
                     selected_profile=str(payload["selected_profile"]),
-                    selected_model_key=str(payload.get("selected_model_key") or "qwen3-2b"),
+                    selected_model_key=str(payload.get("selected_model_key") or "manifest"),
                     model_name_or_path=(
                         str(payload["model_name_or_path"])
                         if payload.get("model_name_or_path")
@@ -207,15 +206,11 @@ def create_app(library_root: str):
                     worker_loop.snapshot().to_dict(),
                 )
             elif path == "/api/health" and method == "POST":
-                payload = _read_json_body(environ)
+                _read_json_body(environ)
                 result = run_runtime_health_check(
-                    profile_id=str(payload["profile_id"]),
-                    model_key=str(payload.get("model_key") or "qwen3-2b"),
-                    model_name_or_path=(
-                        str(payload["model_name_or_path"])
-                        if payload.get("model_name_or_path")
-                        else None
-                    ),
+                    profile_id="vulkan",
+                    model_key="manifest",
+                    model_name_or_path=None,
                     library_root=library_root_path,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
@@ -308,7 +303,7 @@ def create_app(library_root: str):
                     run_first_run_command(
                         library_root_path,
                         selected_profile=str(payload["selected_profile"]),
-                        selected_model_key=str(payload.get("selected_model_key") or "qwen3-2b"),
+                        selected_model_key=str(payload.get("selected_model_key") or "manifest"),
                         model_name_or_path=(
                             str(payload["model_name_or_path"])
                             if payload.get("model_name_or_path")
@@ -425,18 +420,6 @@ def create_app(library_root: str):
             elif path == "/api/duplicates" and method == "GET":
                 threshold = float(query.get("threshold", ["0.92"])[0])
                 result = scan_duplicate_assets(library_root_path, threshold=threshold)
-                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
-            elif path == "/api/switch-recipe" and method == "POST":
-                payload = _read_json_body(environ)
-                result = switch_active_recipe(
-                    library_root_path,
-                    preset_key=str(payload["preset"]),
-                    gif_frame_count=(
-                        int(payload["gif_frame_count"])
-                        if payload.get("gif_frame_count") is not None
-                        else None
-                    ),
-                )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path.startswith("/media/") and method == "GET":
                 media_path = path.removeprefix("/media/")
