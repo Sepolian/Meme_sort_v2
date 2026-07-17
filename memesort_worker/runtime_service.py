@@ -21,28 +21,6 @@ _HEALTH_CHECK_PNG = base64.b64decode(
 )
 
 
-def _persist_resolved_model_source(
-    library_root: Path | str,
-    resolved_model_source: str | None,
-) -> library.RuntimeSettings:
-    settings = library.get_runtime_settings(library_root)
-    if not resolved_model_source:
-        return settings
-    if settings.model_name_or_path and library._is_local_model_path(settings.model_name_or_path):
-        return settings
-    if settings.model_name_or_path == resolved_model_source:
-        return settings
-    return library.save_runtime_settings(
-        library_root,
-        selected_profile=settings.selected_profile,
-        selected_model_key=settings.selected_model_key,
-        model_name_or_path=resolved_model_source,
-        selected_recipe_preset=settings.selected_recipe_preset,
-        gif_frame_count=settings.gif_frame_count,
-        backend_name=settings.backend_name,
-    )
-
-
 def _save_last_health_check(
     library_root: Path | str,
     result: library.RuntimeHealthResult,
@@ -98,71 +76,17 @@ def get_last_health_check(
         )
 
 
-def _resolve_runtime_model_source_for_backend(
-    backend_name: str,
-    model_name_or_path: str | None,
-    selected_model_key: str | None = None,
-    allow_download: bool = False,
-) -> str | None:
-    if backend_name == "llama.cpp":
-        if selected_model_key is None:
-            return library._configured_model_source(model_name_or_path)
-        return library.resolve_effective_model_source_for_backend(
-            backend_name,
-            selected_model_key,
-            model_name_or_path,
-            allow_download=False,
-        )
-    if backend_name != "qwen3-vl":
-        return model_name_or_path
-
-    if selected_model_key is not None:
-        return library.resolve_effective_model_source(
-            selected_model_key,
-            model_name_or_path,
-            allow_download=allow_download,
-        )
-
-    configured_source = library._configured_model_source(model_name_or_path)
-    if configured_source and not library._is_local_model_path(configured_source) and allow_download:
-        return library.ensure_project_local_model_snapshot(configured_source)
-    return configured_source
-
-
-def _infer_model_source_origin(
-    requested_model_name_or_path: str | None,
-    resolved_model_source: str | None,
-    selected_model_key: str | None,
-) -> str | None:
-    if not resolved_model_source:
-        return None
-
-    if requested_model_name_or_path and library._is_local_model_path(requested_model_name_or_path):
-        return "explicit-local-path"
-
-    resolved_path = Path(resolved_model_source).expanduser().resolve()
-    project_store_root = library.project_model_store_root().resolve()
-    if resolved_path == project_store_root or project_store_root in resolved_path.parents:
-        return "project-local-model-store"
-
-    if selected_model_key is not None:
-        discovered = library.discover_local_model_path(selected_model_key)
-        if discovered and str(Path(discovered).expanduser().resolve()) == str(resolved_path):
-            return "discovered-local-snapshot"
-
-    return "configured-model-source"
-
-
 def run_runtime_health_check(
     profile_id: str,
     model_key: str = library.MANIFEST_MODEL_KEY,
     model_name_or_path: str | None = None,
     library_root: Path | str | None = None,
 ) -> library.RuntimeHealthResult:
+    if model_name_or_path is not None:
+        raise ValueError("Vulkan model path is owned by runtime-manifest.json")
     profile = library.get_runtime_profile(profile_id)
     model_variant = library.get_model_variant(model_key)
     library.resolve_recipe_preset(profile.profile_id, model_variant.model_key)
-    resolved_model_source = model_name_or_path
     diagnostic_steps: list[dict[str, object]] = [
         {
             "step": "runtime-profile",
@@ -176,259 +100,20 @@ def run_runtime_health_check(
         },
     ]
 
-    if profile.backend_name == "llama.cpp":
-        return _run_llama_cpp_runtime_health_check(
-            profile=profile,
-            model_variant=model_variant,
-            model_name_or_path=model_name_or_path,
-            library_root=library_root,
-            diagnostic_steps=diagnostic_steps,
-        )
-
-    try:
-        import torch  # type: ignore
-    except ImportError:
-        result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
-            backend_name="qwen3-vl",
-            model_name_or_path=model_name_or_path,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=False,
-            cuda_available=False,
-            gpu_name=None,
-            model_source_origin=None,
-            model_downloaded=False,
-            text_smoke_vector_dim=None,
-            diagnostic_steps=[
-                *diagnostic_steps,
-                {
-                    "step": "torch-import",
-                    "status": "error",
-                    "detail": "PyTorch is not installed in the active virtual environment.",
-                },
-            ],
-            smoke_test_ok=False,
-            error="PyTorch is not installed in the active virtual environment.",
-        )
-        if library_root is not None:
-            _save_last_health_check(library_root, result=result)
-        return result
-
-    diagnostic_steps.append(
-        {
-            "step": "torch-import",
-            "status": "ok",
-            "detail": "PyTorch import succeeded.",
-        }
-    )
-
-    cuda_available = bool(torch.cuda.is_available())
-    gpu_name = None
-    if cuda_available:
-        try:
-            gpu_name = str(torch.cuda.get_device_name(0))
-        except Exception:
-            gpu_name = "unknown-cuda-device"
-
-    diagnostic_steps.append(
-        {
-            "step": "cuda-availability",
-            "status": "ok" if (not profile.device.startswith("cuda") or cuda_available) else "error",
-            "detail": (
-                f"CUDA visible as {gpu_name or 'unknown-cuda-device'}."
-                if cuda_available
-                else "CUDA is not available to PyTorch."
-            ),
-        }
-    )
-
-    if profile.device.startswith("cuda") and not cuda_available:
-        result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
-            backend_name="qwen3-vl",
-            model_name_or_path=model_name_or_path,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=True,
-            cuda_available=False,
-            gpu_name=gpu_name,
-            model_source_origin=None,
-            model_downloaded=False,
-            text_smoke_vector_dim=None,
-            diagnostic_steps=diagnostic_steps,
-            smoke_test_ok=False,
-            error="CUDA profile selected but torch.cuda.is_available() is false.",
-        )
-        if library_root is not None:
-            _save_last_health_check(library_root, result=result)
-        return result
-
-    prior_local_source = library.resolve_effective_model_source(
-        model_key,
-        model_name_or_path,
-        allow_download=False,
-    )
-    try:
-        resolved_model_source = _resolve_runtime_model_source_for_backend(
-            "qwen3-vl",
-            model_name_or_path,
-            selected_model_key=model_key,
-            allow_download=True,
-        )
-    except Exception as exc:
-        result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
-            backend_name="qwen3-vl",
-            model_name_or_path=model_name_or_path,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=True,
-            cuda_available=cuda_available,
-            gpu_name=gpu_name,
-            model_source_origin=None,
-            model_downloaded=False,
-            text_smoke_vector_dim=None,
-            diagnostic_steps=[
-                *diagnostic_steps,
-                {
-                    "step": "resolve-model-source",
-                    "status": "error",
-                    "detail": str(exc),
-                },
-            ],
-            smoke_test_ok=False,
-            error=str(exc),
-        )
-        if library_root is not None:
-            _save_last_health_check(library_root, result=result)
-        return result
-
-    model_source_origin = _infer_model_source_origin(
-        model_name_or_path,
-        resolved_model_source,
-        model_key,
-    )
-    model_downloaded = bool(resolved_model_source and not prior_local_source)
-    diagnostic_steps.append(
-        {
-            "step": "resolve-model-source",
-            "status": "ok" if resolved_model_source else "error",
-            "detail": resolved_model_source or "No model source is ready yet.",
-        }
-    )
-
-    if not resolved_model_source:
-        result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
-            backend_name="qwen3-vl",
-            model_name_or_path=None,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=True,
-            cuda_available=cuda_available,
-            gpu_name=gpu_name,
-            model_source_origin=None,
-            model_downloaded=False,
-            text_smoke_vector_dim=None,
-            diagnostic_steps=diagnostic_steps,
-            smoke_test_ok=False,
-            error="Model source is not ready yet.",
-        )
-        if library_root is not None:
-            _save_last_health_check(library_root, result=result)
-        return result
-
-    try:
-        backend = library.get_embedding_backend(
-            "qwen3-vl",
-            library.get_runtime_config_for_profile(
-                profile.profile_id,
-                model_name_or_path=resolved_model_source,
-            ),
-        )
-        vector = backend.embed_text(
-            "confused reaction image",
-            output_dimension=model_variant.output_dimension,
-            instruction=library.INSTRUCTION_TEXT_BY_KEY["qwen3vl-text-to-image-default-v1"],
-        )
-    except Exception as exc:
-        result = library.RuntimeHealthResult(
-            profile_id=profile.profile_id,
-            backend_name="qwen3-vl",
-            model_name_or_path=resolved_model_source,
-            selected_model_key=model_variant.model_key,
-            selected_model_label=model_variant.label,
-            device=profile.device,
-            torch_dtype=profile.torch_dtype,
-            torch_available=True,
-            cuda_available=cuda_available,
-            gpu_name=gpu_name,
-            model_source_origin=model_source_origin,
-            model_downloaded=model_downloaded,
-            text_smoke_vector_dim=None,
-            diagnostic_steps=[
-                *diagnostic_steps,
-                {
-                    "step": "text-embedding-smoke",
-                    "status": "error",
-                    "detail": str(exc),
-                },
-            ],
-            smoke_test_ok=False,
-            error=str(exc),
-        )
-        if library_root is not None:
-            _save_last_health_check(library_root, result=result)
-        return result
-
-    diagnostic_steps.append(
-        {
-            "step": "text-embedding-smoke",
-            "status": "ok",
-            "detail": f"Text embedding smoke passed at {int(vector.shape[0])}d.",
-        }
-    )
-
-    result = library.RuntimeHealthResult(
-        profile_id=profile.profile_id,
-        backend_name="qwen3-vl",
-        model_name_or_path=resolved_model_source,
-        selected_model_key=model_variant.model_key,
-        selected_model_label=model_variant.label,
-        device=profile.device,
-        torch_dtype=profile.torch_dtype,
-        torch_available=True,
-        cuda_available=cuda_available,
-        gpu_name=gpu_name,
-        model_source_origin=model_source_origin,
-        model_downloaded=model_downloaded,
-        text_smoke_vector_dim=int(vector.shape[0]),
+    return _run_llama_cpp_runtime_health_check(
+        profile=profile,
+        model_variant=model_variant,
+        library_root=library_root,
         diagnostic_steps=diagnostic_steps,
-        smoke_test_ok=True,
-        error=None,
     )
-    if library_root is not None:
-        _save_last_health_check(library_root, result=result)
-    return result
 
 
 def _run_llama_cpp_runtime_health_check(
     profile,
     model_variant,
-    model_name_or_path: str | None,
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
 ) -> library.RuntimeHealthResult:
-    _ = model_name_or_path  # Vulkan runtime paths are manifest-owned, never user-selected.
     manifest = load_runtime_manifest()
     resolved_model_source = str(manifest.model_install_dir)
     if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
@@ -553,11 +238,7 @@ def _run_llama_cpp_runtime_health_check(
             torch_available=False,
             cuda_available=False,
             gpu_name=gpu_name,
-            model_source_origin=_infer_model_source_origin(
-                None,
-                resolved_model_source,
-                model_variant.model_key,
-            ),
+            model_source_origin="project-local-model-store",
             model_downloaded=False,
             text_smoke_vector_dim=None,
             diagnostic_steps=[
@@ -593,11 +274,7 @@ def _run_llama_cpp_runtime_health_check(
         torch_available=False,
         cuda_available=False,
         gpu_name=gpu_name,
-        model_source_origin=_infer_model_source_origin(
-            None,
-            resolved_model_source,
-            model_variant.model_key,
-        ),
+        model_source_origin="project-local-model-store",
         model_downloaded=False,
         text_smoke_vector_dim=int(vector.shape[0]),
         diagnostic_steps=diagnostic_steps,
@@ -663,8 +340,6 @@ def run_first_run_flow(
         model_name_or_path=model_name_or_path,
         library_root=library_root,
     )
-    _persist_resolved_model_source(library_root, health_check.model_name_or_path)
-
     should_resume_worker_loop = False
     import_result: dict[str, object] | None = None
     if health_check.smoke_test_ok and import_path:
@@ -695,10 +370,8 @@ def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
     settings = library.get_runtime_settings(library_root)
     assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
-    suggested_model_path = (
-        library.discover_local_gguf_model_path(settings.selected_model_key)
-        if settings.backend_name == "llama.cpp"
-        else library.discover_local_model_path(settings.selected_model_key)
+    suggested_model_path = library.discover_local_gguf_model_path(
+        settings.selected_model_key
     )
     effective_model_source = library.resolve_effective_model_source_for_backend(
         settings.backend_name,

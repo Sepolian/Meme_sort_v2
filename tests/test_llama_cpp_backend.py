@@ -254,8 +254,6 @@ class LlamaCppBackendTests(unittest.TestCase):
                 source_path=Path(temp_dir) / "runtime-manifest.json",
             )
             with patch(
-                "memesort_worker.library.ensure_project_local_model_snapshot"
-            ) as download, patch(
                 "memesort_worker.runtime_service.load_runtime_manifest",
                 return_value=missing_manifest,
             ):
@@ -268,7 +266,6 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertFalse(result.smoke_test_ok)
         self.assertEqual("llama.cpp", result.backend_name)
         self.assertIn("GGUF", result.error)
-        download.assert_not_called()
 
     def test_vulkan_health_check_validates_text_and_image_embeddings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -305,7 +302,7 @@ class LlamaCppBackendTests(unittest.TestCase):
                                     result = run_runtime_health_check(
                                         "vulkan",
                                         model_key="manifest",
-                                        model_name_or_path=str(bundle),
+                                        model_name_or_path=None,
                                     )
 
         self.assertTrue(result.smoke_test_ok)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -136,14 +135,3 @@ def _coerce_normalized_dimension(
     if not np.all(np.isfinite(normalized)):
         raise EmbeddingBackendError("Embedding normalization produced non-finite values")
     return normalized
-
-
-def _is_local_model_path(model_name_or_path: str | None) -> bool:
-    """Compatibility helper for old persisted settings during Vulkan migration."""
-    if not model_name_or_path:
-        return False
-    if os.path.isabs(model_name_or_path):
-        return True
-    if model_name_or_path.startswith((".", ".\\", "./")):
-        return True
-    return os.path.exists(model_name_or_path)

@@ -3,11 +3,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import shutil
 import sqlite3
-import sys
-import threading
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -20,10 +17,8 @@ from PIL import Image
 from .embedding_backend import (
     EmbeddingBackend,
     EmbeddingRuntimeConfig,
-    _is_local_model_path,
     get_embedding_backend,
 )
-from .process_io import ensure_process_stdio
 from . import ocr_artifacts
 from . import job_queue
 from .semantic_retrieval import scan_duplicate_vector_rows
@@ -91,9 +86,6 @@ PREPROCESS_SPECS_BY_VERSION = {
 
 DEFAULT_GIF_FRAME_COUNT = _RUNTIME_MANIFEST.preprocessing.gif_frame_count
 DEFAULT_OCR_RECIPE = ocr_artifacts.DEFAULT_OCR_RECIPE
-PROJECT_MODEL_STORE_DIRNAME = ".models"
-MODEL_DOWNLOAD_WORKERS = 8
-_MODEL_DOWNLOAD_LOCK = threading.Lock()
 
 
 @dataclass
@@ -455,148 +447,6 @@ def _resolve(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def project_root() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[1]
-
-
-def project_model_store_root() -> Path:
-    return project_root() / PROJECT_MODEL_STORE_DIRNAME
-
-
-def _model_cache_dir_name(model_id: str) -> str:
-    owner, model_name = model_id.split("/", 1)
-    return f"models--{owner}--{model_name}"
-
-
-def _candidate_hf_snapshot_roots(include_global_cache: bool = True) -> list[Path]:
-    roots = [project_model_store_root()]
-    if include_global_cache:
-        roots.extend(
-            [
-                Path.home() / ".cache" / "huggingface" / "hub",
-                Path.home() / "AppData" / "Local" / "huggingface" / "hub",
-            ]
-        )
-    deduped_roots: list[Path] = []
-    seen: set[str] = set()
-    for root in roots:
-        key = str(root)
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped_roots.append(root)
-    return deduped_roots
-
-
-def _discover_snapshot_for_model_id(
-    model_id: str,
-    include_global_cache: bool = True,
-) -> str | None:
-    if "/" not in model_id:
-        return None
-    cache_dir_name = _model_cache_dir_name(model_id)
-
-    for root in _candidate_hf_snapshot_roots(include_global_cache=include_global_cache):
-        model_cache = root / cache_dir_name
-        refs_main = model_cache / "refs" / "main"
-        snapshots_dir = model_cache / "snapshots"
-        if not model_cache.exists() or not snapshots_dir.exists():
-            continue
-
-        snapshot_name: str | None = None
-        if refs_main.exists():
-            try:
-                snapshot_name = refs_main.read_text(encoding="utf-8").strip()
-            except Exception:
-                snapshot_name = None
-        if snapshot_name:
-            snapshot_path = snapshots_dir / snapshot_name
-            if snapshot_path.exists():
-                return str(snapshot_path)
-
-        try:
-            snapshot_paths = sorted(
-                [path for path in snapshots_dir.iterdir() if path.is_dir()],
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
-        except Exception:
-            snapshot_paths = []
-        if snapshot_paths:
-            return str(snapshot_paths[0])
-
-    return None
-
-
-def _configured_model_source(configured_model_name_or_path: str | None) -> str | None:
-    if not configured_model_name_or_path:
-        return None
-    configured_source = configured_model_name_or_path.strip()
-    return configured_source or None
-
-
-def _requested_model_source(
-    selected_model_key: str,
-    configured_model_name_or_path: str | None,
-) -> str:
-    configured_source = _configured_model_source(configured_model_name_or_path)
-    if configured_source:
-        return configured_source
-    return get_model_variant(selected_model_key).model_id
-
-
-def _existing_local_model_path(model_name_or_path: str | None) -> str | None:
-    configured_source = _configured_model_source(model_name_or_path)
-    if not configured_source or not _is_local_model_path(configured_source):
-        return None
-    candidate = Path(configured_source).expanduser().resolve()
-    if candidate.exists():
-        return str(candidate)
-    return None
-
-
-def ensure_project_local_model_snapshot(model_id: str) -> str:
-    if "/" not in model_id:
-        raise ValueError(f"Expected a Hugging Face repo id, got: {model_id}")
-
-    existing_snapshot = _discover_snapshot_for_model_id(model_id, include_global_cache=False)
-    if existing_snapshot:
-        return existing_snapshot
-
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as exc:
-        raise RuntimeError(
-            "huggingface_hub is not installed in the active virtual environment."
-        ) from exc
-
-    model_store_root = project_model_store_root()
-    model_store_root.mkdir(parents=True, exist_ok=True)
-    ensure_process_stdio()
-
-    with _MODEL_DOWNLOAD_LOCK:
-        existing_snapshot = _discover_snapshot_for_model_id(model_id, include_global_cache=False)
-        if existing_snapshot:
-            return existing_snapshot
-
-        snapshot_path = snapshot_download(
-            repo_id=model_id,
-            cache_dir=model_store_root,
-            max_workers=MODEL_DOWNLOAD_WORKERS,
-        )
-    return str(Path(snapshot_path).resolve())
-
-
-def discover_local_model_path(model_key: str) -> str | None:
-    model_variant = get_model_variant(model_key)
-    return _discover_snapshot_for_model_id(
-        model_variant.model_id,
-        include_global_cache=False,
-    )
-
-
 def discover_local_gguf_model_path(model_key: str) -> str | None:
     get_model_variant(model_key)
     if not _RUNTIME_MANIFEST.main_model_path.is_file():
@@ -604,38 +454,6 @@ def discover_local_gguf_model_path(model_key: str) -> str | None:
     if not _RUNTIME_MANIFEST.projector_path.is_file():
         return None
     return str(_RUNTIME_MANIFEST.model_install_dir)
-
-
-def resolve_effective_model_source(
-    selected_model_key: str,
-    configured_model_name_or_path: str | None,
-    allow_download: bool = False,
-) -> str | None:
-    existing_local_path = _existing_local_model_path(configured_model_name_or_path)
-    if existing_local_path:
-        return existing_local_path
-
-    model_variant = get_model_variant(selected_model_key)
-    requested_model_source = _requested_model_source(
-        selected_model_key,
-        configured_model_name_or_path,
-    )
-    if _is_local_model_path(requested_model_source):
-        return requested_model_source
-
-    if requested_model_source == model_variant.model_id:
-        discovered_model_path = discover_local_model_path(selected_model_key)
-    else:
-        discovered_model_path = _discover_snapshot_for_model_id(
-            requested_model_source,
-            include_global_cache=True,
-        )
-    if discovered_model_path:
-        return discovered_model_path
-
-    if allow_download:
-        return ensure_project_local_model_snapshot(requested_model_source)
-    return None
 
 
 def resolve_effective_model_source_for_backend(
@@ -1316,52 +1134,6 @@ def get_last_health_check(
         )
     finally:
         conn.close()
-
-
-def _resolve_runtime_model_source_for_backend(
-    backend_name: str,
-    model_name_or_path: str | None,
-    selected_model_key: str | None = None,
-    allow_download: bool = False,
-) -> str | None:
-    if selected_model_key is not None:
-        return resolve_effective_model_source_for_backend(
-            backend_name,
-            selected_model_key,
-            model_name_or_path,
-            allow_download=allow_download,
-        )
-    if backend_name != "qwen3-vl":
-        return _configured_model_source(model_name_or_path)
-
-    configured_source = _configured_model_source(model_name_or_path)
-    if configured_source and not _is_local_model_path(configured_source) and allow_download:
-        return ensure_project_local_model_snapshot(configured_source)
-    return configured_source
-
-
-def _infer_model_source_origin(
-    requested_model_name_or_path: str | None,
-    resolved_model_source: str | None,
-    selected_model_key: str | None,
-) -> str | None:
-    if not resolved_model_source:
-        return None
-
-    if requested_model_name_or_path and _is_local_model_path(requested_model_name_or_path):
-        return "explicit-local-path"
-
-    resolved_path = Path(resolved_model_source).expanduser().resolve()
-    project_store_root = project_model_store_root().resolve()
-    if resolved_path == project_store_root or project_store_root in resolved_path.parents:
-        return "project-local-model-store"
-
-    if selected_model_key is not None:
-        discovered = discover_local_model_path(selected_model_key)
-        if discovered and str(Path(discovered).expanduser().resolve()) == str(resolved_path):
-            return "discovered-local-snapshot"
-
-    return "configured-model-source"
 
 
 def run_runtime_health_check(
