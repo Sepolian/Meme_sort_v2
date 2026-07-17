@@ -40,7 +40,6 @@ __all__ = [
     "is_runtime_ready_for_indexing",
     "list_assets",
     "runtime_health_matches_manifest",
-    "switch_active_recipe",
 ]
 
 

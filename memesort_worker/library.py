@@ -46,15 +46,13 @@ SUPPORTED_EXTENSIONS = {
 
 _RUNTIME_MANIFEST = load_runtime_manifest()
 VULKAN_PROFILE_ID = "vulkan"
-MANIFEST_RECIPE_PRESET = "vulkan-manifest"
-_VULKAN_RECIPE_PRESET = MANIFEST_RECIPE_PRESET
 _VULKAN_POOLING_KEY = (
     f"{_RUNTIME_MANIFEST.embedding.pooling}-"
     f"{_RUNTIME_MANIFEST.embedding.normalization}-"
     f"{_RUNTIME_MANIFEST.embedding.storage_dtype}"
 )
 
-DEFAULT_RECIPE = {
+MANIFEST_RECIPE = {
     "family_key": _RUNTIME_MANIFEST.model.protocol,
     "model_id": _RUNTIME_MANIFEST.model.id,
     "model_revision": _RUNTIME_MANIFEST.recipe_fingerprint,
@@ -65,10 +63,6 @@ DEFAULT_RECIPE = {
     "pooling_key": _VULKAN_POOLING_KEY,
     "normalized": 1,
     "gif_frame_count": _RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-}
-
-RECIPE_PRESETS: dict[str, dict[str, object]] = {
-    MANIFEST_RECIPE_PRESET: dict(DEFAULT_RECIPE),
 }
 
 INSTRUCTION_TEXT_BY_KEY = {
@@ -120,18 +114,6 @@ class DeletePendingJobsResult:
     requested_job_ids: list[str]
     deleted_job_ids: list[str]
     skipped_job_ids: list[str]
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
-class SwitchRecipeResult:
-    library_root: str
-    active_recipe_id: str
-    active_recipe_label: str
-    assets_seen: int
-    reindex_jobs_created: int
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -545,12 +527,12 @@ def _ensure_recipe(conn: sqlite3.Connection, recipe_spec: dict[str, object]) -> 
     return recipe_id
 
 
-def _ensure_default_recipe(conn: sqlite3.Connection) -> str:
-    return _ensure_recipe(conn, DEFAULT_RECIPE)
+def _ensure_manifest_recipe(conn: sqlite3.Connection) -> str:
+    return _ensure_recipe(conn, MANIFEST_RECIPE)
 
 
 def _activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]:
-    recipe_id = _ensure_default_recipe(conn)
+    recipe_id = _ensure_manifest_recipe(conn)
     active_recipe_id = _get_active_recipe_id(conn)
     state = _get_worker_state_json(conn, "semantic_recipe_activation")
     already_active = (
@@ -626,40 +608,6 @@ def _ensure_missing_ocr_jobs(conn: sqlite3.Connection) -> int:
     )
 
 
-def _recipe_spec_for_preset(
-    preset_key: str,
-    gif_frame_count: int | None = None,
-) -> dict[str, object]:
-    if preset_key not in RECIPE_PRESETS:
-        raise ValueError(f"Unknown recipe preset: {preset_key}")
-    recipe_spec = dict(RECIPE_PRESETS[preset_key])
-    if gif_frame_count is not None:
-        if gif_frame_count <= 0:
-            raise ValueError("gif_frame_count must be positive")
-        if (
-            preset_key == _VULKAN_RECIPE_PRESET
-            and gif_frame_count != _RUNTIME_MANIFEST.preprocessing.gif_frame_count
-        ):
-            raise ValueError(
-                "The Vulkan GIF frame count is pinned by runtime-manifest.json"
-            )
-        recipe_spec["gif_frame_count"] = gif_frame_count
-    return recipe_spec
-
-
-def _validate_recipe_preset_for_profile(
-    profile_id: str,
-    preset_key: str,
-) -> None:
-    recipe_spec = _recipe_spec_for_preset(preset_key)
-    recipe_profile_id = str(recipe_spec["runtime_profile"])
-    if recipe_profile_id != profile_id:
-        raise ValueError(
-            f"Recipe preset {preset_key} requires runtime profile "
-            f"{recipe_profile_id}, not {profile_id}"
-        )
-
-
 def _get_worker_state_json(
     conn: sqlite3.Connection,
     key: str,
@@ -698,7 +646,7 @@ def _set_active_recipe_id(conn: sqlite3.Connection, recipe_id: str) -> None:
 def _get_active_recipe_id(conn: sqlite3.Connection) -> str:
     payload = _get_worker_state_json(conn, "active_recipe_id")
     if payload is None:
-        recipe_id = _ensure_default_recipe(conn)
+        recipe_id = _ensure_manifest_recipe(conn)
         _set_active_recipe_id(conn, recipe_id)
         return recipe_id
 
@@ -710,9 +658,9 @@ def _get_active_recipe_id(conn: sqlite3.Connection) -> str:
     if existing is not None:
         return recipe_id
 
-    fallback = _ensure_default_recipe(conn)
-    _set_active_recipe_id(conn, fallback)
-    return fallback
+    manifest_recipe_id = _ensure_manifest_recipe(conn)
+    _set_active_recipe_id(conn, manifest_recipe_id)
+    return manifest_recipe_id
 
 
 def _get_recipe_row(conn: sqlite3.Connection, recipe_id: str) -> sqlite3.Row:
@@ -1106,88 +1054,6 @@ def _create_job(
     now: str,
 ) -> int:
     return job_queue.create_job(conn, job_type, asset_id, recipe_id, payload, now)
-
-
-def switch_active_recipe(
-    library_root: Path | str,
-    preset_key: str,
-    gif_frame_count: int | None = None,
-) -> SwitchRecipeResult:
-    init_result = initialize_library(library_root)
-    library_root_path = Path(init_result.library_root)
-    conn = _connect(_database_path(library_root_path))
-    try:
-        with conn:
-            recipe_id = _ensure_recipe(conn, _recipe_spec_for_preset(preset_key, gif_frame_count))
-            _set_active_recipe_id(conn, recipe_id)
-
-            asset_rows = conn.execute(
-                """
-                SELECT id
-                FROM asset
-                WHERE deleted_at IS NULL
-                ORDER BY imported_at ASC, id ASC
-                """
-            ).fetchall()
-
-            reindex_jobs_created = 0
-            for asset_row in asset_rows:
-                asset_id = str(asset_row["id"])
-                has_embedding = conn.execute(
-                    """
-                    SELECT 1
-                    FROM embedding_item
-                    WHERE asset_id = ?
-                      AND recipe_id = ?
-                      AND kind = 'image'
-                    LIMIT 1
-                    """,
-                    (asset_id, recipe_id),
-                ).fetchone()
-                if has_embedding is not None:
-                    continue
-
-                if job_queue.has_incomplete_job(
-                    conn,
-                    asset_id=asset_id,
-                    recipe_id=recipe_id,
-                    job_type="embed_asset",
-                ):
-                    continue
-
-                library_path_row = conn.execute(
-                    "SELECT library_path, media_type FROM asset WHERE id = ?",
-                    (asset_id,),
-                ).fetchone()
-                reindex_jobs_created += _create_job(
-                    conn=conn,
-                    job_type="embed_asset",
-                    asset_id=asset_id,
-                    recipe_id=recipe_id,
-                    payload={
-                        "asset_id": asset_id,
-                        "recipe_id": recipe_id,
-                        "media_type": str(library_path_row["media_type"]),
-                        "library_path": str(library_path_row["library_path"]),
-                    },
-                    now=_utc_now(),
-                )
-
-        recipe_row = _get_recipe_row(conn, recipe_id)
-        return SwitchRecipeResult(
-            library_root=str(library_root_path),
-            active_recipe_id=recipe_id,
-            active_recipe_label=_recipe_label(
-                str(recipe_row["model_id"]),
-                int(recipe_row["output_dimension"]),
-                str(recipe_row["runtime_profile"]),
-                _gif_frame_count_for_recipe(recipe_row),
-            ),
-            assets_seen=len(asset_rows),
-            reindex_jobs_created=reindex_jobs_created,
-        )
-    finally:
-        conn.close()
 
 
 def _delete_asset_rows(

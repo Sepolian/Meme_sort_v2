@@ -74,6 +74,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
             "get_runtime_settings",
             "resolve_recipe_preset",
             "save_runtime_settings",
+            "switch_active_recipe",
         ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(library_module, name))

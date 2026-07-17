@@ -241,7 +241,7 @@ class LlamaCppBackendTests(unittest.TestCase):
 
     def test_vulkan_recipe_identity_is_derived_from_manifest(self) -> None:
         manifest = load_runtime_manifest()
-        recipe = library_module.RECIPE_PRESETS["vulkan-manifest"]
+        recipe = library_module.MANIFEST_RECIPE
 
         self.assertEqual(manifest.model.id, recipe["model_id"])
         self.assertEqual(manifest.recipe_fingerprint, recipe["model_revision"])
