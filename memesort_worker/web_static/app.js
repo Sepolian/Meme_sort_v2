@@ -1,7 +1,5 @@
 const state = {
-  runtimeProfiles: [],
-  modelVariants: [],
-  runtimeSettings: null,
+  runtime: null,
   setupState: null,
   assetSummary: null,
   libraryStatus: null,
@@ -142,41 +140,24 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
-function summarizeProfile(profile) {
-  if (!profile) {
+function summarizeRuntime(runtime) {
+  if (!runtime) {
     return "";
   }
-  return `${profile.label} | ${profile.device} | still <= ${profile.still_max_side}px | gif <= ${profile.gif_max_side}px | gif frames ${profile.gif_frame_count}`;
-}
-
-function selectedProfile() {
-  return state.runtimeProfiles[0] || null;
-}
-
-function selectedModelVariant() {
-  return state.modelVariants[0] || null;
-}
-
-function renderProfiles() {
-  renderProfileSummary();
-}
-
-function renderModelVariants() {
-  renderModelVariantSummary();
+  return `${runtime.backend_name} / ${runtime.device} / llama.cpp ${runtime.llama_cpp_build}`;
 }
 
 function renderProfileSummary() {
-  const profile = selectedProfile();
+  const runtime = state.runtime;
   const node = byId("profileSummary");
-  if (!profile) {
+  if (!runtime) {
     node.textContent = "";
     return;
   }
   node.innerHTML = `
-    <div class="small"><strong>${escapeHtml(profile.label)}</strong></div>
-    <div class="small muted">${escapeHtml(profile.notes || "")}</div>
-    <div class="small mono">${escapeHtml(summarizeProfile(profile))}</div>
-    <div class="small muted">Pinned recipe: ${escapeHtml(profile.recipe_preset)} | ${escapeHtml(profile.backend_name || "llama.cpp")}</div>
+    <div class="small"><strong>Pinned Vulkan runtime</strong></div>
+    <div class="small muted">Vulkan0 only; supported AMD, Intel, and NVIDIA GPUs are admitted before inference starts.</div>
+    <div class="small mono">${escapeHtml(summarizeRuntime(runtime))}</div>
   `;
 }
 
@@ -194,32 +175,32 @@ async function cancelActiveSearches() {
 }
 
 function renderModelVariantSummary() {
-  const variant = selectedModelVariant();
+  const runtime = state.runtime;
   const node = byId("modelVariantSummary");
-  if (!variant) {
+  if (!runtime) {
     node.textContent = "";
     return;
   }
   node.innerHTML = `
-    <div class="small"><strong>${escapeHtml(variant.label)}</strong></div>
-    <div class="small muted">${escapeHtml(variant.notes || "")}</div>
-    <div class="small mono">${escapeHtml(variant.model_id)} | ${escapeHtml(variant.output_dimension)}d</div>
+    <div class="small"><strong>${escapeHtml(runtime.model_label)}</strong></div>
+    <div class="small muted">Developer changes this pinned GGUF bundle through runtime-manifest.json.</div>
+    <div class="small mono">${escapeHtml(runtime.model_id)} | ${escapeHtml(runtime.output_dimension)}d | ${escapeHtml(runtime.storage_dtype)}</div>
   `;
 }
 
 function renderRuntimeSummary() {
-  if (!state.runtimeSettings) {
+  if (!state.runtime) {
     return;
   }
 
   setText(
     "runtimeSummary",
     [
-      state.runtimeSettings.selected_profile,
-      state.runtimeSettings.selected_model_key,
-      state.runtimeSettings.selected_recipe_preset,
-      state.runtimeSettings.backend_name || "llama.cpp",
-      `gif-f${state.runtimeSettings.gif_frame_count}`,
+      state.runtime.backend_name,
+      state.runtime.device,
+      `${state.runtime.output_dimension}d`,
+      state.runtime.storage_dtype,
+      `gif-f${state.runtime.gif_frame_count}`,
     ].join(" / ")
   );
   setText("activeRecipe", state.assetSummary?.active_recipe_label || "No active index yet");
@@ -1014,9 +995,7 @@ function renderLibraryStatus() {
 async function loadState() {
   renderSkeletonCards("assetGrid", 8);
   const payload = await api("/api/state");
-  state.runtimeProfiles = payload.runtime_profiles || [];
-  state.modelVariants = payload.model_variants || [];
-  state.runtimeSettings = payload.runtime_settings || null;
+  state.runtime = payload.runtime || null;
   state.setupState = payload.setup_state || null;
   state.assetSummary = payload.asset_summary || null;
   const availableAssetIds = new Set((state.assetSummary?.assets || []).map((asset) => asset.asset_id));
@@ -1036,8 +1015,6 @@ async function loadState() {
   ) {
     state.selectedAsset = null;
   }
-  renderProfiles();
-  renderModelVariants();
   renderRuntimeSummary();
   renderSetupGuide();
   renderSetupChecklist();

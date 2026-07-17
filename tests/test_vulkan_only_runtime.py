@@ -12,51 +12,48 @@ from unittest.mock import patch
 from PIL import Image
 
 from memesort_worker.active_runtime import search_text_for_active_runtime
+from memesort_worker.app_state import build_app_state
 from memesort_worker.embedding_backend import get_embedding_backend
 from memesort_worker.library import (
-    get_runtime_settings,
     initialize_library,
     import_folder,
     list_assets,
-    list_model_variants,
-    list_runtime_profiles,
     _preprocess_image_bytes,
 )
 from memesort_worker import library as library_module
+from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
 class VulkanOnlyRuntimeTests(unittest.TestCase):
-    def test_only_manifest_vulkan_runtime_is_exposed(self) -> None:
+    def test_runtime_descriptor_is_derived_from_the_manifest(self) -> None:
         manifest = load_runtime_manifest()
-        profiles = list_runtime_profiles()
-        models = list_model_variants()
+        runtime = get_runtime_descriptor()
 
-        self.assertEqual(["vulkan"], [profile.profile_id for profile in profiles])
-        self.assertEqual(["manifest"], [model.model_key for model in models])
-        self.assertEqual("llama.cpp", profiles[0].backend_name)
-        self.assertEqual("Vulkan0", profiles[0].device)
-        self.assertEqual(manifest.model.id, models[0].model_id)
-        self.assertEqual(manifest.model.output_dimension, models[0].output_dimension)
+        self.assertEqual("llama.cpp", runtime.backend_name)
+        self.assertEqual(manifest.platform.device, runtime.device)
+        self.assertEqual(manifest.llama_cpp.build, runtime.llama_cpp_build)
+        self.assertEqual(manifest.model.id, runtime.model_id)
+        self.assertEqual(manifest.model.output_dimension, runtime.output_dimension)
+        self.assertEqual(manifest.embedding.storage_dtype, runtime.storage_dtype)
+        self.assertEqual(manifest.runtime_fingerprint, runtime.runtime_fingerprint)
+        self.assertEqual(manifest.recipe_fingerprint, runtime.recipe_fingerprint)
+        self.assertEqual(manifest.preprocessing.version, runtime.preprocessing_version)
 
-    def test_new_library_uses_manifest_recipe_and_canonical_settings(self) -> None:
+    def test_new_library_uses_manifest_recipe_and_read_only_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "library"
             initialize_library(root)
-            settings = get_runtime_settings(root)
             assets = list_assets(root)
+            state = build_app_state(root)
 
-        self.assertEqual("vulkan", settings.selected_profile)
-        self.assertEqual("manifest", settings.selected_model_key)
-        self.assertEqual("vulkan-manifest", settings.selected_recipe_preset)
-        self.assertEqual("llama.cpp", settings.backend_name)
+        self.assertEqual(get_runtime_descriptor().to_dict(), state.runtime)
         self.assertIn(" / vulkan", assets.active_recipe_label)
 
-    def test_runtime_has_no_mutable_settings_api_or_persisted_selection(self) -> None:
+    def test_runtime_has_no_selection_api_or_persisted_selection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "library"
             initialize_library(root)
-            get_runtime_settings(root)
             conn = sqlite3.connect(root / "library.sqlite")
             try:
                 persisted = conn.execute(
@@ -66,7 +63,20 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 conn.close()
 
         self.assertIsNone(persisted)
-        self.assertFalse(hasattr(library_module, "save_runtime_settings"))
+        for name in (
+            "RuntimeProfileSpec",
+            "ModelVariantSpec",
+            "RuntimeSettings",
+            "list_runtime_profiles",
+            "list_model_variants",
+            "get_runtime_profile",
+            "get_model_variant",
+            "get_runtime_settings",
+            "resolve_recipe_preset",
+            "save_runtime_settings",
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(library_module, name))
 
     def test_search_api_has_no_backend_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch(

@@ -17,10 +17,7 @@ from memesort_worker.embedding_backend import (
 from memesort_worker import library as library_module
 from memesort_worker.library import (
     RuntimeHealthResult,
-    get_runtime_settings,
     is_runtime_ready_for_indexing,
-    list_runtime_profiles,
-    resolve_recipe_preset,
 )
 from memesort_worker.llama_cpp_backend import (
     LlamaCppBackendError,
@@ -31,6 +28,7 @@ from memesort_worker.llama_cpp_backend import (
     verify_qwen3_vl_embedding_2b_bundle,
 )
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_admission import VulkanDeviceInfo
 from memesort_worker.runtime_service import run_runtime_health_check
 from memesort_worker.runtime_service import (
@@ -234,15 +232,12 @@ class LlamaCppBackendTests(unittest.TestCase):
             self.assertIsNone(server._process)
             _close_runtime_loggers()
 
-    def test_vulkan_profile_selects_llama_cpp_and_distinct_recipe(self) -> None:
-        profiles = {profile.profile_id: profile for profile in list_runtime_profiles()}
+    def test_runtime_descriptor_identifies_the_pinned_vulkan_backend(self) -> None:
+        runtime = get_runtime_descriptor()
 
-        self.assertEqual({"vulkan"}, set(profiles))
-        self.assertEqual("llama.cpp", profiles["vulkan"].backend_name)
-        self.assertEqual(
-            "vulkan-manifest",
-            resolve_recipe_preset("vulkan", "manifest"),
-        )
+        self.assertEqual("llama.cpp", runtime.backend_name)
+        self.assertEqual("Vulkan0", runtime.device)
+        self.assertEqual(load_runtime_manifest().llama_cpp.build, runtime.llama_cpp_build)
 
     def test_vulkan_recipe_identity_is_derived_from_manifest(self) -> None:
         manifest = load_runtime_manifest()
@@ -254,18 +249,9 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertEqual(manifest.preprocessing.version, recipe["preprocess_version"])
         self.assertEqual(manifest.embedding.instruction_id, recipe["instruction_key"])
 
-    def test_runtime_settings_infer_backend_from_vulkan_profile(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = Path(temp_dir) / "library"
-            settings = get_runtime_settings(library_root)
-
-        self.assertEqual("llama.cpp", settings.backend_name)
-        self.assertEqual("vulkan-manifest", settings.selected_recipe_preset)
-
     def test_persisted_health_cannot_authorize_a_new_app_session(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            get_runtime_settings(library_root)
             passed = RuntimeHealthResult(
                 runtime_fingerprint=load_runtime_manifest().runtime_fingerprint,
                 backend_name="llama.cpp",

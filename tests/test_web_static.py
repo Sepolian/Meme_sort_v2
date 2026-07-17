@@ -12,6 +12,23 @@ STATIC_ROOT = Path(__file__).resolve().parents[1] / "memesort_worker" / "web_sta
 
 
 class AssetDetailStylesTests(unittest.TestCase):
+    def test_runtime_ui_consumes_one_read_only_runtime_descriptor(self) -> None:
+        app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("runtime: null", app_script)
+        self.assertIn("state.runtime = payload.runtime || null", app_script)
+        for legacy_name in (
+            "runtimeProfiles",
+            "modelVariants",
+            "runtimeSettings",
+            "selectedProfile",
+            "selectedModelVariant",
+            "renderProfiles",
+            "renderModelVariants",
+        ):
+            with self.subTest(legacy_name=legacy_name):
+                self.assertNotIn(legacy_name, app_script)
+
     def test_detail_disclosure_uses_theme_colors(self) -> None:
         styles = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
 

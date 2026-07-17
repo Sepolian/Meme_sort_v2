@@ -46,7 +46,6 @@ SUPPORTED_EXTENSIONS = {
 
 _RUNTIME_MANIFEST = load_runtime_manifest()
 VULKAN_PROFILE_ID = "vulkan"
-MANIFEST_MODEL_KEY = "manifest"
 MANIFEST_RECIPE_PRESET = "vulkan-manifest"
 _VULKAN_RECIPE_PRESET = MANIFEST_RECIPE_PRESET
 _VULKAN_POOLING_KEY = (
@@ -270,49 +269,6 @@ class RetryJobsResult:
 
 
 @dataclass
-class RuntimeProfileSpec:
-    profile_id: str
-    label: str
-    recipe_preset: str
-    model_id: str
-    device: str
-    still_max_side: int
-    gif_max_side: int
-    gif_frame_count: int
-    notes: str
-    backend_name: str = "llama.cpp"
-    supported_model_keys: tuple[str, ...] = (MANIFEST_MODEL_KEY,)
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
-class ModelVariantSpec:
-    model_key: str
-    label: str
-    model_id: str
-    output_dimension: int
-    notes: str
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
-class RuntimeSettings:
-    selected_profile: str
-    selected_model_key: str
-    selected_recipe_preset: str
-    gif_frame_count: int
-    backend_name: str
-    library_root: str | None = None
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-@dataclass
 class RuntimeHealthResult:
     runtime_fingerprint: str
     backend_name: str
@@ -361,39 +317,6 @@ class SetupStateResult:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
-
-
-RUNTIME_PROFILES: dict[str, RuntimeProfileSpec] = {
-    VULKAN_PROFILE_ID: RuntimeProfileSpec(
-        profile_id=VULKAN_PROFILE_ID,
-        label="Vulkan0 (llama.cpp)",
-        recipe_preset=MANIFEST_RECIPE_PRESET,
-        model_id=_RUNTIME_MANIFEST.model.id,
-        device=_RUNTIME_MANIFEST.platform.device,
-        still_max_side=_RUNTIME_MANIFEST.preprocessing.still_max_side,
-        gif_max_side=_RUNTIME_MANIFEST.preprocessing.gif_max_side,
-        gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-        notes="Pinned Vulkan0 backend for supported AMD, Intel, and NVIDIA GPUs.",
-        backend_name="llama.cpp",
-        supported_model_keys=(MANIFEST_MODEL_KEY,),
-    ),
-}
-
-MODEL_VARIANTS: dict[str, ModelVariantSpec] = {
-    MANIFEST_MODEL_KEY: ModelVariantSpec(
-        model_key=MANIFEST_MODEL_KEY,
-        label=_RUNTIME_MANIFEST.model.base_model_id.split("/")[-1],
-        model_id=_RUNTIME_MANIFEST.model.id,
-        output_dimension=_RUNTIME_MANIFEST.model.output_dimension,
-        notes="Developer-controlled by runtime-manifest.json.",
-    ),
-}
-
-MODEL_PRESET_BY_PROFILE: dict[str, dict[str, str]] = {
-    MANIFEST_MODEL_KEY: {
-        VULKAN_PROFILE_ID: MANIFEST_RECIPE_PRESET,
-    },
-}
 
 
 def _utc_now() -> str:
@@ -917,56 +840,6 @@ def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
     if frame_count <= 0:
         raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
     return frame_count
-
-
-def list_runtime_profiles() -> list[RuntimeProfileSpec]:
-    return [RUNTIME_PROFILES[key] for key in sorted(RUNTIME_PROFILES.keys())]
-
-
-def list_model_variants() -> list[ModelVariantSpec]:
-    return [MODEL_VARIANTS[key] for key in sorted(MODEL_VARIANTS.keys())]
-
-
-def get_runtime_profile(profile_id: str) -> RuntimeProfileSpec:
-    try:
-        return RUNTIME_PROFILES[profile_id]
-    except KeyError as exc:
-        raise ValueError(f"Unknown runtime profile: {profile_id}") from exc
-
-
-def get_model_variant(model_key: str) -> ModelVariantSpec:
-    try:
-        return MODEL_VARIANTS[model_key]
-    except KeyError as exc:
-        raise ValueError(f"Unknown model variant: {model_key}") from exc
-
-
-def resolve_recipe_preset(profile_id: str, model_key: str) -> str:
-    profile = get_runtime_profile(profile_id)
-    get_model_variant(model_key)
-    if model_key not in profile.supported_model_keys:
-        raise ValueError(
-            f"Runtime profile {profile_id} does not support model variant {model_key}"
-        )
-    try:
-        return MODEL_PRESET_BY_PROFILE[model_key][profile_id]
-    except KeyError as exc:
-        raise ValueError(
-            f"Unsupported runtime profile {profile_id} for model variant {model_key}"
-        ) from exc
-
-
-def get_runtime_settings(library_root: Path | str) -> RuntimeSettings:
-    init_result = initialize_library(library_root)
-    library_root_path = Path(init_result.library_root)
-    return RuntimeSettings(
-        selected_profile=VULKAN_PROFILE_ID,
-        selected_model_key=MANIFEST_MODEL_KEY,
-        selected_recipe_preset=MANIFEST_RECIPE_PRESET,
-        gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
-        backend_name="llama.cpp",
-        library_root=str(library_root_path),
-    )
 
 
 def initialize_library(root: Path | str) -> LibraryInitResult:
