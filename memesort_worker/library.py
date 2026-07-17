@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .embedding_backend import (
     EmbeddingBackend,
@@ -702,6 +702,67 @@ def _ensure_default_recipe(conn: sqlite3.Connection) -> str:
     return _ensure_recipe(conn, DEFAULT_RECIPE)
 
 
+def _activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]:
+    recipe_id = _ensure_default_recipe(conn)
+    active_recipe_id = _get_active_recipe_id(conn)
+    state = _get_worker_state_json(conn, "semantic_recipe_activation")
+    already_active = (
+        active_recipe_id == recipe_id
+        and state is not None
+        and state.get("recipe_fingerprint") == _RUNTIME_MANIFEST.recipe_fingerprint
+        and state.get("recipe_id") == recipe_id
+    )
+    if already_active:
+        return recipe_id, False, 0
+
+    first_activation = state is None and active_recipe_id == recipe_id
+    if first_activation:
+        _set_worker_state_json(
+            conn,
+            "semantic_recipe_activation",
+            {
+                "recipe_fingerprint": _RUNTIME_MANIFEST.recipe_fingerprint,
+                "recipe_id": recipe_id,
+            },
+        )
+        return recipe_id, False, 0
+
+    conn.execute("DELETE FROM embedding_item")
+    conn.execute("DELETE FROM job WHERE type = 'embed_asset'")
+    conn.execute("DELETE FROM embedding_recipe WHERE id != ?", (recipe_id,))
+    _set_active_recipe_id(conn, recipe_id)
+    conn.execute("DELETE FROM worker_state WHERE key = 'last_runtime_health_check'")
+
+    queued = 0
+    now = _utc_now()
+    asset_rows = conn.execute(
+        "SELECT id, media_type FROM asset WHERE deleted_at IS NULL ORDER BY id"
+    ).fetchall()
+    for asset_row in asset_rows:
+        asset_id = str(asset_row["id"])
+        queued += _create_job(
+            conn,
+            job_type="embed_asset",
+            asset_id=asset_id,
+            recipe_id=recipe_id,
+            payload={
+                "asset_id": asset_id,
+                "recipe_id": recipe_id,
+                "media_type": str(asset_row["media_type"]),
+            },
+            now=now,
+        )
+    _set_worker_state_json(
+        conn,
+        "semantic_recipe_activation",
+        {
+            "recipe_fingerprint": _RUNTIME_MANIFEST.recipe_fingerprint,
+            "recipe_id": recipe_id,
+        },
+    )
+    return recipe_id, True, queued
+
+
 def _ensure_ocr_recipe(conn: sqlite3.Connection, recipe_spec: dict[str, object]) -> str:
     return ocr_artifacts.ensure_ocr_recipe(conn, recipe_spec)
 
@@ -857,7 +918,8 @@ def _preprocess_image_bytes(
     max_side = int(preprocess_spec["still_max_side"])
 
     with Image.open(io.BytesIO(image_bytes)) as image:
-        rgb = image.convert("RGB")
+        oriented = ImageOps.exif_transpose(image)
+        rgb = _composite_manifest_rgb(oriented)
         rgb.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
         buffer = io.BytesIO()
         rgb.save(buffer, format="PNG")
@@ -904,12 +966,25 @@ def _extract_gif_frame_bytes(
 
         for frame_index in selected_indexes:
             image.seek(frame_index)
-            rgb = image.convert("RGB")
+            rgb = _composite_manifest_rgb(image)
             rgb.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
             buffer = io.BytesIO()
             rgb.save(buffer, format="PNG")
             frame_payloads.append((frame_index, buffer.getvalue()))
     return frame_payloads
+
+
+def _composite_manifest_rgb(image: Image.Image) -> Image.Image:
+    if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+        rgba = image.convert("RGBA")
+        background = Image.new(
+            "RGB",
+            rgba.size,
+            _RUNTIME_MANIFEST.preprocessing.alpha_background,
+        )
+        background.paste(rgba, mask=rgba.getchannel("A"))
+        return background
+    return image.convert(_RUNTIME_MANIFEST.preprocessing.color_mode)
 
 
 def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
@@ -1165,9 +1240,8 @@ def initialize_library(root: Path | str) -> LibraryInitResult:
     try:
         with conn:
             _create_schema(conn)
-            recipe_id = _ensure_default_recipe(conn)
+            recipe_id, _, _ = _activate_manifest_recipe(conn)
             _ensure_default_ocr_recipe(conn)
-            _get_active_recipe_id(conn)
             _ensure_missing_ocr_jobs(conn)
     finally:
         conn.close()

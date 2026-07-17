@@ -1,19 +1,27 @@
 from __future__ import annotations
 
+import json
+import io
+import sqlite3
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image
 
 from memesort_worker.active_runtime import search_text_for_active_runtime
 from memesort_worker.embedding_backend import EmbeddingBackendError, get_embedding_backend
 from memesort_worker.library import (
     get_runtime_settings,
     initialize_library,
+    import_folder,
     list_assets,
     list_model_variants,
     list_runtime_profiles,
     save_runtime_settings,
+    _preprocess_image_bytes,
 )
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
@@ -81,6 +89,147 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
             with self.subTest(backend_name=backend_name):
                 with self.assertRaisesRegex(EmbeddingBackendError, "Vulkan-only"):
                     get_embedding_backend(backend_name)
+
+    def test_recipe_change_atomically_resets_semantic_state_and_requeues(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "library"
+            source = Path(temp_dir) / "source"
+            source.mkdir()
+            (source / "image.png").write_bytes(
+                b"\x89PNG\r\n\x1a\n" + b"test-image"
+            )
+            initialize_library(root)
+            imported = import_folder(root, source)
+            self.assertEqual(1, imported.new_assets)
+            database = root / "library.sqlite"
+            conn = sqlite3.connect(database)
+            try:
+                asset_id = str(conn.execute("SELECT id FROM asset").fetchone()[0])
+                current_recipe = str(
+                    conn.execute(
+                        "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
+                        "WHERE key = 'active_recipe_id'"
+                    ).fetchone()[0]
+                )
+                old_recipe = str(uuid.uuid4())
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO embedding_recipe (
+                            id, family_key, model_id, model_revision, output_dimension,
+                            runtime_profile, preprocess_version, instruction_key,
+                            pooling_key, normalized, gif_frame_count, created_at
+                        )
+                        SELECT ?, family_key, model_id, 'old-fingerprint', output_dimension,
+                               'legacy', preprocess_version, instruction_key,
+                               pooling_key, normalized, gif_frame_count, created_at
+                        FROM embedding_recipe WHERE id = ?
+                        """,
+                        (old_recipe, current_recipe),
+                    )
+                    conn.execute(
+                        "UPDATE job SET recipe_id = ? WHERE type = 'embed_asset'",
+                        (old_recipe,),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO embedding_item (
+                            id, asset_id, recipe_id, kind, source_ref,
+                            vector_dim, vector_blob, created_at
+                        ) VALUES (?, ?, ?, 'image', 'old', 1, ?, 'old')
+                        """,
+                        (str(uuid.uuid4()), asset_id, old_recipe, b"\x00\x00\x80?"),
+                    )
+                    conn.execute(
+                        "UPDATE worker_state SET value_json = ? WHERE key = 'active_recipe_id'",
+                        (json.dumps({"recipe_id": old_recipe}),),
+                    )
+                    conn.execute(
+                        "UPDATE worker_state SET value_json = ? "
+                        "WHERE key = 'semantic_recipe_activation'",
+                        (
+                            json.dumps(
+                                {
+                                    "recipe_fingerprint": "old-fingerprint",
+                                    "recipe_id": old_recipe,
+                                }
+                            ),
+                        ),
+                    )
+            finally:
+                conn.close()
+
+            with patch(
+                "memesort_worker.library._create_job",
+                side_effect=RuntimeError("queue failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "queue failed"):
+                    initialize_library(root)
+            conn = sqlite3.connect(database)
+            try:
+                self.assertEqual(
+                    1, conn.execute("SELECT COUNT(*) FROM embedding_item").fetchone()[0]
+                )
+                active_after_rollback = conn.execute(
+                    "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
+                    "WHERE key = 'active_recipe_id'"
+                ).fetchone()[0]
+                self.assertEqual(old_recipe, active_after_rollback)
+            finally:
+                conn.close()
+
+            initialize_library(root)
+            initialize_library(root)
+            conn = sqlite3.connect(database)
+            try:
+                self.assertEqual(1, conn.execute("SELECT COUNT(*) FROM asset").fetchone()[0])
+                self.assertEqual(
+                    1, conn.execute("SELECT COUNT(*) FROM source_record").fetchone()[0]
+                )
+                self.assertEqual(
+                    0, conn.execute("SELECT COUNT(*) FROM embedding_item").fetchone()[0]
+                )
+                embed_jobs = conn.execute(
+                    "SELECT status, recipe_id FROM job WHERE type = 'embed_asset'"
+                ).fetchall()
+                self.assertEqual(1, len(embed_jobs))
+                self.assertEqual("pending", embed_jobs[0][0])
+                self.assertNotEqual(old_recipe, embed_jobs[0][1])
+                self.assertEqual(
+                    1, conn.execute("SELECT COUNT(*) FROM embedding_recipe").fetchone()[0]
+                )
+                self.assertGreater(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM job WHERE type != 'embed_asset'"
+                    ).fetchone()[0],
+                    0,
+                )
+            finally:
+                conn.close()
+
+    def test_manifest_preprocessing_applies_exif_and_white_alpha(self) -> None:
+        transparent = Image.new("RGBA", (1, 1), (255, 0, 0, 0))
+        transparent_bytes = io.BytesIO()
+        transparent.save(transparent_bytes, format="PNG")
+        processed = _preprocess_image_bytes(
+            transparent_bytes.getvalue(),
+            load_runtime_manifest().preprocessing.version,
+        )
+        with Image.open(io.BytesIO(processed)) as image:
+            self.assertEqual("RGB", image.mode)
+            self.assertEqual((255, 255, 255), image.getpixel((0, 0)))
+
+        oriented = Image.new("RGB", (2, 1), "red")
+        exif = Image.Exif()
+        exif[274] = 6
+        oriented_bytes = io.BytesIO()
+        oriented.save(oriented_bytes, format="JPEG", exif=exif)
+        processed = _preprocess_image_bytes(
+            oriented_bytes.getvalue(),
+            load_runtime_manifest().preprocessing.version,
+        )
+        with Image.open(io.BytesIO(processed)) as image:
+            self.assertEqual((1, 2), image.size)
 
 
 if __name__ == "__main__":
