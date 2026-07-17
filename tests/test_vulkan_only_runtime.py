@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from memesort_worker.active_runtime import search_text_for_active_runtime
+from memesort_worker.embedding_backend import EmbeddingBackendError, get_embedding_backend
 from memesort_worker.library import (
     get_runtime_settings,
     initialize_library,
@@ -74,6 +75,12 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                     backend_name="debug",
                 )
         search.assert_not_called()
+
+    def test_legacy_embedding_backends_cannot_be_constructed(self) -> None:
+        for backend_name in ("debug", "qwen3-vl", "cpu", "cuda"):
+            with self.subTest(backend_name=backend_name):
+                with self.assertRaisesRegex(EmbeddingBackendError, "Vulkan-only"):
+                    get_embedding_backend(backend_name)
 
 
 if __name__ == "__main__":
