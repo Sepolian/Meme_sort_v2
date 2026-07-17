@@ -4,11 +4,18 @@ import io
 import json
 import sqlite3
 import tempfile
+import threading
+import time
 import unittest
+import uuid
 from contextlib import redirect_stdout
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from unittest.mock import patch
+from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 import numpy as np
 from PIL import Image
@@ -30,7 +37,13 @@ from memesort_worker.library import (
 )
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
-from memesort_worker.webapp import create_app
+from memesort_worker.inference_service import INFERENCE_SCHEDULER
+from memesort_worker.webapp import ThreadedWSGIServer, create_app
+
+
+class QuietWSGIRequestHandler(WSGIRequestHandler):
+    def log_message(self, _format: str, *args: object) -> None:
+        return
 
 
 class StubEmbeddingBackend:
@@ -77,6 +90,32 @@ class StubOcrBackend:
 
     def close(self) -> None:
         return
+
+
+class BlockingSearchBackend(StubEmbeddingBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.text_calls: list[str] = []
+
+    def embed_text(
+        self,
+        text: str,
+        output_dimension: int,
+        instruction: str | None = None,
+    ) -> np.ndarray:
+        def operation() -> np.ndarray:
+            self.text_calls.append(text)
+            if len(self.text_calls) == 1:
+                self.started.set()
+                if not self.release.wait(timeout=5):
+                    raise RuntimeError("test search was not released")
+            return super(BlockingSearchBackend, self).embed_text(
+                text, output_dimension, instruction
+            )
+
+        return INFERENCE_SCHEDULER.submit(operation)
 
 
 class LibraryTests(unittest.TestCase):
@@ -133,6 +172,35 @@ class LibraryTests(unittest.TestCase):
             )
         )
         return captured["status"], json.loads(response_body.decode("utf-8"))
+
+    def _http_json(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        payload: dict[str, object] | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        request = Request(
+            url,
+            data=body,
+            method=method,
+            headers={"Content-Type": "application/json"} if body is not None else {},
+        )
+        try:
+            with urlopen(request, timeout=5) as response:
+                return int(response.status), json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            return int(error.code), json.loads(error.read().decode("utf-8"))
+
+    def _wait_for_search_queue(self, size: int) -> None:
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with INFERENCE_SCHEDULER._condition:
+                if len(INFERENCE_SCHEDULER._search_queue) == size:
+                    return
+            time.sleep(0.01)
+        self.fail(f"search queue did not reach {size}")
 
     def test_initialize_library_creates_manifest_recipe(self) -> None:
         manifest = load_runtime_manifest()
@@ -326,6 +394,76 @@ class LibraryTests(unittest.TestCase):
         self.assertNotIn("runtime_profiles", payload)
         self.assertNotIn("model_variants", payload)
         self.assertNotIn("runtime_settings", payload)
+
+    def test_http_search_cancellation_only_cancels_its_own_queued_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            self._run_all_jobs_with_stubs(library_root)
+            backend = BlockingSearchBackend()
+            app = create_app(str(library_root))
+            server = make_server(
+                "127.0.0.1",
+                0,
+                app,
+                server_class=ThreadedWSGIServer,
+                handler_class=QuietWSGIRequestHandler,
+            )
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            first_id = str(uuid.uuid4())
+            cancelled_id = str(uuid.uuid4())
+            responses: dict[str, tuple[int, dict[str, object]]] = {}
+            first: threading.Thread | None = None
+            cancelled: threading.Thread | None = None
+
+            def search(request_id: str, query: str) -> None:
+                responses[request_id] = self._http_json(
+                    f"{base_url}/api/search?{urlencode({'query': query, 'top_k': 1, 'request_id': request_id})}"
+                )
+
+            try:
+                with patch(
+                    "memesort_worker.library.get_embedding_backend", return_value=backend
+                ):
+                    first = threading.Thread(target=search, args=(first_id, "first"))
+                    cancelled = threading.Thread(
+                        target=search, args=(cancelled_id, "cancel me")
+                    )
+                    first.start()
+                    self.assertTrue(backend.started.wait(timeout=2))
+                    cancelled.start()
+                    self._wait_for_search_queue(1)
+
+                    cancel_status, cancel_payload = self._http_json(
+                        f"{base_url}/api/search/cancel",
+                        method="POST",
+                        payload={"request_id": cancelled_id},
+                    )
+                    self.assertEqual(200, cancel_status)
+                    self.assertEqual(cancelled_id, cancel_payload["request_id"])
+                    self.assertTrue(cancel_payload["was_active"])
+
+                    backend.release.set()
+                    first.join(timeout=3)
+                    cancelled.join(timeout=3)
+
+                self.assertFalse(first.is_alive())
+                self.assertFalse(cancelled.is_alive())
+                self.assertEqual(200, responses[first_id][0])
+                self.assertEqual(409, responses[cancelled_id][0])
+                self.assertEqual("InferenceCancelledError", responses[cancelled_id][1]["error"])
+                self.assertEqual(["first"], backend.text_calls)
+            finally:
+                backend.release.set()
+                if first is not None:
+                    first.join(timeout=3)
+                if cancelled is not None:
+                    cancelled.join(timeout=3)
+                server.shutdown()
+                server.server_close()
+                server_thread.join(timeout=2)
+                app.shutdown()
 
 
 if __name__ == "__main__":

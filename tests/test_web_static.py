@@ -12,6 +12,16 @@ STATIC_ROOT = Path(__file__).resolve().parents[1] / "memesort_worker" / "web_sta
 
 
 class AssetDetailStylesTests(unittest.TestCase):
+    def test_leaving_search_tab_cancels_each_active_search_request(self) -> None:
+        app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn(
+            'if (tabId !== "searchTab") {\n    cancelActiveSearches();',
+            app_script,
+        )
+        self.assertIn('api("/api/search/cancel"', app_script)
+        self.assertIn("state.activeSearchRequestIds.clear()", app_script)
+
     def test_runtime_ui_consumes_one_read_only_runtime_descriptor(self) -> None:
         app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
