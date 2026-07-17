@@ -1,4 +1,4 @@
-# Keep OCR isolated from the main Python 3.13 environment.
-# Paddle GPU wheels target CUDA/NVIDIA; Windows AMD systems should use this CPU runtime.
-paddlepaddle==3.2.2
+# PaddlePaddle is installed separately from its official Windows CPU index in
+# scripts/setup_windows_llama.ps1. PaddleOCR and its Python dependencies use
+# the default PyPI index.
 paddleocr==3.6.0

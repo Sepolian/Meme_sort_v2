@@ -52,6 +52,23 @@ class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     daemon_threads = True
 
 
+def authorize_vulkan_for_web_session(library_root: Path) -> None:
+    """Run the required same-process Vulkan smoke test before serving work.
+
+    The health result is deliberately process-local: it authorizes the worker
+    loop in this application session, rather than trusting a result persisted
+    by an earlier run.  Starting the web application is therefore the one
+    place that establishes authorization for both normal UI use and the
+    desktop launcher's immediate import-and-index action.
+    """
+    result = run_runtime_health_check(library_root=library_root)
+    if not result.smoke_test_ok:
+        raise RuntimeError(
+            result.error
+            or "Vulkan runtime health check failed; the local UI was not started."
+        )
+
+
 def _serve_library_file(library_root: Path, media_path: str) -> tuple[str, list[tuple[str, str]], bytes]:
     candidate = (library_root / media_path).resolve()
     if library_root.resolve() not in candidate.parents and candidate != library_root.resolve():
@@ -411,15 +428,19 @@ def run_web_app(
     on_started=None,
 ) -> None:
     app = create_app(library_root)
-    with make_server(host, port, app, server_class=ThreadedWSGIServer) as server:
-        socket_host, socket_port = server.socket.getsockname()[:2]
-        payload = {
-            "host": socket_host,
-            "port": socket_port,
-            "url": f"http://{socket_host}:{socket_port}/",
-            "library_root": str(Path(library_root).resolve()),
-        }
-        print(json.dumps(payload))
-        if on_started is not None:
-            on_started(payload)
-        server.serve_forever()
+    try:
+        authorize_vulkan_for_web_session(Path(library_root).expanduser().resolve())
+        with make_server(host, port, app, server_class=ThreadedWSGIServer) as server:
+            socket_host, socket_port = server.socket.getsockname()[:2]
+            payload = {
+                "host": socket_host,
+                "port": socket_port,
+                "url": f"http://{socket_host}:{socket_port}/",
+                "library_root": str(Path(library_root).resolve()),
+            }
+            print(json.dumps(payload))
+            if on_started is not None:
+                on_started(payload)
+            server.serve_forever()
+    finally:
+        app.shutdown()

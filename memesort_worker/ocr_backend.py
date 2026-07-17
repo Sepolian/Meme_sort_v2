@@ -31,11 +31,13 @@ class PaddleOcrWorkerBackend:
         device: str = "cpu",
     ) -> None:
         worker_env = os.environ.copy()
-        worker_env.setdefault(
-            "PADDLE_PDX_CACHE_HOME",
-            str(_project_root() / ".models" / "paddleocr"),
+        # Do not inherit a user-level Paddle cache.  It can point to an
+        # inaccessible or incompatible model directory and would bypass the
+        # repository-local OCR installation contract.
+        worker_env["PADDLE_PDX_CACHE_HOME"] = str(
+            _project_root() / ".models" / "paddleocr"
         )
-        worker_env.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+        worker_env["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
         # The parent and worker exchange one JSON object per line.  On Windows a
         # redirected Python stdout can otherwise inherit the active ANSI code
         # page while this process decodes the pipe as UTF-8, silently damaging

@@ -243,7 +243,23 @@ finally {
 }
 & $uv venv $ocrStaging --python ([string]$manifest.toolchain.python.ocr_version) --managed-python
 $ocrPython = Join-Path $ocrStaging "Scripts\python.exe"
-& $uv pip install --python $ocrPython --index "https://www.paddlepaddle.org.cn/packages/stable/cpu/" -r (Join-Path $repoRoot "requirements-ocr.txt") @uvOffline
+# PaddlePaddle provides its Windows CPU wheel through its own package index.
+# PaddleOCR itself (and its Python dependencies) comes from PyPI.  Installing
+# both from the Paddle index can leave a successfully-created but empty OCR
+# virtual environment because PowerShell does not turn a native-command exit
+# code into an exception by itself.
+& $uv pip install --python $ocrPython --index "https://www.paddlepaddle.org.cn/packages/stable/cpu/" "paddlepaddle==3.2.2" @uvOffline
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install pinned PaddlePaddle CPU runtime."
+}
+& $uv pip install --python $ocrPython -r (Join-Path $repoRoot "requirements-ocr.txt") @uvOffline
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install pinned PaddleOCR worker dependencies."
+}
+& $ocrPython -c "import paddle, paddleocr; assert paddle.__version__ == '3.2.2'; assert paddleocr.__version__ == '3.6.0'; print('Pinned PaddleOCR environment verified.')"
+if ($LASTEXITCODE -ne 0) {
+    throw "Pinned PaddleOCR environment verification failed."
+}
 
 Replace-DirectoryAtomically -StagedPath $mainStaging -TargetPath $mainVenv
 Replace-DirectoryAtomically -StagedPath $ocrStaging -TargetPath $ocrVenv

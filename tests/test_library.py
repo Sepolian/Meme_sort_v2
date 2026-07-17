@@ -40,7 +40,11 @@ from memesort_worker.library import (
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.inference_service import INFERENCE_SCHEDULER
-from memesort_worker.webapp import ThreadedWSGIServer, create_app
+from memesort_worker.webapp import (
+    ThreadedWSGIServer,
+    authorize_vulkan_for_web_session,
+    create_app,
+)
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):
@@ -487,6 +491,24 @@ class LibraryTests(unittest.TestCase):
         self.assertFalse(
             {"runtime_profiles", "model_variants", "runtime_settings"} & set(payload)
         )
+
+    def test_web_startup_runs_current_session_vulkan_authorization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            with patch("memesort_worker.webapp.run_runtime_health_check") as health_check:
+                health_check.return_value.smoke_test_ok = True
+                authorize_vulkan_for_web_session(library_root)
+
+        health_check.assert_called_once_with(library_root=library_root)
+
+    def test_web_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            with patch("memesort_worker.webapp.run_runtime_health_check") as health_check:
+                health_check.return_value.smoke_test_ok = False
+                health_check.return_value.error = "Vulkan0 is unavailable."
+                with self.assertRaisesRegex(RuntimeError, "Vulkan0 is unavailable"):
+                    authorize_vulkan_for_web_session(library_root)
 
     def test_web_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
