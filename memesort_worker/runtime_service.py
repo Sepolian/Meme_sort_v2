@@ -184,11 +184,7 @@ def _run_llama_cpp_runtime_health_check(
             }
         )
         failure_step = "llama-server"
-        runtime_config = library.get_runtime_config_for_profile(
-            profile.profile_id,
-            model_name_or_path=resolved_model_source,
-        )
-        executable = discover_llama_server(runtime_config.llama_server_path)
+        executable = discover_llama_server()
         server_detail = str(executable)
         device_output = probe_llama_devices(
             executable,
@@ -207,7 +203,7 @@ def _run_llama_cpp_runtime_health_check(
             }
         )
         failure_step = "text-embedding-smoke"
-        backend = library.get_embedding_backend("llama.cpp", runtime_config)
+        backend = library.get_embedding_backend()
         vector = backend.embed_text(
             "confused reaction image",
             output_dimension=manifest.model.output_dimension,

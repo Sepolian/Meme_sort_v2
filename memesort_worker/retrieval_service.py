@@ -10,35 +10,10 @@ from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import blob_to_vector, rank_asset_vector_rows
 
 
-def _build_backend(
-    backend_name: str,
-    model_name_or_path: str | None,
-    torch_dtype: str,
-    device: str | None,
-    num_threads: int | None,
-    num_interop_threads: int | None,
-):
-    runtime_config = library._build_runtime_config(
-        model_name_or_path=model_name_or_path,
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
-    )
-    return library.get_embedding_backend(backend_name, runtime_config=runtime_config)
-
-
-
 def search_text(
     library_root: Path | str,
     query: str,
     top_k: int = 10,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
     request_id: str | None = None,
 ) -> library.SearchResult:
     if top_k <= 0:
@@ -51,14 +26,7 @@ def search_text(
         if not vector_rows:
             visual_results: list[dict[str, object]] = []
         else:
-            backend = _build_backend(
-                backend_name,
-                model_name_or_path=model_name_or_path,
-                torch_dtype=torch_dtype,
-                device=device,
-                num_threads=num_threads,
-                num_interop_threads=num_interop_threads,
-            )
+            backend = library.get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 query_vector = backend.embed_text(
                     query,
@@ -86,12 +54,6 @@ def search_image_path(
     library_root: Path | str,
     image_path: Path | str,
     top_k: int = 10,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
     request_id: str | None = None,
 ) -> library.ImageSearchResult:
     if top_k <= 0:
@@ -110,14 +72,7 @@ def search_image_path(
         if not vector_rows:
             results: list[dict[str, object]] = []
         else:
-            backend = _build_backend(
-                backend_name,
-                model_name_or_path=model_name_or_path,
-                torch_dtype=torch_dtype,
-                device=device,
-                num_threads=num_threads,
-                num_interop_threads=num_interop_threads,
-            )
+            backend = library.get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 image_bytes = query_path.read_bytes()
                 if suffix == ".gif":

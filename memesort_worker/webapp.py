@@ -288,11 +288,6 @@ def create_app(library_root: str):
                 payload = _read_json_body(environ)
                 result = run_jobs_for_active_runtime(
                     library_root_path,
-                    backend_name=(
-                        str(payload["backend_name"])
-                        if payload.get("backend_name")
-                        else None
-                    ),
                     max_jobs=int(payload.get("max_jobs", 20)),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
@@ -403,11 +398,6 @@ def create_app(library_root: str):
                     library_root_path,
                     query=query_text,
                     top_k=top_k,
-                    backend_name=(
-                        str(query["backend_name"][0])
-                        if query.get("backend_name")
-                        else None
-                    ),
                     request_id=request_id,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
@@ -417,11 +407,6 @@ def create_app(library_root: str):
                     library_root_path,
                     image_path=str(payload["path"]),
                     top_k=int(payload.get("top_k", 18)),
-                    backend_name=(
-                        str(payload["backend_name"])
-                        if payload.get("backend_name")
-                        else None
-                    ),
                     request_id=str(payload.get("request_id") or ""),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())

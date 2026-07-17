@@ -12,7 +12,6 @@ import numpy as np
 
 from memesort_worker.embedding_backend import (
     EmbeddingBackendError,
-    EmbeddingRuntimeConfig,
     LlamaCppEmbeddingBackend,
 )
 from memesort_worker import library as library_module
@@ -114,12 +113,11 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertEqual(manifest.logging.max_bytes_per_file, config.log_max_bytes)
 
     def test_embedding_backend_rejects_dimension_mismatch(self) -> None:
-        config = EmbeddingRuntimeConfig()
         with patch(
             "memesort_worker.llama_cpp_backend.LlamaCppEmbeddingAdapter.embed_text",
             return_value=np.array([3.0, 4.0, 12.0], dtype=np.float32),
         ):
-            backend = LlamaCppEmbeddingBackend(config)
+            backend = LlamaCppEmbeddingBackend()
             with self.assertRaisesRegex(EmbeddingBackendError, "expected exactly 2"):
                 backend.embed_text("hello", output_dimension=2)
 
@@ -128,7 +126,7 @@ class LlamaCppBackendTests(unittest.TestCase):
             "memesort_worker.llama_cpp_backend.LlamaCppEmbeddingAdapter.embed_text",
             return_value=np.array([3.0, 4.0], dtype=np.float64),
         ):
-            vector = LlamaCppEmbeddingBackend(EmbeddingRuntimeConfig()).embed_text(
+            vector = LlamaCppEmbeddingBackend().embed_text(
                 "hello", output_dimension=2
             )
 
@@ -137,7 +135,7 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertAlmostEqual(1.0, float(np.linalg.norm(vector)), places=6)
 
     def test_embedding_backend_rejects_zero_and_non_finite_vectors(self) -> None:
-        backend = LlamaCppEmbeddingBackend(EmbeddingRuntimeConfig())
+        backend = LlamaCppEmbeddingBackend()
         for vector, message in (
             (np.zeros(2, dtype=np.float32), "zero vector"),
             (np.array([np.nan, 1.0], dtype=np.float32), "NaN or infinite"),

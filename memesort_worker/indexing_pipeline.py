@@ -17,23 +17,10 @@ from .semantic_retrieval import vector_to_blob
 
 def run_pending_jobs(
     library_root: Path | str,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
     max_jobs: int | None = None,
 ) -> library.RunJobsResult:
     init_result = library.initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
-    runtime_config = library._build_runtime_config(
-        model_name_or_path=model_name_or_path,
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
-    )
     backend: EmbeddingBackend | None = None
     ocr_backend: OcrBackend | None = None
     conn = library._connect(library._database_path(library_root_path))
@@ -64,14 +51,11 @@ def run_pending_jobs(
                     _run_generate_thumbnail_job(conn, library_root_path, payload)
                 elif job_type == "embed_asset":
                     if backend is None:
-                        backend = library.get_embedding_backend(
-                            backend_name,
-                            runtime_config=runtime_config,
-                        )
+                        backend = library.get_embedding_backend()
                     _run_embed_asset_job(conn, library_root_path, payload, backend)
                 elif job_type == "ocr_asset":
                     if ocr_backend is None:
-                        ocr_backend = get_ocr_backend(library_root_path, backend_name)
+                        ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
                     ocr_artifacts.run_ocr_asset_job(
                         conn,
                         library_root_path,
@@ -97,7 +81,7 @@ def run_pending_jobs(
 
         return library.RunJobsResult(
             library_root=str(library_root_path),
-            backend=backend.backend_id if backend is not None else backend_name,
+            backend=backend.backend_id if backend is not None else "llama.cpp",
             requeued_running_jobs=requeued_running_jobs,
             retried_failed_jobs=retried_failed_jobs,
             processed_jobs=processed_jobs,

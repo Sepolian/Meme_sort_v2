@@ -12,7 +12,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from memesort_worker.active_runtime import search_text_for_active_runtime
-from memesort_worker.embedding_backend import EmbeddingBackendError, get_embedding_backend
+from memesort_worker.embedding_backend import get_embedding_backend
 from memesort_worker.library import (
     get_runtime_settings,
     initialize_library,
@@ -71,11 +71,11 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                     model_name_or_path=None,
                 )
 
-    def test_request_cannot_override_active_vulkan_backend(self) -> None:
+    def test_search_api_has_no_backend_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch(
             "memesort_worker.active_runtime._search_text"
         ) as search:
-            with self.assertRaisesRegex(ValueError, "Backend override"):
+            with self.assertRaisesRegex(TypeError, "unexpected keyword argument"):
                 search_text_for_active_runtime(
                     Path(temp_dir) / "library",
                     query="test",
@@ -84,10 +84,10 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 )
         search.assert_not_called()
 
-    def test_legacy_embedding_backends_cannot_be_constructed(self) -> None:
+    def test_embedding_factory_has_no_backend_selector(self) -> None:
         for backend_name in ("debug", "qwen3-vl", "cpu", "cuda"):
             with self.subTest(backend_name=backend_name):
-                with self.assertRaisesRegex(EmbeddingBackendError, "Vulkan-only"):
+                with self.assertRaisesRegex(TypeError, "positional argument"):
                     get_embedding_backend(backend_name)
 
     def test_recipe_change_atomically_resets_semantic_state_and_requeues(self) -> None:

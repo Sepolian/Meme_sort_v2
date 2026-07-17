@@ -16,13 +16,12 @@ from PIL import Image, ImageOps
 
 from .embedding_backend import (
     EmbeddingBackend,
-    EmbeddingRuntimeConfig,
     get_embedding_backend,
 )
 from . import ocr_artifacts
 from . import job_queue
 from .semantic_retrieval import scan_duplicate_vector_rows
-from .runtime_manifest import default_manifest_path, load_runtime_manifest
+from .runtime_manifest import load_runtime_manifest
 
 
 DATABASE_NAME = "library.sqlite"
@@ -995,32 +994,6 @@ def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
     return frame_count
 
 
-def _build_runtime_config(
-    model_name_or_path: str | None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
-) -> EmbeddingRuntimeConfig:
-    manifest = _RUNTIME_MANIFEST
-    return EmbeddingRuntimeConfig(
-        model_name_or_path=(
-            str(manifest.model_install_dir)
-            if device == manifest.platform.device
-            else model_name_or_path
-        ),
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
-        llama_server_path=str(manifest.llama_server_path),
-        llama_server_url=None,
-        llama_gpu_layers=manifest.llama_cpp.server.gpu_layers,
-        llama_context_size=manifest.llama_cpp.server.context_size,
-        runtime_manifest_path=str(default_manifest_path()),
-    )
-
-
 def list_runtime_profiles() -> list[RuntimeProfileSpec]:
     return [RUNTIME_PROFILES[key] for key in sorted(RUNTIME_PROFILES.keys())]
 
@@ -1129,20 +1102,6 @@ def save_runtime_settings(
     finally:
         conn.close()
     return settings
-
-
-def get_runtime_config_for_profile(
-    profile_id: str,
-    model_name_or_path: str | None = None,
-) -> EmbeddingRuntimeConfig:
-    profile = get_runtime_profile(profile_id)
-    return _build_runtime_config(
-        model_name_or_path=model_name_or_path,
-        torch_dtype=profile.torch_dtype,
-        device=profile.device,
-        num_threads=profile.num_threads,
-        num_interop_threads=profile.num_interop_threads,
-    )
 
 
 def _save_last_health_check(
@@ -2252,24 +2211,12 @@ def _requeue_incomplete_jobs(conn: sqlite3.Connection) -> tuple[int, int]:
 
 def run_pending_jobs(
     library_root: Path | str,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
     max_jobs: int | None = None,
 ) -> RunJobsResult:
     from .indexing_pipeline import run_pending_jobs as _run_pending_jobs
 
     return _run_pending_jobs(
         library_root,
-        backend_name=backend_name,
-        model_name_or_path=model_name_or_path,
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
         max_jobs=max_jobs,
     )
 
@@ -2278,12 +2225,6 @@ def search_text(
     library_root: Path | str,
     query: str,
     top_k: int = 10,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
 ) -> SearchResult:
     from .retrieval_service import search_text as _search_text
 
@@ -2291,12 +2232,6 @@ def search_text(
         library_root,
         query=query,
         top_k=top_k,
-        backend_name=backend_name,
-        model_name_or_path=model_name_or_path,
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
     )
 
 
@@ -2304,12 +2239,6 @@ def search_image_path(
     library_root: Path | str,
     image_path: Path | str,
     top_k: int = 10,
-    backend_name: str = "debug",
-    model_name_or_path: str | None = None,
-    torch_dtype: str = "auto",
-    device: str | None = None,
-    num_threads: int | None = None,
-    num_interop_threads: int | None = None,
 ) -> ImageSearchResult:
     from .retrieval_service import search_image_path as _search_image_path
 
@@ -2317,12 +2246,6 @@ def search_image_path(
         library_root,
         image_path=image_path,
         top_k=top_k,
-        backend_name=backend_name,
-        model_name_or_path=model_name_or_path,
-        torch_dtype=torch_dtype,
-        device=device,
-        num_threads=num_threads,
-        num_interop_threads=num_interop_threads,
     )
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import tempfile
 import time
@@ -11,16 +10,13 @@ from pathlib import Path
 from typing import Iterable
 
 from memesort_worker.library import (
-    DEFAULT_RECIPE,
-    PREPROCESS_SPECS_BY_VERSION,
-    RECIPE_PRESETS,
     import_folder,
     initialize_library,
     list_assets,
     run_pending_jobs,
     search_text,
-    switch_active_recipe,
 )
+from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
 DEFAULT_QUERY_FIELDS = (
@@ -44,12 +40,9 @@ class QueryEvaluation:
 @dataclass
 class EvaluationReport:
     backend: str
-    model_name_or_path: str | None
-    torch_dtype: str
-    device: str | None
-    num_threads: int | None
-    num_interop_threads: int | None
-    recipe_preset: str | None
+    model_id: str
+    recipe_fingerprint: str
+    device: str
     preprocess_version: str
     still_max_side: int
     gif_max_side: int
@@ -86,71 +79,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON labels keyed by filename",
     )
     parser.add_argument(
-        "--backend",
-        default="debug",
-        choices=("debug", "qwen3-vl", "llama.cpp"),
-        help="Embedding backend to use",
-    )
-    parser.add_argument(
-        "--model-name-or-path",
-        default=None,
-        help="Required for qwen3-vl and llama.cpp",
-    )
-    parser.add_argument(
-        "--llama-server",
-        default=None,
-        help="Path to llama-server.exe (or set MEMESORT_LLAMA_SERVER)",
-    )
-    parser.add_argument(
-        "--torch-dtype",
-        default="auto",
-        help="Torch dtype for qwen3-vl",
-    )
-    parser.add_argument(
-        "--device",
-        default=None,
-        help="Optional torch device for qwen3-vl",
-    )
-    parser.add_argument(
-        "--num-threads",
-        type=int,
-        default=None,
-        help="Optional torch intra-op thread count for qwen3-vl",
-    )
-    parser.add_argument(
-        "--num-interop-threads",
-        type=int,
-        default=None,
-        help="Optional torch inter-op thread count for qwen3-vl",
-    )
-    parser.add_argument(
-        "--recipe-preset",
-        default=None,
-        help="Optional recipe preset to activate before import/indexing.",
-    )
-    parser.add_argument(
-        "--recipe-runtime-profile",
-        default=None,
-        help="Optional runtime profile label override for eval-only recipe variants.",
-    )
-    parser.add_argument(
-        "--preprocess-version",
-        default=None,
-        help="Optional preprocess version override for eval-only recipe variants.",
-    )
-    parser.add_argument(
-        "--still-max-side",
-        type=int,
-        default=None,
-        help="Optional still-image longest-side cap for eval-only recipe variants.",
-    )
-    parser.add_argument(
-        "--gif-max-side",
-        type=int,
-        default=None,
-        help="Optional GIF longest-side cap for eval-only recipe variants.",
-    )
-    parser.add_argument(
         "--query-fields",
         nargs="+",
         default=list(DEFAULT_QUERY_FIELDS),
@@ -175,104 +103,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-@dataclass(frozen=True)
-class RecipeSelection:
-    preset_key: str | None
-    preprocess_version: str
-    still_max_side: int
-    gif_max_side: int
-
-
-def prepare_recipe_for_eval(
-    recipe_preset: str | None,
-    recipe_runtime_profile: str | None = None,
-    preprocess_version: str | None = None,
-    still_max_side: int | None = None,
-    gif_max_side: int | None = None,
-) -> RecipeSelection:
-    if recipe_preset is None:
-        if any(
-            value is not None
-            for value in (
-                recipe_runtime_profile,
-                preprocess_version,
-                still_max_side,
-                gif_max_side,
-            )
-        ):
-            raise ValueError("Recipe overrides require --recipe-preset")
-        default_preprocess_version = str(DEFAULT_RECIPE["preprocess_version"])
-        default_preprocess = PREPROCESS_SPECS_BY_VERSION[default_preprocess_version]
-        return RecipeSelection(
-            preset_key=None,
-            preprocess_version=default_preprocess_version,
-            still_max_side=int(default_preprocess["still_max_side"]),
-            gif_max_side=int(default_preprocess["gif_max_side"]),
-        )
-
-    if recipe_preset not in RECIPE_PRESETS:
-        raise ValueError(f"Unknown recipe preset: {recipe_preset}")
-
-    base_recipe = dict(RECIPE_PRESETS[recipe_preset])
-    base_preprocess_version = str(base_recipe["preprocess_version"])
-    base_preprocess = PREPROCESS_SPECS_BY_VERSION[base_preprocess_version]
-
-    has_custom_preprocess = any(
-        value is not None for value in (preprocess_version, still_max_side, gif_max_side)
-    )
-    if not has_custom_preprocess and recipe_runtime_profile is None:
-        return RecipeSelection(
-            preset_key=recipe_preset,
-            preprocess_version=base_preprocess_version,
-            still_max_side=int(base_preprocess["still_max_side"]),
-            gif_max_side=int(base_preprocess["gif_max_side"]),
-        )
-
-    effective_preprocess_version = preprocess_version or base_preprocess_version
-    if still_max_side is None:
-        if effective_preprocess_version not in PREPROCESS_SPECS_BY_VERSION:
-            raise ValueError(
-                "Unknown preprocess version without still_max_side override: "
-                f"{effective_preprocess_version}"
-            )
-        effective_preprocess = PREPROCESS_SPECS_BY_VERSION[effective_preprocess_version]
-        effective_still_max_side = int(effective_preprocess["still_max_side"])
-        effective_gif_max_side = int(
-            effective_preprocess["gif_max_side"] if gif_max_side is None else gif_max_side
-        )
-        if gif_max_side is not None:
-            PREPROCESS_SPECS_BY_VERSION[effective_preprocess_version] = {
-                "still_max_side": effective_still_max_side,
-                "gif_max_side": effective_gif_max_side,
-            }
-    else:
-        effective_still_max_side = still_max_side
-        effective_gif_max_side = int(
-            base_preprocess["gif_max_side"] if gif_max_side is None else gif_max_side
-        )
-        PREPROCESS_SPECS_BY_VERSION[effective_preprocess_version] = {
-            "still_max_side": effective_still_max_side,
-            "gif_max_side": effective_gif_max_side,
-        }
-
-    effective_runtime_profile = (
-        recipe_runtime_profile
-        or f"{str(base_recipe['runtime_profile'])}-eval-{effective_still_max_side}"
-    )
-    effective_preset_key = f"{recipe_preset}--{effective_runtime_profile}--{effective_preprocess_version}"
-    RECIPE_PRESETS[effective_preset_key] = {
-        **base_recipe,
-        "runtime_profile": effective_runtime_profile,
-        "preprocess_version": effective_preprocess_version,
-    }
-    return RecipeSelection(
-        preset_key=effective_preset_key,
-        preprocess_version=effective_preprocess_version,
-        still_max_side=effective_still_max_side,
-        gif_max_side=effective_gif_max_side,
-    )
-
-
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -282,44 +112,19 @@ def main() -> None:
     labels_path = Path(args.labels_path).resolve()
     labels = json.loads(labels_path.read_text(encoding="utf-8"))
 
-    if args.llama_server:
-        os.environ["MEMESORT_LLAMA_SERVER"] = str(Path(args.llama_server).resolve())
-    if args.backend == "llama.cpp" and not args.model_name_or_path:
-        parser.error("--model-name-or-path is required for llama.cpp")
-
-    recipe_preset = args.recipe_preset
-    if args.backend == "llama.cpp" and recipe_preset is None:
-        recipe_preset = "qwen3-2b-vulkan-balanced"
-
+    manifest = load_runtime_manifest()
     temp_root = Path(tempfile.mkdtemp(prefix="memesort_eval_"))
     library_root = temp_root / "library"
-    recipe_selection = prepare_recipe_for_eval(
-        recipe_preset=recipe_preset,
-        recipe_runtime_profile=args.recipe_runtime_profile,
-        preprocess_version=args.preprocess_version,
-        still_max_side=args.still_max_side,
-        gif_max_side=args.gif_max_side,
-    )
 
     try:
         initialize_library(library_root)
-        if recipe_selection.preset_key is not None:
-            switch_active_recipe(library_root, recipe_selection.preset_key)
 
         import_started_at = time.perf_counter()
         import_folder(library_root, dataset_dir)
         import_seconds = time.perf_counter() - import_started_at
 
         indexing_started_at = time.perf_counter()
-        run_pending_jobs(
-            library_root,
-            backend_name=args.backend,
-            model_name_or_path=args.model_name_or_path,
-            torch_dtype=args.torch_dtype,
-            device=args.device,
-            num_threads=args.num_threads,
-            num_interop_threads=args.num_interop_threads,
-        )
+        run_pending_jobs(library_root)
         indexing_seconds = time.perf_counter() - indexing_started_at
 
         asset_listing = list_assets(library_root)
@@ -349,12 +154,6 @@ def main() -> None:
                 library_root,
                 query=query,
                 top_k=args.top_k,
-                backend_name=args.backend,
-                model_name_or_path=args.model_name_or_path,
-                torch_dtype=args.torch_dtype,
-                device=args.device,
-                num_threads=args.num_threads,
-                num_interop_threads=args.num_interop_threads,
             )
             query_seconds_total += time.perf_counter() - query_started_at
 
@@ -376,16 +175,13 @@ def main() -> None:
             )
 
         report = EvaluationReport(
-            backend=args.backend,
-            model_name_or_path=args.model_name_or_path,
-            torch_dtype=args.torch_dtype,
-            device=args.device,
-            num_threads=args.num_threads,
-            num_interop_threads=args.num_interop_threads,
-            recipe_preset=recipe_selection.preset_key,
-            preprocess_version=recipe_selection.preprocess_version,
-            still_max_side=recipe_selection.still_max_side,
-            gif_max_side=recipe_selection.gif_max_side,
+            backend="llama.cpp-vulkan",
+            model_id=manifest.model.id,
+            recipe_fingerprint=manifest.recipe_fingerprint,
+            device=manifest.platform.device,
+            preprocess_version=manifest.preprocessing.version,
+            still_max_side=manifest.preprocessing.still_max_side,
+            gif_max_side=manifest.preprocessing.gif_max_side,
             query_fields=list(args.query_fields),
             top_k=args.top_k,
             asset_count=len(filename_to_asset),

@@ -12,23 +12,6 @@ class EmbeddingBackendError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
-class EmbeddingRuntimeConfig:
-    """Runtime wiring retained at service boundaries while Vulkan owns execution."""
-
-    model_name_or_path: str | None = None
-    torch_dtype: str = "auto"
-    device: str | None = None
-    low_cpu_mem_usage: bool = True
-    num_threads: int | None = None
-    num_interop_threads: int | None = None
-    llama_server_path: str | None = None
-    llama_server_url: str | None = None
-    llama_gpu_layers: int = 99
-    llama_context_size: int = 4096
-    runtime_manifest_path: str | None = None
-
-
 @dataclass
 class EmbeddingBackend:
     backend_id: str
@@ -50,20 +33,12 @@ class EmbeddingBackend:
         raise NotImplementedError
 
 
-def get_embedding_backend(
-    backend_name: str,
-    runtime_config: EmbeddingRuntimeConfig | None = None,
-) -> EmbeddingBackend:
-    if backend_name != "llama.cpp":
-        raise EmbeddingBackendError(
-            f"Unsupported embedding backend: {backend_name}. "
-            "MemeSort is Vulkan-only and requires llama.cpp."
-        )
-    return _get_cached_llama_cpp_backend(runtime_config or EmbeddingRuntimeConfig())
+def get_embedding_backend() -> EmbeddingBackend:
+    return _get_cached_llama_cpp_backend()
 
 
 class LlamaCppEmbeddingBackend(EmbeddingBackend):
-    def __init__(self, runtime_config: EmbeddingRuntimeConfig) -> None:
+    def __init__(self) -> None:
         from .llama_cpp_backend import (
             LlamaCppBackendError,
             LlamaCppEmbeddingAdapter,
@@ -72,7 +47,7 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         from .runtime_manifest import load_runtime_manifest
 
         self._adapter_error = LlamaCppBackendError
-        manifest = load_runtime_manifest(runtime_config.runtime_manifest_path)
+        manifest = load_runtime_manifest()
         self._adapter = LlamaCppEmbeddingAdapter(load_server_config(manifest.source_path))
         super().__init__(
             backend_id=f"llama.cpp-vulkan::{manifest.recipe_fingerprint}"
@@ -111,10 +86,8 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
 
 
 @lru_cache(maxsize=1)
-def _get_cached_llama_cpp_backend(
-    runtime_config: EmbeddingRuntimeConfig,
-) -> LlamaCppEmbeddingBackend:
-    return LlamaCppEmbeddingBackend(runtime_config)
+def _get_cached_llama_cpp_backend() -> LlamaCppEmbeddingBackend:
+    return LlamaCppEmbeddingBackend()
 
 
 def _coerce_normalized_dimension(

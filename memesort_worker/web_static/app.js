@@ -1445,7 +1445,6 @@ async function runJobs() {
     method: "POST",
     body: JSON.stringify({
       max_jobs: 50,
-      backend_name: state.runtimeSettings?.backend_name || selectedBackendName(),
     }),
   });
   byId("importResult").textContent = JSON.stringify(result, null, 2);

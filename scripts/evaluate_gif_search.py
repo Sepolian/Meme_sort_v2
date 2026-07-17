@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import tempfile
 import time
@@ -16,8 +15,8 @@ from memesort_worker.library import (
     list_assets,
     run_pending_jobs,
     search_text,
-    switch_active_recipe,
 )
+from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
 DEFAULT_QUERY_FIELDS = (
@@ -41,11 +40,9 @@ class QueryEvaluation:
 @dataclass
 class EvaluationReport:
     backend: str
-    model_name_or_path: str | None
-    torch_dtype: str
-    device: str | None
-    num_threads: int | None
-    num_interop_threads: int | None
+    model_id: str
+    recipe_fingerprint: str
+    device: str
     query_fields: list[str]
     top_k: int
     asset_count: int
@@ -70,13 +67,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate GIF retrieval against labeled examples")
     parser.add_argument("--dataset-dir", default="gif_example", help="Directory containing GIF assets")
     parser.add_argument("--labels-path", default="labels/gif_labels.json", help="JSON labels keyed by filename")
-    parser.add_argument("--backend", default="debug", choices=("debug", "qwen3-vl", "llama.cpp"), help="Embedding backend")
-    parser.add_argument("--model-name-or-path", default=None, help="Required for qwen3-vl and llama.cpp")
-    parser.add_argument("--llama-server", default=None, help="Path to llama-server.exe")
-    parser.add_argument("--torch-dtype", default="auto", help="Torch dtype for qwen3-vl")
-    parser.add_argument("--device", default=None, help="Optional torch device for qwen3-vl")
-    parser.add_argument("--num-threads", type=int, default=None, help="Optional torch intra-op thread count for qwen3-vl")
-    parser.add_argument("--num-interop-threads", type=int, default=None, help="Optional torch inter-op thread count for qwen3-vl")
     parser.add_argument("--query-fields", nargs="+", default=list(DEFAULT_QUERY_FIELDS), help="Fields to concatenate into each query")
     parser.add_argument("--top-k", type=int, default=10, help="Result count")
     parser.add_argument("--keep-library", action="store_true", help="Keep temporary library for inspection")
@@ -92,32 +82,19 @@ def main() -> None:
     dataset_dir = Path(args.dataset_dir).resolve()
     labels_path = Path(args.labels_path).resolve()
     labels = json.loads(labels_path.read_text(encoding="utf-8"))
-    if args.llama_server:
-        os.environ["MEMESORT_LLAMA_SERVER"] = str(Path(args.llama_server).resolve())
-    if args.backend == "llama.cpp" and not args.model_name_or_path:
-        parser.error("--model-name-or-path is required for llama.cpp")
+    manifest = load_runtime_manifest()
 
     temp_root = Path(tempfile.mkdtemp(prefix="memesort_gif_eval_"))
     library_root = temp_root / "library"
 
     try:
         initialize_library(library_root)
-        if args.backend == "llama.cpp":
-            switch_active_recipe(library_root, "qwen3-2b-vulkan-balanced")
         import_started_at = time.perf_counter()
         import_folder(library_root, dataset_dir)
         import_seconds = time.perf_counter() - import_started_at
 
         indexing_started_at = time.perf_counter()
-        run_pending_jobs(
-            library_root,
-            backend_name=args.backend,
-            model_name_or_path=args.model_name_or_path,
-            torch_dtype=args.torch_dtype,
-            device=args.device,
-            num_threads=args.num_threads,
-            num_interop_threads=args.num_interop_threads,
-        )
+        run_pending_jobs(library_root)
         indexing_seconds = time.perf_counter() - indexing_started_at
 
         asset_listing = list_assets(library_root)
@@ -143,12 +120,6 @@ def main() -> None:
                 library_root,
                 query=query,
                 top_k=args.top_k,
-                backend_name=args.backend,
-                model_name_or_path=args.model_name_or_path,
-                torch_dtype=args.torch_dtype,
-                device=args.device,
-                num_threads=args.num_threads,
-                num_interop_threads=args.num_interop_threads,
             )
             query_seconds_total += time.perf_counter() - query_started_at
 
@@ -170,12 +141,10 @@ def main() -> None:
             )
 
         report = EvaluationReport(
-            backend=args.backend,
-            model_name_or_path=args.model_name_or_path,
-            torch_dtype=args.torch_dtype,
-            device=args.device,
-            num_threads=args.num_threads,
-            num_interop_threads=args.num_interop_threads,
+            backend="llama.cpp-vulkan",
+            model_id=manifest.model.id,
+            recipe_fingerprint=manifest.recipe_fingerprint,
+            device=manifest.platform.device,
             query_fields=list(args.query_fields),
             top_k=args.top_k,
             asset_count=len(filename_to_asset),
