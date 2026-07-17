@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "paths": {
+    "download_dir": ".runtime/downloads",
+    "activation_record": ".runtime/active-runtime.json",
+    "log_dir": ".runtime/logs"
+  },
+  "platform": {
+    "os": "windows",
+    "architecture": "x86_64",
+    "device": "Vulkan0",
+    "vendor_ids": {
+      "amd": "0x1002",
+      "intel": "0x8086",
+      "nvidia": "0x10de"
+    }
+  },
+  "toolchain": {
+    "uv": {
+      "version": "0.11.28",
+      "install_dir": ".runtime/uv",
+      "archive": {
+        "filename": "uv-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "0a23463216d09c6a72ff80ef5dc5a795f07dc1575cb84d24596c2f124a441b7b",
+        "size_bytes": 25568726
+      }
+    },
+    "python": {
+      "main_version": "3.13.14",
+      "ocr_version": "3.12.13"
+    }
+  },
+  "llama_cpp": {
+    "build": "b9982",
+    "install_dir": ".runtime/llama.cpp-b9982-vulkan",
+    "executable": "llama-server.exe",
+    "archive": {
+      "filename": "llama-b9982-bin-win-vulkan-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b9982/llama-b9982-bin-win-vulkan-x64.zip",
+      "sha256": "b8c49b3ff732d663dbbf9b1fcefb1153816d072c89bc0579197cea5d19873616",
+      "size_bytes": 32938852
+    },
+    "server": {
+      "gpu_layers": 99,
+      "context_size": 4096,
+      "parallel_slots": 1,
+      "startup_timeout_seconds": 300,
+      "request_timeout_seconds": 300,
+      "device_probe_timeout_seconds": 20,
+      "idle_timeout_seconds": 600
+    }
+  },
+  "model": {
+    "id": "DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
+    "base_model_id": "Qwen/Qwen3-VL-Embedding-2B",
+    "conversion_repository": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF",
+    "install_dir": ".models/gguf/qwen3-2b-q4_k_m",
+    "protocol": "llama.cpp-openai-multimodal-embeddings-v1",
+    "request_model": "qwen3-vl-embedding",
+    "output_dimension": 2048,
+    "main": {
+      "filename": "Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf",
+      "url": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF/resolve/main/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf",
+      "sha256": "42a4ebc629ecc6514649e12b1529b857f54900273bb854f853c970fb90edd09d",
+      "size_bytes": 1107410528
+    },
+    "projector": {
+      "filename": "mmproj-Qwen.Qwen3-VL-Embedding-2B.f16.gguf",
+      "url": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF/resolve/main/mmproj-Qwen.Qwen3-VL-Embedding-2B.f16.gguf",
+      "sha256": "3f89a7768ffa6606935319f71bf56bb71871249ba549bf1080a0caea7a088613",
+      "size_bytes": 819395136
+    }
+  },
+  "preprocessing": {
+    "version": "still-480-gif-480-rgb-white-exif-v1",
+    "still_max_side": 480,
+    "gif_max_side": 480,
+    "gif_frame_count": 4,
+    "resample": "lanczos",
+    "color_mode": "RGB",
+    "alpha_background": "#ffffff",
+    "apply_exif_orientation": true
+  },
+  "embedding": {
+    "instruction_id": "qwen3vl-text-to-image-default-v1",
+    "instruction": "Retrieve images that best match the user's text query.",
+    "media_marker": "<__media__>",
+    "pooling": "last",
+    "normalization": "l2",
+    "storage_dtype": "float32"
+  },
+  "logging": {
+    "file_count": 5,
+    "max_bytes_per_file": 2097152
+  },
+  "shutdown_grace_seconds": 10
+}
