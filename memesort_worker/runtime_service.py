@@ -6,6 +6,7 @@ from pathlib import Path
 from .asset_browse import list_asset_summaries
 from . import library_internal as library
 from .library_store import LibraryStore
+from .runtime_manifest import load_runtime_manifest
 
 
 _HEALTH_CHECK_PNG = base64.b64decode(
@@ -421,17 +422,14 @@ def _run_llama_cpp_runtime_health_check(
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
 ) -> library.RuntimeHealthResult:
-    resolved_model_source = _resolve_runtime_model_source_for_backend(
-        "llama.cpp",
-        model_name_or_path,
-        selected_model_key=model_variant.model_key,
-        allow_download=False,
-    )
-    if not resolved_model_source:
+    _ = model_name_or_path  # Vulkan runtime paths are manifest-owned, never user-selected.
+    manifest = load_runtime_manifest()
+    resolved_model_source = str(manifest.model_install_dir)
+    if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
         result = library.RuntimeHealthResult(
             profile_id=profile.profile_id,
             backend_name="llama.cpp",
-            model_name_or_path=None,
+            model_name_or_path=resolved_model_source,
             selected_model_key=model_variant.model_key,
             selected_model_label=model_variant.label,
             device=profile.device,
@@ -448,13 +446,13 @@ def _run_llama_cpp_runtime_health_check(
                     "step": "resolve-gguf-bundle",
                     "status": "error",
                     "detail": (
-                        "Configure a local folder containing the Q4_K_M main GGUF and "
-                        "one mmproj*.gguf file. GGUF is not downloaded automatically yet."
+                        "The pinned GGUF bundle declared by runtime-manifest.json is "
+                        "not active. Run setup to install it."
                     ),
                 },
             ],
             smoke_test_ok=False,
-            error="Local GGUF model bundle is not configured or was not discovered.",
+            error="Pinned GGUF model bundle is missing.",
         )
         if library_root is not None:
             _save_last_health_check(library_root, result=result)
@@ -466,12 +464,12 @@ def _run_llama_cpp_runtime_health_check(
         from .llama_cpp_backend import (
             discover_llama_server,
             probe_llama_devices,
-            resolve_gguf_bundle,
             verify_qwen3_vl_embedding_2b_bundle,
         )
 
-        main_model, mmproj = resolve_gguf_bundle(resolved_model_source)
-        verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj)
+        main_model = manifest.main_model_path
+        mmproj = manifest.projector_path
+        verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj, manifest)
         diagnostic_steps.append(
             {
                 "step": "resolve-gguf-bundle",
@@ -484,24 +482,23 @@ def _run_llama_cpp_runtime_health_check(
             profile.profile_id,
             model_name_or_path=resolved_model_source,
         )
-        if runtime_config.llama_server_url:
-            server_detail = runtime_config.llama_server_url
-            gpu_name = "External llama.cpp server (device unverified)"
-        else:
-            executable = discover_llama_server(runtime_config.llama_server_path)
-            server_detail = str(executable)
-            device_output = probe_llama_devices(executable)
-            vulkan_lines = [
-                line.strip()
-                for line in device_output.splitlines()
-                if "vulkan" in line.lower()
-            ]
-            if not vulkan_lines:
-                raise RuntimeError(
-                    "The configured llama.cpp binary did not enumerate a Vulkan device. "
-                    "Use the official Windows Vulkan build and update the GPU driver."
-                )
-            gpu_name = vulkan_lines[0]
+        executable = discover_llama_server(runtime_config.llama_server_path)
+        server_detail = str(executable)
+        device_output = probe_llama_devices(
+            executable,
+            timeout_seconds=manifest.llama_cpp.server.device_probe_timeout_seconds,
+        )
+        vulkan_lines = [
+            line.strip()
+            for line in device_output.splitlines()
+            if "vulkan" in line.lower()
+        ]
+        if not vulkan_lines:
+            raise RuntimeError(
+                "The pinned llama.cpp binary did not enumerate Vulkan0. "
+                "Update the GPU driver and rerun setup."
+            )
+        gpu_name = vulkan_lines[0]
         diagnostic_steps.append(
             {
                 "step": "llama-server",
@@ -513,10 +510,8 @@ def _run_llama_cpp_runtime_health_check(
         backend = library.get_embedding_backend("llama.cpp", runtime_config)
         vector = backend.embed_text(
             "confused reaction image",
-            output_dimension=model_variant.output_dimension,
-            instruction=library.INSTRUCTION_TEXT_BY_KEY[
-                "qwen3vl-text-to-image-default-v1"
-            ],
+            output_dimension=manifest.model.output_dimension,
+            instruction=manifest.embedding.instruction,
         )
         diagnostic_steps.append(
             {
@@ -528,10 +523,8 @@ def _run_llama_cpp_runtime_health_check(
         failure_step = "image-embedding-smoke"
         image_vector = backend.embed_image_bytes(
             _HEALTH_CHECK_PNG,
-            output_dimension=model_variant.output_dimension,
-            instruction=library.INSTRUCTION_TEXT_BY_KEY[
-                "qwen3vl-text-to-image-default-v1"
-            ],
+            output_dimension=manifest.model.output_dimension,
+            instruction=manifest.embedding.instruction,
         )
     except Exception as exc:
         result = library.RuntimeHealthResult(
@@ -546,7 +539,7 @@ def _run_llama_cpp_runtime_health_check(
             cuda_available=False,
             gpu_name=gpu_name,
             model_source_origin=_infer_model_source_origin(
-                model_name_or_path,
+                None,
                 resolved_model_source,
                 model_variant.model_key,
             ),
@@ -586,7 +579,7 @@ def _run_llama_cpp_runtime_health_check(
         cuda_available=False,
         gpu_name=gpu_name,
         model_source_origin=_infer_model_source_origin(
-            model_name_or_path,
+            None,
             resolved_model_source,
             model_variant.model_key,
         ),

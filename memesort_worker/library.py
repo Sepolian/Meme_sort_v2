@@ -27,6 +27,7 @@ from .process_io import ensure_process_stdio
 from . import ocr_artifacts
 from . import job_queue
 from .semantic_retrieval import scan_duplicate_vector_rows
+from .runtime_manifest import default_manifest_path, load_runtime_manifest
 
 
 DATABASE_NAME = "library.sqlite"
@@ -48,6 +49,14 @@ SUPPORTED_EXTENSIONS = {
     ".gif": "image/gif",
     ".bmp": "image/bmp",
 }
+
+_RUNTIME_MANIFEST = load_runtime_manifest()
+_VULKAN_RECIPE_PRESET = "qwen3-2b-vulkan-balanced"
+_VULKAN_POOLING_KEY = (
+    f"{_RUNTIME_MANIFEST.embedding.pooling}-"
+    f"{_RUNTIME_MANIFEST.embedding.normalization}-"
+    f"{_RUNTIME_MANIFEST.embedding.storage_dtype}"
+)
 
 DEFAULT_RECIPE = {
     "family_key": "qwen3-vl-embedding",
@@ -93,11 +102,16 @@ RECIPE_PRESETS: dict[str, dict[str, object]] = {
     },
     "qwen3-2b-vulkan-balanced": {
         **DEFAULT_RECIPE,
-        "model_id": "DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
-        "model_revision": (
-            "main-sha256-42a4ebc629ecc651-mmproj-sha256-3f89a7768ffa6606"
-        ),
+        "family_key": _RUNTIME_MANIFEST.model.protocol,
+        "model_id": _RUNTIME_MANIFEST.model.id,
+        "model_revision": _RUNTIME_MANIFEST.recipe_fingerprint,
+        "output_dimension": _RUNTIME_MANIFEST.model.output_dimension,
         "runtime_profile": "vulkan-balanced",
+        "preprocess_version": _RUNTIME_MANIFEST.preprocessing.version,
+        "instruction_key": _RUNTIME_MANIFEST.embedding.instruction_id,
+        "pooling_key": _VULKAN_POOLING_KEY,
+        "normalized": 1,
+        "gif_frame_count": _RUNTIME_MANIFEST.preprocessing.gif_frame_count,
     },
 }
 
@@ -105,6 +119,7 @@ INSTRUCTION_TEXT_BY_KEY = {
     "qwen3vl-text-to-image-default-v1": (
         "Retrieve images that best match the user's text query."
     ),
+    _RUNTIME_MANIFEST.embedding.instruction_id: _RUNTIME_MANIFEST.embedding.instruction,
 }
 
 PREPROCESS_SPECS_BY_VERSION = {
@@ -115,6 +130,10 @@ PREPROCESS_SPECS_BY_VERSION = {
     "still-native-up-to-1536-gif-native-up-to-960-v1": {
         "still_max_side": 1536,
         "gif_max_side": 960,
+    },
+    _RUNTIME_MANIFEST.preprocessing.version: {
+        "still_max_side": _RUNTIME_MANIFEST.preprocessing.still_max_side,
+        "gif_max_side": _RUNTIME_MANIFEST.preprocessing.gif_max_side,
     },
 }
 
@@ -487,14 +506,14 @@ RUNTIME_PROFILES: dict[str, RuntimeProfileSpec] = {
         profile_id="vulkan-balanced",
         label="Vulkan Balanced (llama.cpp)",
         recipe_preset="qwen3-2b-vulkan-balanced",
-        model_id="DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
-        device="vulkan",
+        model_id=_RUNTIME_MANIFEST.model.id,
+        device=_RUNTIME_MANIFEST.platform.device,
         torch_dtype="gguf-q4_k_m",
         num_threads=8,
         num_interop_threads=2,
-        still_max_side=480,
-        gif_max_side=480,
-        gif_frame_count=4,
+        still_max_side=_RUNTIME_MANIFEST.preprocessing.still_max_side,
+        gif_max_side=_RUNTIME_MANIFEST.preprocessing.gif_max_side,
+        gif_frame_count=_RUNTIME_MANIFEST.preprocessing.gif_frame_count,
         notes="Cross-vendor GPU path for NVIDIA, AMD, and Intel using llama.cpp Vulkan.",
         backend_name="llama.cpp",
         supported_model_keys=("qwen3-2b",),
@@ -506,7 +525,7 @@ MODEL_VARIANTS: dict[str, ModelVariantSpec] = {
         model_key="qwen3-2b",
         label="Qwen3 2B",
         model_id="Qwen/Qwen3-VL-Embedding-2B",
-        output_dimension=2048,
+        output_dimension=_RUNTIME_MANIFEST.model.output_dimension,
         notes="Smaller baseline model with lower VRAM and CPU cost.",
     ),
     "qwen3-8b": ModelVariantSpec(
@@ -1002,6 +1021,13 @@ def _recipe_spec_for_preset(
     if gif_frame_count is not None:
         if gif_frame_count <= 0:
             raise ValueError("gif_frame_count must be positive")
+        if (
+            preset_key == _VULKAN_RECIPE_PRESET
+            and gif_frame_count != _RUNTIME_MANIFEST.preprocessing.gif_frame_count
+        ):
+            raise ValueError(
+                "The Vulkan GIF frame count is pinned by runtime-manifest.json"
+            )
         recipe_spec["gif_frame_count"] = gif_frame_count
     return recipe_spec
 
@@ -1194,14 +1220,22 @@ def _build_runtime_config(
     num_threads: int | None = None,
     num_interop_threads: int | None = None,
 ) -> EmbeddingRuntimeConfig:
+    manifest = _RUNTIME_MANIFEST
     return EmbeddingRuntimeConfig(
-        model_name_or_path=model_name_or_path,
+        model_name_or_path=(
+            str(manifest.model_install_dir)
+            if device == manifest.platform.device
+            else model_name_or_path
+        ),
         torch_dtype=torch_dtype,
         device=device,
         num_threads=num_threads,
         num_interop_threads=num_interop_threads,
-        llama_server_path=os.environ.get("MEMESORT_LLAMA_SERVER"),
-        llama_server_url=os.environ.get("MEMESORT_LLAMA_SERVER_URL"),
+        llama_server_path=str(manifest.llama_server_path),
+        llama_server_url=None,
+        llama_gpu_layers=manifest.llama_cpp.server.gpu_layers,
+        llama_context_size=manifest.llama_cpp.server.context_size,
+        runtime_manifest_path=str(default_manifest_path()),
     )
 
 

@@ -5,7 +5,6 @@ import base64
 import hashlib
 import json
 import os
-import shutil
 import socket
 import subprocess
 import tempfile
@@ -16,20 +15,10 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from urllib.parse import urlsplit
 
 import numpy as np
 
-
-MEDIA_MARKER = "<__media__>"
-DEFAULT_STARTUP_TIMEOUT_SECONDS = 180.0
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 300.0
-QWEN3_VL_EMBEDDING_2B_Q4_K_M_SHA256 = (
-    "42a4ebc629ecc6514649e12b1529b857f54900273bb854f853c970fb90edd09d"
-)
-QWEN3_VL_EMBEDDING_2B_MMPROJ_F16_SHA256 = (
-    "3f89a7768ffa6606935319f71bf56bb71871249ba549bf1080a0caea7a088613"
-)
+from .runtime_manifest import RuntimeManifest, load_runtime_manifest
 
 
 class LlamaCppBackendError(RuntimeError):
@@ -38,14 +27,49 @@ class LlamaCppBackendError(RuntimeError):
 
 @dataclass(frozen=True)
 class LlamaCppServerConfig:
-    model_path: str
-    mmproj_path: str | None = None
-    executable_path: str | None = None
-    server_url: str | None = None
-    gpu_layers: int = 99
-    context_size: int = 4096
-    startup_timeout_seconds: float = DEFAULT_STARTUP_TIMEOUT_SECONDS
-    request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+    executable_path: Path
+    model_path: Path
+    mmproj_path: Path
+    request_model: str
+    media_marker: str
+    device: str
+    gpu_layers: int
+    context_size: int
+    parallel_slots: int
+    pooling: str
+    normalization: str
+    startup_timeout_seconds: float
+    request_timeout_seconds: float
+    device_probe_timeout_seconds: float
+    shutdown_grace_seconds: float
+
+    @classmethod
+    def from_manifest(cls, manifest: RuntimeManifest) -> "LlamaCppServerConfig":
+        return cls(
+            executable_path=manifest.llama_server_path,
+            model_path=manifest.main_model_path,
+            mmproj_path=manifest.projector_path,
+            request_model=manifest.model.request_model,
+            media_marker=manifest.embedding.media_marker,
+            device=manifest.platform.device,
+            gpu_layers=manifest.llama_cpp.server.gpu_layers,
+            context_size=manifest.llama_cpp.server.context_size,
+            parallel_slots=manifest.llama_cpp.server.parallel_slots,
+            pooling=manifest.embedding.pooling,
+            normalization=manifest.embedding.normalization,
+            startup_timeout_seconds=manifest.llama_cpp.server.startup_timeout_seconds,
+            request_timeout_seconds=manifest.llama_cpp.server.request_timeout_seconds,
+            device_probe_timeout_seconds=(
+                manifest.llama_cpp.server.device_probe_timeout_seconds
+            ),
+            shutdown_grace_seconds=manifest.shutdown_grace_seconds,
+        )
+
+
+def load_server_config(
+    manifest_path: str | Path | None = None,
+) -> LlamaCppServerConfig:
+    return LlamaCppServerConfig.from_manifest(load_runtime_manifest(manifest_path))
 
 
 def resolve_gguf_bundle(model_name_or_path: str) -> tuple[Path, Path]:
@@ -100,36 +124,32 @@ def resolve_gguf_bundle(model_name_or_path: str) -> tuple[Path, Path]:
     return main_model, mmproj_candidates[0]
 
 
-def discover_llama_server(executable_path: str | None = None) -> Path:
-    configured = executable_path or os.environ.get("MEMESORT_LLAMA_SERVER")
-    if configured:
-        candidate = Path(configured).expanduser().resolve()
-        if candidate.is_file():
-            return candidate
-        raise LlamaCppBackendError(f"Configured llama-server executable does not exist: {candidate}")
-
-    discovered = shutil.which("llama-server") or shutil.which("llama-server.exe")
-    if discovered:
-        return Path(discovered).resolve()
-
+def discover_llama_server(executable_path: str | Path | None = None) -> Path:
+    candidate = Path(executable_path or load_server_config().executable_path).resolve()
+    if candidate.is_file():
+        return candidate
     raise LlamaCppBackendError(
-        "llama-server was not found. Install a llama.cpp Vulkan build and either add "
-        "llama-server.exe to PATH or set MEMESORT_LLAMA_SERVER to its full path."
+        f"Pinned llama-server executable does not exist: {candidate}. Run setup to "
+        "activate the runtime declared by runtime-manifest.json."
     )
 
 
-def verify_qwen3_vl_embedding_2b_bundle(main_model: Path, mmproj: Path) -> None:
+def verify_qwen3_vl_embedding_2b_bundle(
+    main_model: Path,
+    mmproj: Path,
+    manifest: RuntimeManifest | None = None,
+) -> None:
+    manifest = manifest or load_runtime_manifest()
     expected = {
-        main_model: QWEN3_VL_EMBEDDING_2B_Q4_K_M_SHA256,
-        mmproj: QWEN3_VL_EMBEDDING_2B_MMPROJ_F16_SHA256,
+        main_model: manifest.model.main.sha256,
+        mmproj: manifest.model.projector.sha256,
     }
     for path, expected_hash in expected.items():
         actual_hash = _sha256_file(path)
         if actual_hash != expected_hash:
             raise LlamaCppBackendError(
                 f"Unexpected SHA256 for {path.name}: {actual_hash}. "
-                "The Vulkan 2B recipe is pinned to the verified DevQuasar Q4_K_M bundle; "
-                "using a different conversion requires a distinct index recipe."
+                "The active Vulkan recipe is pinned by runtime-manifest.json."
             )
 
 
@@ -140,7 +160,7 @@ class LlamaCppServer:
         self.config = config
         self._process: subprocess.Popen[bytes] | None = None
         self._log_file: Any | None = None
-        self._base_url = _normalize_local_server_url(config.server_url)
+        self._base_url: str | None = None
         self._lock = threading.RLock()
 
     @property
@@ -158,10 +178,10 @@ class LlamaCppServer:
             if process is not None and process.poll() is None:
                 process.terminate()
                 try:
-                    process.wait(timeout=5)
+                    process.wait(timeout=self.config.shutdown_grace_seconds)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    process.wait(timeout=5)
+                    process.wait(timeout=self.config.shutdown_grace_seconds)
             if self._log_file is not None:
                 self._log_file.close()
                 self._log_file = None
@@ -170,7 +190,7 @@ class LlamaCppServer:
         _ = self.base_url
         payload = {
             "input": request_input,
-            "model": "qwen3-vl-embedding",
+            "model": self.config.request_model,
             "encoding_format": "float",
         }
         response = self._request_json(
@@ -193,13 +213,15 @@ class LlamaCppServer:
         return vector
 
     def _ensure_ready(self) -> None:
-        if self._base_url and self._process is None:
-            self._wait_until_healthy()
-            return
         if self._process is not None and self._process.poll() is None:
             return
 
-        main_model, mmproj = resolve_gguf_bundle(self.config.model_path)
+        main_model = self.config.model_path.resolve()
+        mmproj = self.config.mmproj_path.resolve()
+        if not main_model.is_file():
+            raise LlamaCppBackendError(f"Pinned main GGUF does not exist: {main_model}")
+        if not mmproj.is_file():
+            raise LlamaCppBackendError(f"Pinned multimodal projector does not exist: {mmproj}")
         executable = discover_llama_server(self.config.executable_path)
         _activate_managed_server(self)
         port = _find_available_local_port()
@@ -216,18 +238,20 @@ class LlamaCppServer:
             str(port),
             "--embedding",
             "--pooling",
-            "last",
+            self.config.pooling,
             "--embd-normalize",
-            "2",
+            _llama_normalization_value(self.config.normalization),
+            "--device",
+            self.config.device,
             "--n-gpu-layers",
             str(self.config.gpu_layers),
             "--ctx-size",
             str(self.config.context_size),
             "--parallel",
-            "1",
+            str(self.config.parallel_slots),
         ]
         env = os.environ.copy()
-        env["LLAMA_MEDIA_MARKER"] = MEDIA_MARKER
+        env["LLAMA_MEDIA_MARKER"] = self.config.media_marker
         creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         self._log_file = tempfile.TemporaryFile(mode="w+b")
         try:
@@ -327,7 +351,7 @@ class LlamaCppEmbeddingAdapter:
         image_bytes: bytes,
         instruction: str | None = None,
     ) -> np.ndarray:
-        prompt = _format_text_prompt(MEDIA_MARKER, instruction)
+        prompt = _format_text_prompt(self.config.media_marker, instruction)
         encoded = base64.b64encode(image_bytes).decode("ascii")
         return self.server.request_embedding(
             [{"prompt_string": prompt, "multimodal_data": [encoded]}]
@@ -348,14 +372,22 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def probe_llama_devices(executable_path: str | Path) -> str:
+def probe_llama_devices(
+    executable_path: str | Path,
+    timeout_seconds: float | None = None,
+) -> str:
+    timeout = (
+        load_server_config().device_probe_timeout_seconds
+        if timeout_seconds is None
+        else timeout_seconds
+    )
     try:
         completed = subprocess.run(
             [str(executable_path), "--list-devices"],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
-            timeout=20,
+            timeout=timeout,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -372,23 +404,12 @@ def probe_llama_devices(executable_path: str | Path) -> str:
     return output
 
 
-def _normalize_local_server_url(server_url: str | None) -> str | None:
-    if not server_url:
-        return None
-    normalized = server_url.rstrip("/")
-    if normalized.endswith("/v1"):
-        normalized = normalized[:-3]
-    parsed = urlsplit(normalized)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {
-        "127.0.0.1",
-        "localhost",
-        "::1",
-    }:
-        raise LlamaCppBackendError(
-            "MEMESORT_LLAMA_SERVER_URL must point to a loopback-only HTTP server; "
-            "MemeSort will not send local images to a remote embedding endpoint."
-        )
-    return normalized
+def _llama_normalization_value(normalization: str) -> str:
+    if normalization == "l2":
+        return "2"
+    raise LlamaCppBackendError(
+        f"Unsupported llama.cpp embedding normalization: {normalization}"
+    )
 
 
 def _find_available_local_port() -> int:

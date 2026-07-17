@@ -51,6 +51,7 @@ class EmbeddingRuntimeConfig:
     llama_server_url: str | None = None
     llama_gpu_layers: int = 99
     llama_context_size: int = 4096
+    runtime_manifest_path: str | None = None
 
 
 @dataclass
@@ -367,29 +368,18 @@ def get_embedding_backend(
 
 class LlamaCppEmbeddingBackend(EmbeddingBackend):
     def __init__(self, runtime_config: EmbeddingRuntimeConfig) -> None:
-        if not runtime_config.model_name_or_path:
-            raise EmbeddingBackendError("llama.cpp backend requires a local GGUF model source")
         from .llama_cpp_backend import (
             LlamaCppBackendError,
             LlamaCppEmbeddingAdapter,
-            LlamaCppServerConfig,
+            load_server_config,
         )
+        from .runtime_manifest import load_runtime_manifest
 
         self._adapter_error = LlamaCppBackendError
-        self._adapter = LlamaCppEmbeddingAdapter(
-            LlamaCppServerConfig(
-                model_path=runtime_config.model_name_or_path,
-                executable_path=runtime_config.llama_server_path,
-                server_url=runtime_config.llama_server_url,
-                gpu_layers=runtime_config.llama_gpu_layers,
-                context_size=runtime_config.llama_context_size,
-            )
-        )
+        manifest = load_runtime_manifest(runtime_config.runtime_manifest_path)
+        self._adapter = LlamaCppEmbeddingAdapter(load_server_config(manifest.source_path))
         super().__init__(
-            backend_id=(
-                f"llama.cpp::{runtime_config.model_name_or_path}::"
-                f"gpu-layers={runtime_config.llama_gpu_layers}"
-            )
+            backend_id=f"llama.cpp-vulkan::{manifest.recipe_fingerprint}"
         )
 
     def embed_text(
@@ -427,18 +417,25 @@ def _get_cached_llama_cpp_backend(
 def _coerce_normalized_dimension(vector: np.ndarray, output_dimension: int) -> np.ndarray:
     if output_dimension <= 0:
         raise EmbeddingBackendError(f"Invalid output dimension: {output_dimension}")
-    vector = np.asarray(vector, dtype=np.float32)
+    vector = np.asarray(vector)
     if vector.ndim != 1:
         raise EmbeddingBackendError(f"Expected a 1D embedding, got shape {vector.shape}")
-    if vector.shape[0] < output_dimension:
+    if vector.shape[0] != output_dimension:
         raise EmbeddingBackendError(
-            f"Model returned dim {vector.shape[0]}, smaller than requested {output_dimension}"
+            f"Model returned dim {vector.shape[0]}, expected exactly {output_dimension}"
         )
-    result = vector[:output_dimension]
-    norm = np.linalg.norm(result)
-    if norm == 0:
+    if not np.issubdtype(vector.dtype, np.number):
+        raise EmbeddingBackendError(f"Model returned non-numeric embedding dtype {vector.dtype}")
+    if not np.all(np.isfinite(vector)):
+        raise EmbeddingBackendError("Model returned NaN or infinite embedding values")
+    result = np.asarray(vector, dtype=np.float32)
+    norm = float(np.linalg.norm(result.astype(np.float64, copy=False)))
+    if not np.isfinite(norm) or norm == 0:
         raise EmbeddingBackendError("Model returned zero vector")
-    return result / norm
+    normalized = np.asarray(result / norm, dtype=np.float32)
+    if not np.all(np.isfinite(normalized)):
+        raise EmbeddingBackendError("Embedding normalization produced non-finite values")
+    return normalized
 
 
 def _hash_to_unit_vector(payload: bytes, output_dimension: int) -> np.ndarray:
