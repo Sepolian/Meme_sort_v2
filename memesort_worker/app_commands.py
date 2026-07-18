@@ -3,15 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from .active_runtime import (
-    run_pending_jobs_for_active_runtime as _run_pending_jobs_for_active_runtime,
-    search_image_for_active_runtime as _search_image_for_active_runtime,
-    search_text_for_active_runtime as _search_text_for_active_runtime,
-)
+from .indexing_pipeline import run_pending_jobs as _run_indexing_jobs
 from .library import (
     import_folder,
     is_runtime_ready_for_indexing,
 )
+from .retrieval_service import search_image_path as _search_image_path
+from .retrieval_service import search_text as _search_text
 
 
 class WorkerLoop(Protocol):
@@ -22,23 +20,23 @@ class WorkerLoop(Protocol):
         ...
 
 
-def run_jobs_for_active_runtime(
+def run_jobs(
     library_root: Path | str,
     max_jobs: int = 20,
 ):
-    return _run_pending_jobs_for_active_runtime(
+    return _run_indexing_jobs(
         library_root,
         max_jobs=max_jobs,
     )
 
 
-def search_text_for_active_runtime(
+def search_text(
     library_root: Path | str,
     query: str,
     top_k: int,
     request_id: str | None = None,
 ):
-    return _search_text_for_active_runtime(
+    return _search_text(
         library_root,
         query=query,
         top_k=top_k,
@@ -46,13 +44,13 @@ def search_text_for_active_runtime(
     )
 
 
-def search_image_for_active_runtime(
+def search_image(
     library_root: Path | str,
     image_path: Path | str,
     top_k: int,
     request_id: str | None = None,
 ):
-    return _search_image_for_active_runtime(
+    return _search_image_path(
         library_root,
         image_path=image_path,
         top_k=top_k,

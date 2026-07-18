@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from memesort_worker.active_runtime import search_text_for_active_runtime
+from memesort_worker.app_commands import search_text
 from memesort_worker.app_state import build_app_state
 from memesort_worker.embedding_backend import get_embedding_backend
 from memesort_worker.library import (
@@ -81,10 +81,10 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
 
     def test_search_api_has_no_backend_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch(
-            "memesort_worker.active_runtime._search_text"
+            "memesort_worker.app_commands._search_text"
         ) as search:
             with self.assertRaisesRegex(TypeError, "unexpected keyword argument"):
-                search_text_for_active_runtime(
+                search_text(
                     Path(temp_dir) / "library",
                     query="test",
                     top_k=3,

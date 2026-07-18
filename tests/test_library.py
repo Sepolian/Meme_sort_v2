@@ -468,7 +468,7 @@ class LibraryTests(unittest.TestCase):
                 with patch(
                     "memesort_worker.cli.run_runtime_health_check"
                 ) as health_check, patch(
-                    "memesort_worker.cli.run_pending_jobs_for_active_runtime"
+                    "memesort_worker.cli.run_jobs"
                 ) as run_jobs, redirect_stdout(output):
                     health_check.return_value.smoke_test_ok = True
                     health_check.return_value.error = None

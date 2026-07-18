@@ -6,10 +6,10 @@ from typing import Sequence
 
 from .desktop_app import launch_desktop_shell
 from .launcher import launch_local_mvp_app
-from .active_runtime import (
-    run_pending_jobs_for_active_runtime,
-    search_image_for_active_runtime,
-    search_text_for_active_runtime,
+from .app_commands import (
+    run_jobs,
+    search_image,
+    search_text,
 )
 from .library import (
     import_folder,
@@ -115,7 +115,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 health_check.error
                 or "Vulkan runtime health check failed; indexing was not started."
             )
-        result = run_pending_jobs_for_active_runtime(
+        result = run_jobs(
             args.library_root,
             max_jobs=args.max_jobs,
         )
@@ -123,7 +123,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "search":
-        result = search_text_for_active_runtime(
+        result = search_text(
             args.library_root,
             query=args.query,
             top_k=args.top_k,
@@ -132,7 +132,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "search-image":
-        result = search_image_for_active_runtime(
+        result = search_image(
             args.library_root,
             image_path=args.path,
             top_k=args.top_k,

@@ -18,9 +18,9 @@ from .app_state import build_app_state
 from .asset_browse import get_library_status, list_pending_jobs
 from .app_commands import (
     import_and_start_indexing,
-    run_jobs_for_active_runtime,
-    search_image_for_active_runtime,
-    search_text_for_active_runtime,
+    run_jobs,
+    search_image,
+    search_text,
 )
 from .library import (
     delete_assets,
@@ -275,7 +275,7 @@ def create_app(library_root: str):
                 )
             elif path == "/api/run-jobs" and method == "POST":
                 payload = _read_json_body(environ)
-                result = run_jobs_for_active_runtime(
+                result = run_jobs(
                     library_root_path,
                     max_jobs=int(payload.get("max_jobs", 20)),
                 )
@@ -352,7 +352,7 @@ def create_app(library_root: str):
                 query_text = str(query.get("query", [""])[0])
                 top_k = int(query.get("top_k", ["12"])[0])
                 request_id = str(query.get("request_id", [""])[0])
-                result = search_text_for_active_runtime(
+                result = search_text(
                     library_root_path,
                     query=query_text,
                     top_k=top_k,
@@ -361,7 +361,7 @@ def create_app(library_root: str):
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search-image" and method == "POST":
                 payload = _read_json_body(environ)
-                result = search_image_for_active_runtime(
+                result = search_image(
                     library_root_path,
                     image_path=str(payload["path"]),
                     top_k=int(payload.get("top_k", 18)),
