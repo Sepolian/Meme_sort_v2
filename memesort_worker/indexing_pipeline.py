@@ -33,58 +33,49 @@ def run_pending_jobs(
     ocr_backend: OcrBackend | None = None
     conn = library._connect(library._database_path(library_root_path))
     try:
-        with conn:
-            requeued_running_jobs, retried_failed_jobs = job_queue.requeue_incomplete_jobs(conn)
-        job_rows = job_queue.fetch_pending_jobs(conn, max_jobs=max_jobs)
+        queue = job_queue.JobQueue(conn)
+        (
+            requeued_running_jobs,
+            retried_failed_jobs,
+            pending_jobs,
+        ) = queue.prepare(max_jobs)
 
         processed_jobs = 0
         completed_jobs = 0
         failed_jobs = 0
         skipped_jobs = 0
 
-        for job_row in job_rows:
+        for job in pending_jobs:
             processed_jobs += 1
-            job_id = str(job_row["id"])
-            job_type = str(job_row["type"])
-            payload = job_queue.payload_for_job(job_row)
 
             try:
-                with conn:
-                    claimed = job_queue.mark_job_running(conn, job_id)
-                if not claimed:
+                if not queue.claim(job):
                     skipped_jobs += 1
                     continue
 
-                if job_type == "generate_thumbnail":
-                    _run_generate_thumbnail_job(conn, library_root_path, payload)
-                elif job_type == "embed_asset":
+                if job.job_type is job_queue.JobType.GENERATE_THUMBNAIL:
+                    _run_generate_thumbnail_job(conn, library_root_path, job.payload)
+                elif job.job_type is job_queue.JobType.EMBED_ASSET:
                     if backend is None:
                         backend = library.get_embedding_backend()
-                    _run_embed_asset_job(conn, library_root_path, payload, backend)
-                elif job_type == "ocr_asset":
+                    _run_embed_asset_job(conn, library_root_path, job.payload, backend)
+                elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:
                         ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
                     ocr_artifacts.run_ocr_asset_job(
                         conn,
                         library_root_path,
-                        payload,
+                        job.payload,
                         ocr_backend,
                     )
                 else:
                     skipped_jobs += 1
-                    raise ValueError(f"Unsupported job type: {job_type}")
+                    raise ValueError(f"Unsupported job type: {job.job_type}")
 
-                with conn:
-                    job_queue.mark_job_completed(conn, job_id)
-                    completed_jobs += 1
+                queue.complete(job)
+                completed_jobs += 1
             except Exception as exc:
-                with conn:
-                    job_queue.mark_job_failed(
-                        conn,
-                        job_id,
-                        error_code=type(exc).__name__,
-                        error_detail=str(exc),
-                    )
+                queue.fail(job, exc)
                 failed_jobs += 1
 
         return library.RunJobsResult(

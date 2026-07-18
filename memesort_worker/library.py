@@ -557,7 +557,10 @@ def _activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]
         return recipe_id, False, 0
 
     conn.execute("DELETE FROM embedding_item")
-    conn.execute("DELETE FROM job WHERE type = 'embed_asset'")
+    conn.execute(
+        "DELETE FROM job WHERE type = ?",
+        (job_queue.JobType.EMBED_ASSET.value,),
+    )
     conn.execute("DELETE FROM embedding_recipe WHERE id != ?", (recipe_id,))
     _set_active_recipe_id(conn, recipe_id)
     conn.execute("DELETE FROM worker_state WHERE key = 'last_runtime_health_check'")
@@ -569,16 +572,11 @@ def _activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]
     ).fetchall()
     for asset_row in asset_rows:
         asset_id = str(asset_row["id"])
-        queued += _create_job(
+        queued += job_queue.enqueue_embedding(
             conn,
-            job_type="embed_asset",
             asset_id=asset_id,
             recipe_id=recipe_id,
-            payload={
-                "asset_id": asset_id,
-                "recipe_id": recipe_id,
-                "media_type": str(asset_row["media_type"]),
-            },
+            media_type=str(asset_row["media_type"]),
             now=now,
         )
     _set_worker_state_json(
@@ -601,11 +599,7 @@ def _ensure_default_ocr_recipe(conn: sqlite3.Connection) -> str:
 
 
 def _ensure_missing_ocr_jobs(conn: sqlite3.Connection) -> int:
-    return ocr_artifacts.ensure_missing_ocr_jobs(
-        conn,
-        create_job=_create_job,
-        now=_utc_now(),
-    )
+    return ocr_artifacts.ensure_missing_ocr_jobs(conn, now=_utc_now())
 
 
 def _get_worker_state_json(
@@ -944,36 +938,22 @@ def import_folder(
                 else:
                     source_records_refreshed += 1
 
-                jobs_created += _create_job(
+                jobs_created += job_queue.enqueue_thumbnail(
                     conn=conn,
-                    job_type="generate_thumbnail",
                     asset_id=asset_id,
-                    recipe_id=None,
-                    payload={
-                        "asset_id": asset_id,
-                        "library_path": destination_relative.as_posix(),
-                    },
                     now=now,
                 )
-                jobs_created += _create_job(
+                jobs_created += job_queue.enqueue_embedding(
                     conn=conn,
-                    job_type="embed_asset",
                     asset_id=asset_id,
                     recipe_id=active_recipe_id,
-                    payload={
-                        "asset_id": asset_id,
-                        "recipe_id": active_recipe_id,
-                        "media_type": media_type,
-                        "library_path": destination_relative.as_posix(),
-                    },
+                    media_type=media_type,
                     now=now,
                 )
                 jobs_created += ocr_artifacts.enqueue_ocr_asset_job(
                     conn,
                     asset_id=asset_id,
                     media_type=media_type,
-                    library_path=destination_relative.as_posix(),
-                    create_job=_create_job,
                     now=now,
                     ocr_recipe_id=ocr_recipe_id,
                 )
@@ -1043,17 +1023,6 @@ def _upsert_source_record(conn: sqlite3.Connection, asset_id: str, source_path: 
         (str(uuid.uuid4()), asset_id, source_path, now, now),
     )
     return "added"
-
-
-def _create_job(
-    conn: sqlite3.Connection,
-    job_type: str,
-    asset_id: str | None,
-    recipe_id: str | None,
-    payload: dict[str, object],
-    now: str,
-) -> int:
-    return job_queue.create_job(conn, job_type, asset_id, recipe_id, payload, now)
 
 
 def _delete_asset_rows(
@@ -1258,8 +1227,8 @@ def rebuild_active_indexes(library_root: Path | str, asset_ids: list[str]) -> Ba
             reindex_jobs_created = 0
             for asset_id in requested_asset_ids:
                 running = conn.execute(
-                    "SELECT 1 FROM job WHERE asset_id = ? AND recipe_id = ? AND type = 'embed_asset' AND status = 'running' LIMIT 1",
-                    (asset_id, active_recipe_id),
+                    "SELECT 1 FROM job WHERE asset_id = ? AND recipe_id = ? AND type = ? AND status = 'running' LIMIT 1",
+                    (asset_id, active_recipe_id, job_queue.JobType.EMBED_ASSET.value),
                 ).fetchone()
                 if running is not None:
                     skipped_running_asset_ids.append(asset_id)
@@ -1269,17 +1238,18 @@ def rebuild_active_indexes(library_root: Path | str, asset_ids: list[str]) -> Ba
                     (asset_id, active_recipe_id),
                 ).rowcount
                 conn.execute(
-                    "DELETE FROM job WHERE asset_id = ? AND recipe_id = ? AND type = 'embed_asset' AND status IN ('pending', 'failed')",
-                    (asset_id, active_recipe_id),
+                    "DELETE FROM job WHERE asset_id = ? AND recipe_id = ? AND type = ? AND status IN ('pending', 'failed')",
+                    (asset_id, active_recipe_id, job_queue.JobType.EMBED_ASSET.value),
                 )
                 asset_row = conn.execute(
                     "SELECT library_path, media_type FROM asset WHERE id = ?", (asset_id,)
                 ).fetchone()
-                reindex_jobs_created += _create_job(
-                    conn, "embed_asset", asset_id, active_recipe_id,
-                    {"asset_id": asset_id, "recipe_id": active_recipe_id,
-                     "media_type": str(asset_row["media_type"]), "library_path": str(asset_row["library_path"])},
-                    _utc_now(),
+                reindex_jobs_created += job_queue.enqueue_embedding(
+                    conn,
+                    asset_id=asset_id,
+                    recipe_id=active_recipe_id,
+                    media_type=str(asset_row["media_type"]),
+                    now=_utc_now(),
                 )
                 affected_asset_ids.append(asset_id)
         return BatchAssetActionResult(
@@ -1672,7 +1642,10 @@ def _project_asset_status(
         return "indexed"
 
     active_jobs = [
-        row for row in jobs if str(row["type"]) == "embed_asset" and str(row["recipe_id"]) == active_recipe_id
+        row
+        for row in jobs
+        if str(row["type"]) == job_queue.JobType.EMBED_ASSET.value
+        and str(row["recipe_id"]) == active_recipe_id
     ]
     has_stale_embeddings = any(str(row["recipe_id"]) != active_recipe_id for row in embeddings)
 

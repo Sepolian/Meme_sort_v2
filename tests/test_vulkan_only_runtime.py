@@ -168,7 +168,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 conn.close()
 
             with patch(
-                "memesort_worker.library._create_job",
+                "memesort_worker.job_queue.enqueue_embedding",
                 side_effect=RuntimeError("queue failed"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "queue failed"):

@@ -3,9 +3,85 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 
-RETRYABLE_JOB_TYPES = ("generate_thumbnail", "embed_asset", "ocr_asset")
+
+class JobType(str, Enum):
+    GENERATE_THUMBNAIL = "generate_thumbnail"
+    EMBED_ASSET = "embed_asset"
+    OCR_ASSET = "ocr_asset"
+
+
+RETRYABLE_JOB_TYPES = tuple(job_type.value for job_type in JobType)
+
+
+@dataclass(frozen=True)
+class PendingJob:
+    job_id: str
+    job_type: JobType | str
+    asset_id: str | None
+    recipe_id: str | None
+    payload_json: str
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "PendingJob":
+        raw_job_type = str(row["type"])
+        try:
+            job_type: JobType | str = JobType(raw_job_type)
+        except ValueError:
+            job_type = raw_job_type
+        return cls(
+            job_id=str(row["id"]),
+            job_type=job_type,
+            asset_id=str(row["asset_id"]) if row["asset_id"] else None,
+            recipe_id=str(row["recipe_id"]) if row["recipe_id"] else None,
+            payload_json=str(row["payload_json"]),
+        )
+
+    @property
+    def payload(self) -> dict[str, object]:
+        payload = json.loads(self.payload_json)
+        if not isinstance(payload, dict):
+            raise ValueError(f"Job {self.job_id} payload must be an object")
+        return payload
+
+
+class JobQueue:
+    """Own the durable lifecycle of pending Indexing jobs."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def prepare(
+        self,
+        max_jobs: int | None,
+    ) -> tuple[int, int, list[PendingJob]]:
+        with self._conn:
+            requeued_running, retried_failed = requeue_incomplete_jobs(self._conn)
+        return (
+            requeued_running,
+            retried_failed,
+            fetch_pending_jobs(self._conn, max_jobs=max_jobs),
+        )
+
+    def claim(self, job: PendingJob) -> bool:
+        with self._conn:
+            return mark_job_running(self._conn, job.job_id)
+
+    def complete(self, job: PendingJob) -> None:
+        with self._conn:
+            mark_job_completed(self._conn, job.job_id)
+
+    def fail(self, job: PendingJob, error: Exception) -> None:
+        with self._conn:
+            mark_job_failed(
+                self._conn,
+                job.job_id,
+                error_code=type(error).__name__,
+                error_detail=str(error),
+            )
 
 
 def _utc_now() -> str:
@@ -36,7 +112,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def create_job(
+def _insert_job(
     conn: sqlite3.Connection,
     job_type: str,
     asset_id: str | None,
@@ -44,6 +120,7 @@ def create_job(
     payload: dict[str, object],
     now: str,
 ) -> int:
+    normalized_job_type = JobType(job_type).value
     conn.execute(
         """
         INSERT INTO job (
@@ -64,7 +141,7 @@ def create_job(
         """,
         (
             str(uuid.uuid4()),
-            job_type,
+            normalized_job_type,
             "pending",
             asset_id,
             recipe_id,
@@ -80,10 +157,70 @@ def create_job(
     return 1
 
 
+def enqueue_thumbnail(
+    conn: sqlite3.Connection,
+    *,
+    asset_id: str,
+    now: str,
+) -> int:
+    return _insert_job(
+        conn,
+        JobType.GENERATE_THUMBNAIL.value,
+        asset_id,
+        None,
+        {"asset_id": asset_id},
+        now,
+    )
+
+
+def enqueue_embedding(
+    conn: sqlite3.Connection,
+    *,
+    asset_id: str,
+    recipe_id: str,
+    media_type: str,
+    now: str,
+) -> int:
+    return _insert_job(
+        conn,
+        JobType.EMBED_ASSET.value,
+        asset_id,
+        recipe_id,
+        {
+            "asset_id": asset_id,
+            "recipe_id": recipe_id,
+            "media_type": media_type,
+        },
+        now,
+    )
+
+
+def enqueue_ocr(
+    conn: sqlite3.Connection,
+    *,
+    asset_id: str,
+    ocr_recipe_id: str,
+    media_type: str,
+    now: str,
+) -> int:
+    return _insert_job(
+        conn,
+        JobType.OCR_ASSET.value,
+        asset_id,
+        None,
+        {
+            "asset_id": asset_id,
+            "ocr_recipe_id": ocr_recipe_id,
+            "media_type": media_type,
+        },
+        now,
+    )
+
+
 def fetch_pending_jobs(
     conn: sqlite3.Connection,
     max_jobs: int | None = None,
-) -> list[sqlite3.Row]:
+) -> list[PendingJob]:
     rows = conn.execute(
         """
         SELECT id, type, asset_id, recipe_id, payload_json
@@ -92,13 +229,8 @@ def fetch_pending_jobs(
         ORDER BY created_at ASC, id ASC
         """
     ).fetchall()
-    if max_jobs is None:
-        return rows
-    return rows[:max_jobs]
-
-
-def payload_for_job(job_row: sqlite3.Row) -> dict[str, object]:
-    return json.loads(str(job_row["payload_json"]))
+    selected_rows = rows if max_jobs is None else rows[:max_jobs]
+    return [PendingJob.from_row(row) for row in selected_rows]
 
 
 def requeue_incomplete_jobs(conn: sqlite3.Connection) -> tuple[int, int]:

@@ -197,7 +197,7 @@ class LibraryStore:
         active_jobs = [
             row
             for row in jobs
-            if str(row["type"]) == "embed_asset"
+            if str(row["type"]) == job_queue.JobType.EMBED_ASSET.value
             and str(row["recipe_id"]) == active_recipe_id
         ]
         has_stale_embeddings = any(

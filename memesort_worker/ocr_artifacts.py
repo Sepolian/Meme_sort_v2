@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
@@ -19,13 +18,8 @@ DEFAULT_OCR_RECIPE = {
     "min_confidence": 0.5,
 }
 
-OCR_ASSET_JOB_TYPE = "ocr_asset"
+OCR_ASSET_JOB_TYPE = job_queue.JobType.OCR_ASSET.value
 GIF_MEDIA_TYPE = "image/gif"
-
-CreateJob = Callable[
-    [sqlite3.Connection, str, str | None, str | None, dict[str, object], str],
-    int,
-]
 
 
 class OcrBackend(Protocol):
@@ -166,8 +160,6 @@ def enqueue_ocr_asset_job(
     *,
     asset_id: str,
     media_type: str,
-    library_path: str,
-    create_job: CreateJob,
     now: str | None = None,
     ocr_recipe_id: str | None = None,
 ) -> int:
@@ -175,32 +167,25 @@ def enqueue_ocr_asset_job(
         return 0
 
     recipe_id = ocr_recipe_id or ensure_default_ocr_recipe(conn)
-    return create_job(
+    return job_queue.enqueue_ocr(
         conn,
-        OCR_ASSET_JOB_TYPE,
-        asset_id,
-        None,
-        {
-            "asset_id": asset_id,
-            "ocr_recipe_id": recipe_id,
-            "media_type": media_type,
-            "library_path": library_path,
-        },
-        now or _utc_now(),
+        asset_id=asset_id,
+        ocr_recipe_id=recipe_id,
+        media_type=media_type,
+        now=now or _utc_now(),
     )
 
 
 def ensure_missing_ocr_jobs(
     conn: sqlite3.Connection,
     *,
-    create_job: CreateJob,
     now: str | None = None,
 ) -> int:
     ocr_recipe_id = ensure_default_ocr_recipe(conn)
     enqueue_time = now or _utc_now()
     asset_rows = conn.execute(
         """
-        SELECT id, media_type, library_path
+        SELECT id, media_type
         FROM asset
         WHERE deleted_at IS NULL
           AND media_type <> 'image/gif'
@@ -241,8 +226,6 @@ def ensure_missing_ocr_jobs(
             conn,
             asset_id=asset_id,
             media_type=str(asset_row["media_type"]),
-            library_path=str(asset_row["library_path"]),
-            create_job=create_job,
             now=enqueue_time,
             ocr_recipe_id=ocr_recipe_id,
         )
