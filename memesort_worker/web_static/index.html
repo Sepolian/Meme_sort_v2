@@ -12,12 +12,20 @@
         <a class="brand" href="/" aria-label="MemeSort home"><span class="brand-mark">M</span><span>MemeSort</span></a>
         <nav class="tab-list" aria-label="MemeSort sections">
           <p class="nav-label">Workspace</p>
-          <button class="tab-link active" data-tab="libraryTab"><span>Grid library</span><span id="navAssetCount" class="nav-count">—</span></button>
-          <button class="tab-link" data-tab="searchTab">Semantic search</button>
-          <button class="tab-link" data-tab="duplicatesTab">Duplicates</button>
+          <a class="tab-link active" href="/" data-route="/" data-tab="libraryTab"><span>Grid library</span><span id="navAssetCount" class="nav-count">—</span></a>
+          <div id="searchNavGroup" class="nav-group">
+            <a class="tab-link nav-group-link" href="/search" data-route="/search" data-tab="searchTab"><span>Semantic search</span><span class="nav-chevron" aria-hidden="true">›</span></a>
+            <div id="searchSubnav" class="nav-sublist" aria-label="Semantic search pages">
+              <a class="nav-sub-link" href="/search" data-route="/search">Overview</a>
+              <a class="nav-sub-link" href="/search/text" data-route="/search/text">Text search</a>
+              <a class="nav-sub-link" href="/search/image" data-route="/search/image">Image search</a>
+              <a class="nav-sub-link" href="/search/similar" data-route="/search/similar">Find similar</a>
+            </div>
+          </div>
+          <a class="tab-link" href="/duplicates" data-route="/duplicates" data-tab="duplicatesTab">Duplicates</a>
           <p class="nav-label nav-label-spaced">Operations</p>
-          <button class="tab-link" data-tab="setupTab">Import &amp; runtime</button>
-          <button class="tab-link" data-tab="statusTab"><span>Index queue</span><span id="navQueueCount" class="nav-count">—</span></button>
+          <a class="tab-link" href="/setup" data-route="/setup" data-tab="setupTab">Import &amp; runtime</a>
+          <a class="tab-link" href="/status" data-route="/status" data-tab="statusTab"><span>Index queue</span><span id="navQueueCount" class="nav-count">—</span></a>
         </nav>
         <div class="sidebar-footer">
           <span class="nav-label">Active recipe</span>
@@ -92,7 +100,31 @@
             </div>
           </section>
 
-          <section id="searchTab" class="tab-panel"><div class="section-heading"><p class="eyebrow">Discovery</p><h2>Semantic search</h2></div><div class="grid-two"><div class="card"><h2>Text search</h2><label for="searchInput">Query</label><input id="searchInput" placeholder="confused reaction" /><div class="actions"><button id="searchBtn">Search</button></div><div id="searchResults" class="result-list card-grid"></div></div><div class="card"><h2>Image search</h2><label for="imageSearchPathInput">Local image or GIF</label><input id="imageSearchPathInput" placeholder="F:\Pictures\reaction.png" /><div class="actions"><button id="pickImageSearchFileBtn" class="ghost">Browse file</button><button id="searchImageBtn">Search image</button></div><div id="imageSearchResults" class="result-list card-grid"></div></div></div><div class="card detail-card"><div class="card-header"><div><h2>Find similar asset</h2><p class="muted small">Select an asset from the wall or a result card, then search similar indexed content.</p></div></div><label for="similarAssetIdInput">Selected asset</label><input id="similarAssetIdInput" type="hidden" /><div id="similarSelectedAsset" class="runtime-summary small muted">No asset selected yet.</div><div class="actions"><button id="similarBtn">Find similar</button></div><div id="similarResults" class="result-list card-grid"></div></div></section>
+          <section id="searchTab" class="tab-panel">
+            <section id="searchOverviewPanel" class="search-panel">
+              <div class="section-heading"><p class="eyebrow">Discovery</p><h2>Choose a search method</h2><p class="muted small">Every search uses Indexed Assets from the Active Index Recipe.</p></div>
+              <div class="search-option-grid">
+                <a class="search-option-card" href="/search/text" data-route="/search/text"><span class="search-option-kicker">Words to assets</span><h3>Text search</h3><p>Describe a reaction, scene, or phrase and combine visual similarity with OCR matches.</p><span class="search-option-action">Open text search →</span></a>
+                <a class="search-option-card" href="/search/image" data-route="/search/image"><span class="search-option-kicker">File to assets</span><h3>Image search</h3><p>Choose a local image or GIF and retrieve visually related Indexed Assets.</p><span class="search-option-action">Open image search →</span></a>
+                <a class="search-option-card" href="/search/similar" data-route="/search/similar"><span class="search-option-kicker">Asset to assets</span><h3>Find similar</h3><p>Use the selected library Asset to find related content without embedding a new query.</p><span class="search-option-action">Open similar search →</span></a>
+              </div>
+            </section>
+            <section id="textSearchPanel" class="search-panel">
+              <div class="section-heading"><p class="eyebrow">Semantic search</p><h2>Text search</h2><p class="muted small">Describe the visual or written content you want to retrieve.</p></div>
+              <div class="card search-form-card"><label for="searchInput">Query</label><div class="search-input-row"><input id="searchInput" placeholder="confused reaction" /><button id="searchBtn">Search</button></div></div>
+              <div id="searchResults" class="result-list card-grid search-result-grid"></div>
+            </section>
+            <section id="imageSearchPanel" class="search-panel">
+              <div class="section-heading"><p class="eyebrow">Semantic search</p><h2>Image search</h2><p class="muted small">Choose a local image or GIF to retrieve visually related Indexed Assets.</p></div>
+              <div class="card search-form-card"><label for="imageSearchPathInput">Local image or GIF</label><div class="search-input-row"><input id="imageSearchPathInput" placeholder="F:\Pictures\reaction.png" /><button id="pickImageSearchFileBtn" class="ghost">Browse file</button><button id="searchImageBtn">Search image</button></div></div>
+              <div id="imageSearchResults" class="result-list card-grid search-result-grid"></div>
+            </section>
+            <section id="similarSearchPanel" class="search-panel">
+              <div class="section-heading"><p class="eyebrow">Semantic search</p><h2>Find similar asset</h2><p class="muted small">Select an Asset from the library or a search result, then retrieve related Indexed Assets.</p></div>
+              <div class="card search-form-card"><label for="similarAssetIdInput">Selected asset</label><input id="similarAssetIdInput" type="hidden" /><div id="similarSelectedAsset" class="runtime-summary small muted">No asset selected yet.</div><div class="actions"><button id="similarBtn">Find similar</button></div></div>
+              <div id="similarResults" class="result-list card-grid search-result-grid"></div>
+            </section>
+          </section>
 
           <section id="duplicatesTab" class="tab-panel"><div class="section-heading"><p class="eyebrow">Review</p><h2>Duplicates</h2></div><div class="card"><div class="card-header"><div><h2>Duplicate review</h2><p class="muted small">Scan candidate duplicates with the active recipe only. GIF matches use max frame-to-frame score.</p></div><div class="actions"><input id="duplicateThresholdInput" type="number" min="0" max="1" step="0.01" value="0.92" /><button id="scanDuplicatesBtn">Scan duplicates</button></div></div><div id="duplicateResults" class="result-list duplicate-list"></div></div></section>
 
@@ -104,6 +136,12 @@
 
         </div>
       </main>
+    </div>
+    <div id="searchAssetModal" class="asset-modal" hidden>
+      <section class="asset-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="searchAssetModalTitle">
+        <header class="asset-modal-header"><div><p class="eyebrow">Search result</p><h2 id="searchAssetModalTitle">Asset detail</h2></div><button id="closeSearchAssetModalBtn" type="button" class="ghost asset-modal-close" aria-label="Close asset detail">Close</button></header>
+        <div id="searchAssetDetail" class="asset-modal-body"></div>
+      </section>
     </div>
     <script src="/app.js"></script>
   </body>

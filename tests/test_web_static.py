@@ -36,12 +36,59 @@ class AssetDetailStylesTests(unittest.TestCase):
     def test_leaving_search_tab_cancels_each_active_search_request(self) -> None:
         app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
-        self.assertIn(
-            'if (tabId !== "searchTab") {\n    cancelActiveSearches();',
-            app_script,
-        )
+        self.assertIn('previousConfig?.tabId === "searchTab"', app_script)
+        self.assertIn("cancelActiveSearches();", app_script)
+        self.assertIn("cancelSearch(previousConfig.searchMode);", app_script)
         self.assertIn('api("/api/search/cancel"', app_script)
-        self.assertIn("state.activeSearchRequestIds.clear()", app_script)
+        self.assertIn("active.controller.abort()", app_script)
+
+    def test_semantic_search_uses_addressable_sidebar_subpages(self) -> None:
+        markup = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+        app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="searchNavGroup" class="nav-group"', markup)
+        for route in ("/search", "/search/text", "/search/image", "/search/similar"):
+            with self.subTest(route=route):
+                self.assertIn(f'data-route="{route}"', markup)
+                self.assertIn(f'"{route}"', app_script)
+        self.assertIn('window.history.pushState({}, "",', app_script)
+        self.assertIn('window.addEventListener("popstate"', app_script)
+
+    def test_search_result_opens_accessible_asset_detail_modal(self) -> None:
+        markup = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+        app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="searchAssetModal"', markup)
+        self.assertIn('role="dialog" aria-modal="true"', markup)
+        self.assertIn("openSearchAssetModal(result.asset_id, item)", app_script)
+        self.assertIn('event.key === "Escape"', app_script)
+        self.assertNotIn('switchTab("libraryTab")', app_script)
+
+    def test_search_subroute_refresh_serves_the_app_shell(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = create_app(str(Path(temp_dir) / "library"))
+            try:
+                response: dict[str, str] = {}
+
+                def start_response(status, _headers):
+                    response["status"] = status
+
+                body = b"".join(
+                    app(
+                        {
+                            "REQUEST_METHOD": "GET",
+                            "PATH_INFO": "/search/text",
+                            "QUERY_STRING": "",
+                            "CONTENT_LENGTH": "0",
+                            "wsgi.input": BytesIO(b""),
+                        },
+                        start_response,
+                    )
+                )
+                self.assertTrue(response["status"].startswith("200 "))
+                self.assertIn(b'id="searchNavGroup"', body)
+            finally:
+                app.shutdown()
 
     def test_runtime_ui_consumes_one_read_only_runtime_descriptor(self) -> None:
         app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")

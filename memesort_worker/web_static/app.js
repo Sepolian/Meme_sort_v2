@@ -12,33 +12,74 @@ const state = {
   selectedAssetIds: new Set(),
   duplicatePairs: [],
   lastHealthDiagnosticSteps: [],
-  activeSearchRequestIds: new Set(),
+  activeSearches: {
+    text: null,
+    image: null,
+  },
+  currentRoute: null,
+  searchDetailAsset: null,
+  searchDetailTrigger: null,
+  hasLoadedState: false,
 };
 
 const LIBRARY_DETAIL_WIDTH_KEY = "memesort.libraryDetailWidth";
 const THEME_KEY = "memesort.theme";
 const MOBILE_STACK_BREAKPOINT = 1180;
 
-const pageCopy = {
-  libraryTab: {
+const ROUTES = {
+  "/": {
+    tabId: "libraryTab",
     title: "All assets",
     subtitle: "Local memes, GIFs, semantic retrieval, and duplicate review from the active index recipe.",
+    breadcrumb: "All assets",
   },
-  setupTab: {
+  "/setup": {
+    tabId: "setupTab",
     title: "Import & runtime",
     subtitle: "Prepare the embedding runtime, import local folders, and start the index worker.",
+    breadcrumb: "Import & runtime",
   },
-  searchTab: {
+  "/search": {
+    tabId: "searchTab",
+    searchPanelId: "searchOverviewPanel",
     title: "Semantic search",
     subtitle: "Search indexed assets with text, a local image, or an existing library asset.",
+    breadcrumb: "Semantic search / Overview",
   },
-  duplicatesTab: {
+  "/search/text": {
+    tabId: "searchTab",
+    searchPanelId: "textSearchPanel",
+    searchMode: "text",
+    title: "Text search",
+    subtitle: "Describe a reaction, scene, or phrase to retrieve matching Indexed Assets.",
+    breadcrumb: "Semantic search / Text search",
+  },
+  "/search/image": {
+    tabId: "searchTab",
+    searchPanelId: "imageSearchPanel",
+    searchMode: "image",
+    title: "Image search",
+    subtitle: "Use a local image or GIF to retrieve visually related Indexed Assets.",
+    breadcrumb: "Semantic search / Image search",
+  },
+  "/search/similar": {
+    tabId: "searchTab",
+    searchPanelId: "similarSearchPanel",
+    title: "Find similar",
+    subtitle: "Use an existing Asset to retrieve related Indexed Assets.",
+    breadcrumb: "Semantic search / Find similar",
+  },
+  "/duplicates": {
+    tabId: "duplicatesTab",
     title: "Duplicates",
     subtitle: "Compare candidate duplicate assets using the active recipe only.",
+    breadcrumb: "Duplicates",
   },
-  statusTab: {
+  "/status": {
+    tabId: "statusTab",
     title: "Queue & status",
     subtitle: "Inspect asset state, queued work, recent jobs, and worker loop events.",
+    breadcrumb: "Queue & status",
   },
 };
 
@@ -89,20 +130,70 @@ function isStackedSidebarLayout() {
   return window.matchMedia(`(max-width: ${MOBILE_STACK_BREAKPOINT}px)`).matches;
 }
 
-function switchTab(tabId) {
-  if (tabId !== "searchTab") {
+function normalizeRoute(pathname) {
+  const normalized = pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
+  return ROUTES[normalized] ? normalized : "/";
+}
+
+function routeFromLocation() {
+  return normalizeRoute(window.location.pathname || "/");
+}
+
+function renderRoute(pathname) {
+  const route = normalizeRoute(pathname);
+  const config = ROUTES[route];
+  const previousConfig = state.currentRoute ? ROUTES[state.currentRoute] : null;
+  if (previousConfig?.tabId === "searchTab" && config.tabId !== "searchTab") {
     cancelActiveSearches();
+  } else if (previousConfig?.searchMode && previousConfig.searchMode !== config.searchMode) {
+    cancelSearch(previousConfig.searchMode);
   }
+  if (state.currentRoute && state.currentRoute !== route) {
+    closeSearchAssetModal();
+  }
+  state.currentRoute = route;
+
   document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.classList.toggle("active", panel.id === tabId);
+    panel.classList.toggle("active", panel.id === config.tabId);
   });
-  document.querySelectorAll(".tab-link").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tabId);
+  document.querySelectorAll(".tab-link[data-tab]").forEach((link) => {
+    const isActive = link.dataset.tab === config.tabId;
+    link.classList.toggle("active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", config.tabId === "searchTab" ? "location" : "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
   });
-  const copy = pageCopy[tabId] || pageCopy.libraryTab;
-  setText("pageTitle", copy.title);
-  setText("pageSubtitle", copy.subtitle);
-  setText("breadcrumbLabel", copy.title);
+  document.querySelectorAll(".search-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === config.searchPanelId);
+  });
+  document.querySelectorAll(".nav-sub-link").forEach((link) => {
+    const isActive = normalizeRoute(new URL(link.href, window.location.origin).pathname) === route;
+    link.classList.toggle("active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+  byId("searchNavGroup")?.classList.toggle("expanded", config.tabId === "searchTab");
+  setText("pageTitle", config.title);
+  setText("pageSubtitle", config.subtitle);
+  setText("breadcrumbLabel", config.breadcrumb);
+
+  if (state.hasLoadedState && route === "/search/similar") {
+    const assetId = new URLSearchParams(window.location.search).get("asset");
+    if (assetId && state.selectedAsset?.asset_id !== assetId) {
+      loadAssetDetail(assetId).catch((error) => showError("similarResults", error));
+    }
+  }
+}
+
+function navigate(route) {
+  const target = new URL(route, window.location.origin);
+  window.history.pushState({}, "", `${target.pathname}${target.search}`);
+  renderRoute(target.pathname);
 }
 
 function applyTheme(theme) {
@@ -161,17 +252,46 @@ function renderProfileSummary() {
   `;
 }
 
-async function cancelActiveSearches() {
-  const requestIds = [...state.activeSearchRequestIds];
-  state.activeSearchRequestIds.clear();
-  await Promise.allSettled(
-    requestIds.map((requestId) =>
-      api("/api/search/cancel", {
-        method: "POST",
-        body: JSON.stringify({ request_id: requestId }),
-      })
-    )
-  );
+function cancelSearch(mode) {
+  const active = state.activeSearches[mode];
+  if (!active) {
+    return;
+  }
+  state.activeSearches[mode] = null;
+  active.controller.abort();
+  api("/api/search/cancel", {
+    method: "POST",
+    body: JSON.stringify({ request_id: active.requestId }),
+  }).catch(() => {});
+}
+
+function cancelActiveSearches() {
+  cancelSearch("text");
+  cancelSearch("image");
+}
+
+function beginSearch(mode) {
+  cancelSearch(mode);
+  const active = {
+    requestId: crypto.randomUUID(),
+    controller: new AbortController(),
+  };
+  state.activeSearches[mode] = active;
+  return active;
+}
+
+function finishSearch(mode, active) {
+  if (state.activeSearches[mode] === active) {
+    state.activeSearches[mode] = null;
+  }
+}
+
+function isCurrentSearch(mode, active) {
+  return state.activeSearches[mode] === active;
+}
+
+function isAbortError(error) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function renderModelVariantSummary() {
@@ -528,17 +648,7 @@ function renderWorkbenchOverview() {
   queueAction.textContent = paused ? "Resume queue" : "Pause queue";
 }
 
-function renderAssetDetail() {
-  const container = byId("assetDetail");
-  if (!state.selectedAsset) {
-    container.className = "detail-empty";
-    container.textContent = "Select an asset from the library grid.";
-    renderLibrarySelectionLayout();
-    return;
-  }
-
-  const asset = state.selectedAsset;
-  container.className = "";
+function renderAssetDetailContent(container, asset, { allowMutations = true, errorTargetId = container.id } = {}) {
   const title = selectedAssetDisplayName(asset);
   const indexedRecipeRows = (asset.indexed_recipe_labels || [])
     .map((label) => `<span class="chip">${escapeHtml(label)}</span>`)
@@ -595,7 +705,7 @@ function renderAssetDetail() {
           </div>
           <div class="inline-button-stack">
             <button type="button" class="ghost inline-action reveal-source-btn" data-asset-id="${escapeHtml(asset.asset_id)}" data-source-path="${escapeHtml(record.source_path)}">Reveal Source</button>
-            <button type="button" class="ghost inline-action remove-source-btn" data-asset-id="${escapeHtml(asset.asset_id)}" data-source-path="${escapeHtml(record.source_path)}">Remove Source</button>
+            ${allowMutations ? `<button type="button" class="ghost inline-action remove-source-btn" data-asset-id="${escapeHtml(asset.asset_id)}" data-source-path="${escapeHtml(record.source_path)}">Remove Source</button>` : ""}
           </div>
         </article>
       `
@@ -646,7 +756,7 @@ function renderAssetDetail() {
         </div>
         <div class="actions asset-detail-actions">
           <button type="button" class="ghost reveal-managed-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Reveal Managed File</button>
-          <button type="button" class="ghost delete-asset-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Delete Asset</button>
+          ${allowMutations ? `<button type="button" class="ghost delete-asset-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Delete Asset</button>` : ""}
         </div>
       </section>
 
@@ -713,7 +823,7 @@ function renderAssetDetail() {
       try {
         await removeSourceRecord(button.dataset.assetId, button.dataset.sourcePath);
       } catch (error) {
-        showError("assetDetail", error);
+        showError(errorTargetId, error);
       }
     });
   });
@@ -722,7 +832,7 @@ function renderAssetDetail() {
       try {
         await revealAssetFile(button.dataset.assetId, "source", button.dataset.sourcePath);
       } catch (error) {
-        showError("assetDetail", error);
+        showError(errorTargetId, error);
       }
     });
   });
@@ -731,7 +841,7 @@ function renderAssetDetail() {
       try {
         await revealAssetFile(button.dataset.assetId, "managed");
       } catch (error) {
-        showError("assetDetail", error);
+        showError(errorTargetId, error);
       }
     });
   });
@@ -740,11 +850,108 @@ function renderAssetDetail() {
       try {
         await deleteAsset(button.dataset.assetId);
       } catch (error) {
-        showError("assetDetail", error);
+        showError(errorTargetId, error);
       }
     });
   });
+}
+
+function renderAssetDetail() {
+  const container = byId("assetDetail");
+  if (!state.selectedAsset) {
+    container.className = "detail-empty";
+    container.textContent = "Select an asset from the library grid.";
+    renderLibrarySelectionLayout();
+    return;
+  }
+  container.className = "";
+  renderAssetDetailContent(container, state.selectedAsset);
   renderLibrarySelectionLayout();
+}
+
+function renderSearchAssetDetail() {
+  const container = byId("searchAssetDetail");
+  if (!state.searchDetailAsset) {
+    container.className = "asset-modal-body detail-empty";
+    container.textContent = "Asset detail is unavailable.";
+    return;
+  }
+  container.className = "asset-modal-body";
+  renderAssetDetailContent(container, state.searchDetailAsset, {
+    allowMutations: false,
+    errorTargetId: "searchAssetDetail",
+  });
+}
+
+async function openSearchAssetModal(assetId, trigger) {
+  const modal = byId("searchAssetModal");
+  state.searchDetailAsset = null;
+  state.searchDetailTrigger = trigger || document.activeElement;
+  modal.dataset.assetId = assetId;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  byId("searchAssetDetail").innerHTML = `<div class="asset-modal-loading">Loading Asset detail…</div>`;
+  byId("closeSearchAssetModalBtn").focus();
+  try {
+    const result = await api(`/api/asset-detail?asset_id=${encodeURIComponent(assetId)}`);
+    if (modal.hidden || modal.dataset.assetId !== assetId) {
+      return;
+    }
+    state.searchDetailAsset = result.asset;
+    state.selectedAsset = result.asset;
+    updateSimilarSelection(result.asset);
+    renderAssets();
+    renderAssetDetail();
+    renderSearchAssetDetail();
+  } catch (error) {
+    if (!modal.hidden && modal.dataset.assetId === assetId) {
+      showError("searchAssetDetail", error);
+    }
+  }
+}
+
+function closeSearchAssetModal() {
+  const modal = byId("searchAssetModal");
+  if (!modal || modal.hidden) {
+    return;
+  }
+  modal.hidden = true;
+  delete modal.dataset.assetId;
+  document.body.classList.remove("modal-open");
+  state.searchDetailAsset = null;
+  const trigger = state.searchDetailTrigger;
+  state.searchDetailTrigger = null;
+  if (trigger?.isConnected) {
+    trigger.focus();
+  }
+}
+
+function handleSearchModalKeydown(event) {
+  const modal = byId("searchAssetModal");
+  if (!modal || modal.hidden) {
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSearchAssetModal();
+    return;
+  }
+  if (event.key !== "Tab") {
+    return;
+  }
+  const focusable = [...modal.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  if (!focusable.length) {
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function renderResults(targetId, results, emptyText) {
@@ -759,6 +966,8 @@ function renderResults(targetId, results, emptyText) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "asset-card result-card";
+    item.setAttribute("aria-haspopup", "dialog");
+    item.setAttribute("aria-controls", "searchAssetModal");
     const preview = result.thumbnail_url || result.library_url || "";
     const title = assetDisplayName(result, index);
     const sourceLabel = (result.match_sources || [])
@@ -773,10 +982,7 @@ function renderResults(targetId, results, emptyText) {
         ${snippet}
       </div>
     `;
-    item.addEventListener("click", async () => {
-      await loadAssetDetail(result.asset_id);
-      switchTab("libraryTab");
-    });
+    item.addEventListener("click", () => openSearchAssetModal(result.asset_id, item));
     container.appendChild(item);
   });
 }
@@ -825,7 +1031,7 @@ function renderDuplicateAssetCard(asset, score, index) {
   `;
   button.addEventListener("click", async () => {
     await loadAssetDetail(asset.asset_id);
-    switchTab("libraryTab");
+    navigate("/");
   });
   return button;
 }
@@ -1027,6 +1233,13 @@ async function loadState() {
   renderWorkbenchOverview();
   renderImportTask();
   updateImportPolling();
+  state.hasLoadedState = true;
+  if (state.currentRoute === "/search/similar") {
+    const assetId = new URLSearchParams(window.location.search).get("asset");
+    if (assetId && state.selectedAsset?.asset_id !== assetId) {
+      await loadAssetDetail(assetId);
+    }
+  }
 }
 
 async function loadAssetDetail(assetId) {
@@ -1222,35 +1435,39 @@ async function runJobs() {
 
 async function runSearch() {
   const query = byId("searchInput").value.trim();
-  const requestId = crypto.randomUUID();
-  state.activeSearchRequestIds.add(requestId);
+  const active = beginSearch("text");
   renderSkeletonCards("searchResults", 4);
   try {
     const result = await api(
-      `/api/search?query=${encodeURIComponent(query)}&top_k=18&request_id=${encodeURIComponent(requestId)}`
+      `/api/search?query=${encodeURIComponent(query)}&top_k=18&request_id=${encodeURIComponent(active.requestId)}`,
+      { signal: active.controller.signal }
     );
-    renderResults("searchResults", result.results || [], "No matches yet.");
+    if (isCurrentSearch("text", active)) {
+      renderResults("searchResults", result.results || [], "No matches yet.");
+    }
   } finally {
-    state.activeSearchRequestIds.delete(requestId);
+    finishSearch("text", active);
   }
 }
 
 async function runImageSearch() {
-  const requestId = crypto.randomUUID();
-  state.activeSearchRequestIds.add(requestId);
+  const active = beginSearch("image");
   renderSkeletonCards("imageSearchResults", 4);
   try {
     const result = await api("/api/search-image", {
       method: "POST",
+      signal: active.controller.signal,
       body: JSON.stringify({
         path: byId("imageSearchPathInput").value.trim(),
         top_k: 18,
-        request_id: requestId,
+        request_id: active.requestId,
       }),
     });
-    renderResults("imageSearchResults", result.results || [], "No image matches found.");
+    if (isCurrentSearch("image", active)) {
+      renderResults("imageSearchResults", result.results || [], "No image matches found.");
+    }
   } finally {
-    state.activeSearchRequestIds.delete(requestId);
+    finishSearch("image", active);
   }
 }
 
@@ -1453,6 +1670,13 @@ function wireEvents() {
   byId("closeAssetDetailBtn").addEventListener("click", () => {
     clearSelectedAsset();
   });
+  byId("closeSearchAssetModalBtn").addEventListener("click", closeSearchAssetModal);
+  byId("searchAssetModal").addEventListener("click", (event) => {
+    if (event.target === byId("searchAssetModal")) {
+      closeSearchAssetModal();
+    }
+  });
+  document.addEventListener("keydown", handleSearchModalKeydown);
   byId("healthCheckBtn").addEventListener("click", async () => {
     try {
       await runHealthCheck();
@@ -1506,7 +1730,14 @@ function wireEvents() {
     try {
       await runSearch();
     } catch (error) {
-      showError("searchResults", error);
+      if (!isAbortError(error)) {
+        showError("searchResults", error);
+      }
+    }
+  });
+  byId("searchInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      byId("searchBtn").click();
     }
   });
   byId("pickImageSearchFileBtn").addEventListener("click", async () => {
@@ -1520,7 +1751,9 @@ function wireEvents() {
     try {
       await runImageSearch();
     } catch (error) {
-      showError("imageSearchResults", error);
+      if (!isAbortError(error)) {
+        showError("imageSearchResults", error);
+      }
     }
   });
   byId("similarBtn").addEventListener("click", async () => {
@@ -1615,14 +1848,22 @@ function wireEvents() {
       showError("assetGrid", error);
     }
   });
-  document.querySelectorAll(".tab-link").forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
+  document.querySelectorAll("[data-route]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      navigate(link.getAttribute("href"));
+    });
   });
+  window.addEventListener("popstate", () => renderRoute(routeFromLocation()));
 }
 
 initializeTheme();
 initResizablePanels();
 wireEvents();
+renderRoute(routeFromLocation());
 loadState().catch((error) => {
   document.body.innerHTML = `<pre class="console">${escapeHtml(String(error))}</pre>`;
 });
