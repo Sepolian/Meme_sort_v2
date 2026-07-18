@@ -64,6 +64,15 @@ class AssetDetailStylesTests(unittest.TestCase):
         self.assertIn('event.key === "Escape"', app_script)
         self.assertNotIn('switchTab("libraryTab")', app_script)
 
+    def test_asset_detail_can_navigate_to_find_similar(self) -> None:
+        app_script = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('class="find-similar-btn"', app_script)
+        self.assertIn(
+            "navigate(`/search/similar?asset=${encodeURIComponent(button.dataset.assetId)}`)",
+            app_script,
+        )
+
     def test_search_subroute_refresh_serves_the_app_shell(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             app = create_app(str(Path(temp_dir) / "library"))

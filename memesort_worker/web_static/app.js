@@ -755,6 +755,7 @@ function renderAssetDetailContent(container, asset, { allowMutations = true, err
           </div>
         </div>
         <div class="actions asset-detail-actions">
+          <button type="button" class="find-similar-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Find similar</button>
           <button type="button" class="ghost reveal-managed-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Reveal Managed File</button>
           ${allowMutations ? `<button type="button" class="ghost delete-asset-btn" data-asset-id="${escapeHtml(asset.asset_id)}">Delete Asset</button>` : ""}
         </div>
@@ -818,6 +819,12 @@ function renderAssetDetailContent(container, asset, { allowMutations = true, err
     </div>
   `;
 
+  container.querySelectorAll(".find-similar-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      closeSearchAssetModal();
+      navigate(`/search/similar?asset=${encodeURIComponent(button.dataset.assetId)}`);
+    });
+  });
   container.querySelectorAll(".remove-source-btn").forEach((button) => {
     button.addEventListener("click", async () => {
       try {
