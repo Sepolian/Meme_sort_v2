@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import library_internal as library
+from . import library
 from . import job_queue
 from . import ocr_artifacts
 from .embedding_backend import EmbeddingBackend, EmbeddingBackendError

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from . import library_internal as library
+from . import library
 from .library_store import LibraryStore
 from .inference_service import search_inference_request
 from .retrieval_composition import compose_text_search_results

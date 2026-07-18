@@ -9,7 +9,7 @@ from typing import Iterator
 
 import numpy as np
 
-from . import library_internal as library
+from . import library
 from . import job_queue
 from . import ocr_artifacts
 from .semantic_retrieval import AssetEmbedding, blob_to_vector

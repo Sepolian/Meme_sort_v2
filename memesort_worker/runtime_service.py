@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 from .asset_browse import list_asset_summaries
-from . import library_internal as library
+from . import library
 from .library_store import LibraryStore
 from .runtime_admission import (
     crosscheck_llama_vulkan0,
