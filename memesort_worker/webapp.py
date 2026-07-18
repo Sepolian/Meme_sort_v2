@@ -29,7 +29,6 @@ from .library import (
     get_asset_detail,
     import_folder,
     initialize_library,
-    is_runtime_ready_for_indexing,
     list_assets,
     remove_source_record,
     retry_failed_jobs,
@@ -39,7 +38,9 @@ from .library import (
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
 from .retrieval_service import find_similar_assets
 from .runtime_service import (
+    authorize_runtime_for_session,
     get_setup_state,
+    is_runtime_ready_for_indexing,
     run_runtime_health_check,
 )
 
@@ -50,23 +51,6 @@ STATIC_DIR = Path(__file__).with_name("web_static")
 class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     allow_reuse_address = True
     daemon_threads = True
-
-
-def authorize_vulkan_for_web_session(library_root: Path) -> None:
-    """Run the required same-process Vulkan smoke test before serving work.
-
-    The health result is deliberately process-local: it authorizes the worker
-    loop in this application session, rather than trusting a result persisted
-    by an earlier run.  Starting the web application is therefore the one
-    place that establishes authorization for both normal UI use and the
-    desktop launcher's immediate import-and-index action.
-    """
-    result = run_runtime_health_check(library_root=library_root)
-    if not result.smoke_test_ok:
-        raise RuntimeError(
-            result.error
-            or "Vulkan runtime health check failed; the local UI was not started."
-        )
 
 
 def _serve_library_file(library_root: Path, media_path: str) -> tuple[str, list[tuple[str, str]], bytes]:
@@ -429,7 +413,7 @@ def run_web_app(
 ) -> None:
     app = create_app(library_root)
     try:
-        authorize_vulkan_for_web_session(Path(library_root).expanduser().resolve())
+        authorize_runtime_for_session(Path(library_root).expanduser().resolve())
         with make_server(host, port, app, server_class=ThreadedWSGIServer) as server:
             socket_host, socket_port = server.socket.getsockname()[:2]
             payload = {

@@ -10,8 +10,9 @@ from PIL import Image
 from . import library
 from . import job_queue
 from . import ocr_artifacts
-from .embedding_backend import EmbeddingBackend, EmbeddingBackendError
+from .embedding_backend import EmbeddingBackend, EmbeddingBackendError, get_embedding_backend
 from .ocr_backend import OcrBackend, get_ocr_backend
+from .runtime_service import is_runtime_ready_for_indexing
 from .semantic_retrieval import vector_to_blob
 
 
@@ -19,7 +20,7 @@ def run_pending_jobs(
     library_root: Path | str,
     max_jobs: int | None = None,
 ) -> library.RunJobsResult:
-    runtime_ready, runtime_message = library.is_runtime_ready_for_indexing(
+    runtime_ready, runtime_message = is_runtime_ready_for_indexing(
         library_root
     )
     if not runtime_ready:
@@ -57,7 +58,7 @@ def run_pending_jobs(
                     _run_generate_thumbnail_job(conn, library_root_path, job.payload)
                 elif job.job_type is job_queue.JobType.EMBED_ASSET:
                     if backend is None:
-                        backend = library.get_embedding_backend()
+                        backend = get_embedding_backend()
                     _run_embed_asset_job(conn, library_root_path, job.payload, backend)
                 elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:

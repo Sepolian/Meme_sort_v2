@@ -14,10 +14,7 @@ from typing import Callable
 import numpy as np
 from PIL import Image, ImageOps
 
-from .embedding_backend import (
-    EmbeddingBackend,
-    get_embedding_backend,
-)
+from .embedding_backend import EmbeddingBackend
 from . import ocr_artifacts
 from . import job_queue
 from .semantic_retrieval import scan_duplicate_vector_rows
@@ -307,30 +304,6 @@ def _utc_now() -> str:
 
 def _resolve(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
-
-
-def is_runtime_ready_for_indexing(library_root: Path | str) -> tuple[bool, str]:
-    initialize_library(library_root)
-    if not _RUNTIME_MANIFEST.llama_server_path.is_file():
-        return False, "Pinned llama-server is not installed. Run setup."
-    if not _RUNTIME_MANIFEST.main_model_path.is_file():
-        return False, "Pinned main GGUF is not installed. Run setup."
-    if not _RUNTIME_MANIFEST.projector_path.is_file():
-        return False, "Pinned multimodal projector is not installed. Run setup."
-    from .runtime_service import get_current_health_check
-
-    current_health = get_current_health_check(library_root)
-    if current_health is None:
-        return False, "Vulkan runtime health has not been checked in this app session."
-    if not runtime_health_matches_manifest(current_health):
-        return False, "This session's runtime health check is stale for the active manifest."
-    if not current_health.smoke_test_ok:
-        return False, current_health.error or "Vulkan runtime health check failed."
-    return True, "Runtime is ready for indexing."
-
-
-def runtime_health_matches_manifest(health_check: RuntimeHealthResult) -> bool:
-    return health_check.runtime_fingerprint == _RUNTIME_MANIFEST.runtime_fingerprint
 
 
 def _database_path(library_root: Path) -> Path:
@@ -1624,12 +1597,6 @@ def get_library_status(library_root: Path | str) -> LibraryStatusResult:
         )
     finally:
         conn.close()
-
-
-def get_setup_state(library_root: Path | str) -> SetupStateResult:
-    from .runtime_service import get_setup_state as _get_setup_state
-
-    return _get_setup_state(library_root)
 
 
 def _project_asset_status(

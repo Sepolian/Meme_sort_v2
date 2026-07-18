@@ -17,7 +17,6 @@ from memesort_worker.embedding_backend import (
 from memesort_worker import library as library_module
 from memesort_worker.library import (
     RuntimeHealthResult,
-    is_runtime_ready_for_indexing,
 )
 from memesort_worker.llama_cpp_backend import (
     LlamaCppBackendError,
@@ -35,6 +34,7 @@ from memesort_worker.runtime_service import (
     _clear_current_health_checks,
     _save_last_health_check,
     get_last_health_check,
+    is_runtime_ready_for_indexing,
 )
 
 
@@ -322,7 +322,7 @@ class LlamaCppBackendTests(unittest.TestCase):
                             with patch(
                                 "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
                             ):
-                                with patch("memesort_worker.library.get_embedding_backend") as factory:
+                                with patch("memesort_worker.runtime_service.get_embedding_backend") as factory:
                                     backend = factory.return_value
                                     backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
                                     backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)

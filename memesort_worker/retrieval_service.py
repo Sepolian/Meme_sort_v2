@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 from . import library
+from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
 from .inference_service import search_inference_request
 from .retrieval_composition import compose_text_search_results
@@ -26,7 +27,7 @@ def search_text(
         if not embeddings:
             visual_results: list[dict[str, object]] = []
         else:
-            backend = library.get_embedding_backend()
+            backend = get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 query_vector = backend.embed_text(
                     query,
@@ -72,7 +73,7 @@ def search_image_path(
         if not embeddings:
             results: list[dict[str, object]] = []
         else:
-            backend = library.get_embedding_backend()
+            backend = get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 image_bytes = query_path.read_bytes()
                 if suffix == ".gif":

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .asset_browse import list_asset_summaries
 from . import library
+from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
 from .runtime_admission import (
     crosscheck_llama_vulkan0,
@@ -22,6 +23,10 @@ _HEALTH_CHECK_PNG = base64.b64decode(
 )
 _SESSION_HEALTH_LOCK = threading.Lock()
 _SESSION_HEALTH: dict[str, library.RuntimeHealthResult] = {}
+
+
+class RuntimeAuthorizationError(RuntimeError):
+    """The Pinned Runtime did not authorize work in this application session."""
 
 
 def _library_key(library_root: Path | str) -> str:
@@ -43,6 +48,34 @@ def get_current_health_check(
 ) -> library.RuntimeHealthResult | None:
     with _SESSION_HEALTH_LOCK:
         return _SESSION_HEALTH.get(_library_key(library_root))
+
+
+def runtime_health_matches_manifest(
+    health_check: library.RuntimeHealthResult,
+) -> bool:
+    return health_check.runtime_fingerprint == load_runtime_manifest().runtime_fingerprint
+
+
+def is_runtime_ready_for_indexing(
+    library_root: Path | str,
+) -> tuple[bool, str]:
+    library.initialize_library(library_root)
+    manifest = load_runtime_manifest()
+    if not manifest.llama_server_path.is_file():
+        return False, "Pinned llama-server is not installed. Run setup."
+    if not manifest.main_model_path.is_file():
+        return False, "Pinned main GGUF is not installed. Run setup."
+    if not manifest.projector_path.is_file():
+        return False, "Pinned multimodal projector is not installed. Run setup."
+
+    current_health = get_current_health_check(library_root)
+    if current_health is None:
+        return False, "Vulkan runtime health has not been checked in this app session."
+    if not runtime_health_matches_manifest(current_health):
+        return False, "This session's runtime health check is stale for the active manifest."
+    if not current_health.smoke_test_ok:
+        return False, current_health.error or "Vulkan runtime health check failed."
+    return True, "Runtime is ready for indexing."
 
 
 def _clear_current_health_checks() -> None:
@@ -103,6 +136,18 @@ def run_runtime_health_check(
         library_root=library_root,
         diagnostic_steps=diagnostic_steps,
     )
+
+
+def authorize_runtime_for_session(
+    library_root: Path | str,
+) -> library.RuntimeHealthResult:
+    result = run_runtime_health_check(library_root=library_root)
+    if not result.smoke_test_ok:
+        raise RuntimeAuthorizationError(
+            result.error
+            or "Vulkan runtime health check failed; work was not authorized."
+        )
+    return result
 
 
 def _run_llama_cpp_runtime_health_check(
@@ -196,7 +241,7 @@ def _run_llama_cpp_runtime_health_check(
             }
         )
         failure_step = "text-embedding-smoke"
-        backend = library.get_embedding_backend()
+        backend = get_embedding_backend()
         vector = backend.embed_text(
             "confused reaction image",
             output_dimension=manifest.model.output_dimension,
@@ -274,7 +319,7 @@ def get_setup_state(
         assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
     current_health_check = get_current_health_check(library_root)
-    runtime_ready, runtime_ready_detail = library.is_runtime_ready_for_indexing(library_root)
+    runtime_ready, runtime_ready_detail = is_runtime_ready_for_indexing(library_root)
 
     assets_present = bool(assets_result.assets)
     indexed_assets_present = any(asset["status"] == "indexed" for asset in assets_result.assets)
@@ -287,7 +332,7 @@ def get_setup_state(
     health_check_has_run = current_health_check is not None
     health_check_ok = (
         bool(current_health_check.smoke_test_ok)
-        and library.runtime_health_matches_manifest(current_health_check)
+        and runtime_health_matches_manifest(current_health_check)
         if current_health_check is not None
         else False
     )

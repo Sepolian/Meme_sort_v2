@@ -38,12 +38,12 @@ from memesort_worker.library import (
     search_text,
 )
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
+from memesort_worker.runtime_service import authorize_runtime_for_session
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.inference_service import INFERENCE_SCHEDULER
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.webapp import (
     ThreadedWSGIServer,
-    authorize_vulkan_for_web_session,
     create_app,
 )
 
@@ -146,9 +146,9 @@ class LibraryTests(unittest.TestCase):
     ) -> StubEmbeddingBackend:
         backend = StubEmbeddingBackend()
         with patch(
-            "memesort_worker.library.get_embedding_backend", return_value=backend
+            "memesort_worker.indexing_pipeline.get_embedding_backend", return_value=backend
         ), patch(
-            "memesort_worker.library.is_runtime_ready_for_indexing",
+            "memesort_worker.indexing_pipeline.is_runtime_ready_for_indexing",
             return_value=(True, "test health passed"),
         ), patch(
             "memesort_worker.indexing_pipeline.get_ocr_backend",
@@ -299,7 +299,7 @@ class LibraryTests(unittest.TestCase):
             library_root, _ = self._import_one_image(Path(temp_dir))
             backend = self._run_all_jobs_with_stubs(library_root)
             with patch(
-                "memesort_worker.library.get_embedding_backend", return_value=backend
+                "memesort_worker.retrieval_service.get_embedding_backend", return_value=backend
             ):
                 result = search_text(library_root, query="reaction", top_k=5)
 
@@ -310,7 +310,7 @@ class LibraryTests(unittest.TestCase):
     def test_search_without_embeddings_does_not_start_inference(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
-            with patch("memesort_worker.library.get_embedding_backend") as backend_factory:
+            with patch("memesort_worker.retrieval_service.get_embedding_backend") as backend_factory:
                 result = search_text(library_root, query="reaction", top_k=5)
 
         self.assertEqual([], result.results)
@@ -320,7 +320,7 @@ class LibraryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
             with patch(
-                "memesort_worker.library.is_runtime_ready_for_indexing",
+                "memesort_worker.indexing_pipeline.is_runtime_ready_for_indexing",
                 return_value=(False, "Vulkan runtime health has not been checked in this app session."),
             ):
                 with self.assertRaisesRegex(RuntimeError, "not authorized"):
@@ -466,12 +466,10 @@ class LibraryTests(unittest.TestCase):
             output = io.StringIO()
             try:
                 with patch(
-                    "memesort_worker.cli.run_runtime_health_check"
-                ) as health_check, patch(
+                    "memesort_worker.cli.authorize_runtime_for_session"
+                ) as authorize_runtime, patch(
                     "memesort_worker.cli.run_jobs"
                 ) as run_jobs, redirect_stdout(output):
-                    health_check.return_value.smoke_test_ok = True
-                    health_check.return_value.error = None
                     run_jobs.return_value.to_dict.return_value = {"processed_jobs": 0}
 
                     exit_code = run(["run-jobs", "--library-root", str(library_root)])
@@ -480,7 +478,7 @@ class LibraryTests(unittest.TestCase):
                 output.close()
 
         self.assertEqual(0, exit_code)
-        health_check.assert_called_once_with(str(library_root))
+        authorize_runtime.assert_called_once_with(str(library_root))
         run_jobs.assert_called_once_with(str(library_root), max_jobs=None)
         self.assertEqual({"processed_jobs": 0}, json.loads(output_value))
 
@@ -502,20 +500,20 @@ class LibraryTests(unittest.TestCase):
     def test_web_startup_runs_current_session_vulkan_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            with patch("memesort_worker.webapp.run_runtime_health_check") as health_check:
+            with patch("memesort_worker.runtime_service.run_runtime_health_check") as health_check:
                 health_check.return_value.smoke_test_ok = True
-                authorize_vulkan_for_web_session(library_root)
+                authorize_runtime_for_session(library_root)
 
         health_check.assert_called_once_with(library_root=library_root)
 
     def test_web_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            with patch("memesort_worker.webapp.run_runtime_health_check") as health_check:
+            with patch("memesort_worker.runtime_service.run_runtime_health_check") as health_check:
                 health_check.return_value.smoke_test_ok = False
                 health_check.return_value.error = "Vulkan0 is unavailable."
                 with self.assertRaisesRegex(RuntimeError, "Vulkan0 is unavailable"):
-                    authorize_vulkan_for_web_session(library_root)
+                    authorize_runtime_for_session(library_root)
 
     def test_web_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -594,7 +592,7 @@ class LibraryTests(unittest.TestCase):
 
             try:
                 with patch(
-                    "memesort_worker.library.get_embedding_backend", return_value=backend
+                    "memesort_worker.retrieval_service.get_embedding_backend", return_value=backend
                 ):
                     first = threading.Thread(target=search, args=(first_id, "first"))
                     cancelled = threading.Thread(

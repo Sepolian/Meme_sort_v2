@@ -4,12 +4,10 @@ from pathlib import Path
 from typing import Protocol
 
 from .indexing_pipeline import run_pending_jobs as _run_indexing_jobs
-from .library import (
-    import_folder,
-    is_runtime_ready_for_indexing,
-)
+from .library import import_folder
 from .retrieval_service import search_image_path as _search_image_path
 from .retrieval_service import search_text as _search_text
+from .runtime_service import is_runtime_ready_for_indexing
 
 
 class WorkerLoop(Protocol):
