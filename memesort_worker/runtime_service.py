@@ -265,9 +265,13 @@ def _run_llama_cpp_runtime_health_check(
     return result
 
 
-def get_setup_state(library_root: Path | str) -> library.SetupStateResult:
+def get_setup_state(
+    library_root: Path | str,
+    assets_result: library.AssetListResult | None = None,
+) -> library.SetupStateResult:
     manifest = load_runtime_manifest()
-    assets_result = list_asset_summaries(library_root)
+    if assets_result is None:
+        assets_result = list_asset_summaries(library_root)
     last_health_check = get_last_health_check(library_root)
     current_health_check = get_current_health_check(library_root)
     runtime_ready, runtime_ready_detail = library.is_runtime_ready_for_indexing(library_root)

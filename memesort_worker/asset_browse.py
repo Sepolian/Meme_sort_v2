@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import job_queue
 from . import library_internal as library
+
+
+@dataclass(frozen=True)
+class LibraryReadSnapshot:
+    asset_summary: library.AssetListResult
+    library_status: library.LibraryStatusResult
+    pending_jobs: list[dict[str, object]]
 
 
 def project_asset_status(active_recipe_id: str, embeddings: list[sqlite3.Row], jobs: list[sqlite3.Row]) -> str:
@@ -31,23 +39,35 @@ def list_asset_summaries(library_root: Path | str) -> library.AssetListResult:
         conn.close()
 
 
+def read_library_snapshot(
+    library_root: Path | str,
+    pending_job_limit: int = 200,
+) -> LibraryReadSnapshot:
+    """Read the App State's Library projections from one SQLite snapshot."""
+    init_result = library.initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = library._connect(library._database_path(library_root_path))
+    try:
+        conn.execute("BEGIN")
+        asset_summary = _list_asset_summaries(conn, library_root_path)
+        return LibraryReadSnapshot(
+            asset_summary=asset_summary,
+            library_status=_get_library_status(conn, library_root_path, asset_summary),
+            pending_jobs=_list_pending_jobs(conn, pending_job_limit),
+        )
+    finally:
+        if conn.in_transaction:
+            conn.rollback()
+        conn.close()
+
+
 def get_library_status(library_root: Path | str) -> library.LibraryStatusResult:
     init_result = library.initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
     conn = library._connect(library._database_path(library_root_path))
     try:
         summaries = _list_asset_summaries(conn, library_root_path)
-        asset_counts: dict[str, int] = {}
-        for asset in summaries.assets:
-            status = str(asset["status"])
-            asset_counts[status] = asset_counts.get(status, 0) + 1
-        job_rows = job_queue.collect_status_job_rows(conn)
-        return library.LibraryStatusResult(
-            library_root=str(library_root_path), active_recipe_id=summaries.active_recipe_id,
-            active_recipe_label=summaries.active_recipe_label, asset_counts=asset_counts,
-            job_counts=job_queue.count_jobs_by_status(job_rows), total_assets=len(summaries.assets),
-            total_jobs=len(job_rows), recent_jobs=job_queue.project_recent_jobs(job_rows),
-        )
+        return _get_library_status(conn, library_root_path, summaries)
     finally:
         conn.close()
 
@@ -58,33 +78,62 @@ def list_pending_jobs(library_root: Path | str, limit: int = 200) -> list[dict[s
     library_root_path = Path(init_result.library_root)
     conn = library._connect(library._database_path(library_root_path))
     try:
-        rows = conn.execute(
-            """
-            SELECT job.id, job.type, job.asset_id, job.recipe_id, job.attempt_count,
-                   job.created_at, job.updated_at, asset.library_path
-            FROM job
-            LEFT JOIN asset ON asset.id = job.asset_id
-            WHERE job.status = 'pending'
-            ORDER BY job.created_at ASC, job.id ASC
-            LIMIT ?
-            """,
-            (max(1, min(limit, 1000)),),
-        ).fetchall()
-        return [
-            {
-                "job_id": str(row["id"]),
-                "type": str(row["type"]),
-                "asset_id": str(row["asset_id"]) if row["asset_id"] else None,
-                "asset_path": str(row["library_path"]) if row["library_path"] else None,
-                "recipe_id": str(row["recipe_id"]) if row["recipe_id"] else None,
-                "attempt_count": int(row["attempt_count"]),
-                "created_at": str(row["created_at"]),
-                "updated_at": str(row["updated_at"]),
-            }
-            for row in rows
-        ]
+        return _list_pending_jobs(conn, limit)
     finally:
         conn.close()
+
+
+def _get_library_status(
+    conn: sqlite3.Connection,
+    library_root_path: Path,
+    summaries: library.AssetListResult,
+) -> library.LibraryStatusResult:
+    asset_counts: dict[str, int] = {}
+    for asset in summaries.assets:
+        status = str(asset["status"])
+        asset_counts[status] = asset_counts.get(status, 0) + 1
+    job_rows = job_queue.collect_status_job_rows(conn)
+    return library.LibraryStatusResult(
+        library_root=str(library_root_path),
+        active_recipe_id=summaries.active_recipe_id,
+        active_recipe_label=summaries.active_recipe_label,
+        asset_counts=asset_counts,
+        job_counts=job_queue.count_jobs_by_status(job_rows),
+        total_assets=len(summaries.assets),
+        total_jobs=len(job_rows),
+        recent_jobs=job_queue.project_recent_jobs(job_rows),
+    )
+
+
+def _list_pending_jobs(
+    conn: sqlite3.Connection,
+    limit: int,
+) -> list[dict[str, object]]:
+    rows = conn.execute(
+        """
+        SELECT job.id, job.type, job.asset_id, job.recipe_id, job.attempt_count,
+               job.created_at, job.updated_at, asset.library_path
+        FROM job
+        LEFT JOIN asset ON asset.id = job.asset_id
+        WHERE job.status = 'pending'
+        ORDER BY job.created_at ASC, job.id ASC
+        LIMIT ?
+        """,
+        (max(1, min(limit, 1000)),),
+    ).fetchall()
+    return [
+        {
+            "job_id": str(row["id"]),
+            "type": str(row["type"]),
+            "asset_id": str(row["asset_id"]) if row["asset_id"] else None,
+            "asset_path": str(row["library_path"]) if row["library_path"] else None,
+            "recipe_id": str(row["recipe_id"]) if row["recipe_id"] else None,
+            "attempt_count": int(row["attempt_count"]),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+        }
+        for row in rows
+    ]
 
 
 def _list_asset_summaries(conn: sqlite3.Connection, library_root_path: Path) -> library.AssetListResult:

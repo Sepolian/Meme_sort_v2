@@ -20,6 +20,7 @@ from wsgiref.simple_server import WSGIRequestHandler, make_server
 import numpy as np
 from PIL import Image
 
+from memesort_worker import asset_browse
 from memesort_worker.app_state import build_app_state
 from memesort_worker.cli import run
 from memesort_worker.library import (
@@ -485,9 +486,14 @@ class LibraryTests(unittest.TestCase):
 
     def test_app_state_exposes_one_manifest_runtime_descriptor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            payload = build_app_state(Path(temp_dir) / "library").to_dict()
+            with patch(
+                "memesort_worker.asset_browse._list_asset_summaries",
+                wraps=asset_browse._list_asset_summaries,
+            ) as list_asset_summaries:
+                payload = build_app_state(Path(temp_dir) / "library").to_dict()
 
         self.assertEqual(get_runtime_descriptor().to_dict(), payload["runtime"])
+        self.assertEqual(1, list_asset_summaries.call_count)
         self.assertFalse(
             {"runtime_profiles", "model_variants", "runtime_settings"} & set(payload)
         )
