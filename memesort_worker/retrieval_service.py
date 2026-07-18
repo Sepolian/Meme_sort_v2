@@ -7,7 +7,7 @@ from . import library_internal as library
 from .library_store import LibraryStore
 from .inference_service import search_inference_request
 from .retrieval_composition import compose_text_search_results
-from .semantic_retrieval import blob_to_vector, rank_asset_vector_rows
+from .semantic_retrieval import rank_asset_embeddings
 
 
 def search_text(
@@ -20,10 +20,10 @@ def search_text(
         raise ValueError("top_k must be positive")
 
     with LibraryStore(library_root) as store:
-        vector_rows = store.collect_active_vector_rows()
+        embeddings = store.list_active_embeddings()
         ocr_results = store.collect_ocr_search_results(query, limit=max(top_k * 4, 20))
 
-        if not vector_rows:
+        if not embeddings:
             visual_results: list[dict[str, object]] = []
         else:
             backend = library.get_embedding_backend()
@@ -33,9 +33,9 @@ def search_text(
                     store.active_recipe.output_dimension,
                     instruction=store.active_recipe.instruction_text,
                 )
-            visual_results = rank_asset_vector_rows(
+            visual_results = rank_asset_embeddings(
                 query_vector,
-                vector_rows,
+                embeddings,
                 max(top_k * 4, 20),
             )
         results = compose_text_search_results(visual_results, ocr_results, top_k)
@@ -67,9 +67,9 @@ def search_image_path(
         raise ValueError(f"Unsupported image file extension: {suffix or '(none)'}")
 
     with LibraryStore(library_root) as store:
-        vector_rows = store.collect_active_vector_rows()
+        embeddings = store.list_active_embeddings()
 
-        if not vector_rows:
+        if not embeddings:
             results: list[dict[str, object]] = []
         else:
             backend = library.get_embedding_backend()
@@ -102,7 +102,7 @@ def search_image_path(
                         )
                     ]
             vector_query = query_vectors if len(query_vectors) > 1 else query_vectors[0]
-            results = rank_asset_vector_rows(vector_query, vector_rows, top_k)
+            results = rank_asset_embeddings(vector_query, embeddings, top_k)
 
         return library.ImageSearchResult(
             library_root=str(store.library_root_path),
@@ -124,18 +124,14 @@ def find_similar_assets(
         raise ValueError("top_k must be positive")
 
     with LibraryStore(library_root) as store:
-        query_rows = store.collect_asset_embedding_rows(asset_id)
-        if not query_rows:
+        query_vectors = store.list_asset_embedding_vectors(asset_id)
+        if not query_vectors:
             raise ValueError(
                 f"Asset {asset_id} has no active embedding for recipe {store.active_recipe.recipe_id}"
             )
 
-        vector_rows = store.collect_active_vector_rows(asset_id_to_exclude=asset_id)
-        query_vectors = [
-            blob_to_vector(bytes(query_row["vector_blob"]), int(query_row["vector_dim"]))
-            for query_row in query_rows
-        ]
-        results = rank_asset_vector_rows(query_vectors, vector_rows, top_k)
+        embeddings = store.list_active_embeddings(asset_id_to_exclude=asset_id)
+        results = rank_asset_embeddings(query_vectors, embeddings, top_k)
 
         return library.SimilarityResult(
             library_root=str(store.library_root_path),

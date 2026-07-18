@@ -20,7 +20,6 @@ from wsgiref.simple_server import WSGIRequestHandler, make_server
 import numpy as np
 from PIL import Image
 
-from memesort_worker import asset_browse
 from memesort_worker.app_state import build_app_state
 from memesort_worker.cli import run
 from memesort_worker.library import (
@@ -41,6 +40,7 @@ from memesort_worker.library import (
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.inference_service import INFERENCE_SCHEDULER
+from memesort_worker.library_store import LibraryStore
 from memesort_worker.webapp import (
     ThreadedWSGIServer,
     authorize_vulkan_for_web_session,
@@ -487,8 +487,9 @@ class LibraryTests(unittest.TestCase):
     def test_app_state_exposes_one_manifest_runtime_descriptor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch(
-                "memesort_worker.asset_browse._list_asset_summaries",
-                wraps=asset_browse._list_asset_summaries,
+                "memesort_worker.library_store.LibraryStore.list_asset_summaries",
+                autospec=True,
+                side_effect=LibraryStore.list_asset_summaries,
             ) as list_asset_summaries:
                 payload = build_app_state(Path(temp_dir) / "library").to_dict()
 

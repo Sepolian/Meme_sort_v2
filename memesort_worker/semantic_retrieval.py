@@ -1,8 +1,19 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 
 import numpy as np
+
+
+@dataclass(frozen=True)
+class AssetEmbedding:
+    asset_id: str
+    vector: np.ndarray
+    source_ref: str | None
+    library_path: str
+    media_type: str
+    content_hash: str
 
 
 def vector_to_blob(vector: np.ndarray) -> bytes:
@@ -56,6 +67,45 @@ def rank_asset_vector_rows(
             ),
         }
         for score, row in scored[:top_k]
+    ]
+
+
+def rank_asset_embeddings(
+    query_vector: np.ndarray | list[np.ndarray],
+    embeddings: list[AssetEmbedding],
+    top_k: int,
+) -> list[dict[str, object]]:
+    query_vectors = (
+        [query_vector]
+        if isinstance(query_vector, np.ndarray)
+        else list(query_vector)
+    )
+    if not query_vectors:
+        raise ValueError("At least one query vector is required")
+
+    best_by_asset: dict[str, tuple[float, AssetEmbedding]] = {}
+    for embedding in embeddings:
+        score = max(
+            float(np.dot(candidate, embedding.vector))
+            for candidate in query_vectors
+        )
+        current = best_by_asset.get(embedding.asset_id)
+        if current is None or score > current[0]:
+            best_by_asset[embedding.asset_id] = (score, embedding)
+
+    scored = sorted(best_by_asset.values(), key=lambda item: item[0], reverse=True)
+    return [
+        {
+            "asset_id": embedding.asset_id,
+            "score": score,
+            "library_path": embedding.library_path,
+            "library_url": f"/media/{embedding.library_path}",
+            "thumbnail_url": f"/media/thumbnails/{embedding.asset_id}.jpg",
+            "media_type": embedding.media_type,
+            "content_hash": embedding.content_hash,
+            "matched_source_ref": embedding.source_ref,
+        }
+        for score, embedding in scored[:top_k]
     ]
 
 
