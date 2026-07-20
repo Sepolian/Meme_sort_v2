@@ -275,6 +275,22 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(2, assets.assets[0]["source_record_count"])
         self.assertEqual("pending_initial_index", assets.assets[0]["status"])
 
+    def test_import_records_image_dimensions(self) -> None:
+        """Regression: default import must record actual width/height, not NULL."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            # _write_image creates a 40x30 PNG
+            self._write_image(source_root / "sized.png")
+            import_folder(library_root, source_root)
+            assets = list_assets(library_root)
+
+        self.assertEqual(1, len(assets.assets))
+        self.assertEqual(40, assets.assets[0]["width"])
+        self.assertEqual(30, assets.assets[0]["height"])
+
     def test_pending_jobs_create_thumbnail_embedding_and_ocr_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))

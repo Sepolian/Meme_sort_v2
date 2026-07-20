@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from . import asset_preprocessing
 from . import job_queue
 from . import ocr_artifacts
 from .recipe_provider import default_provider
@@ -704,10 +705,8 @@ def import_folder(
                 raise
 
             byte_size = destination_absolute.stat().st_size
-            if image_dimensions_fn is not None:
-                width, height = image_dimensions_fn(destination_absolute.read_bytes())
-            else:
-                width, height = None, None
+            dimensions_fn = image_dimensions_fn or asset_preprocessing.safe_image_dimensions_from_bytes
+            width, height = dimensions_fn(destination_absolute.read_bytes())
             with conn:
                 conn.execute(
                     """
