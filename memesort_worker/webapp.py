@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import threading
 from http import HTTPStatus
 from pathlib import Path
 from socketserver import ThreadingMixIn
@@ -43,9 +44,21 @@ from .runtime_service import (
     is_runtime_ready_for_indexing,
     run_runtime_health_check,
 )
+from .web_security import (
+    SECURITY_HEADERS,
+    GateOutcome,
+    SessionGate,
+    request_headers_from_environ,
+)
 
 
 STATIC_DIR = Path(__file__).with_name("web_static")
+
+DEFAULT_MAX_REQUEST_BODY_BYTES = 32 * 1024 * 1024
+
+
+class RequestBodyTooLargeError(ValueError):
+    """The request body exceeded the configured size limit."""
 
 
 class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
@@ -82,24 +95,40 @@ def _text_response(status: HTTPStatus, body: bytes, content_type: str) -> tuple[
     return f"{status.value} {status.phrase}", headers, body
 
 
-def _read_json_body(environ: dict[str, object]) -> dict[str, object]:
+def _redirect_response(location: str) -> tuple[str, list[tuple[str, str]], bytes]:
+    status = HTTPStatus.SEE_OTHER
+    headers = [
+        ("Location", location),
+        ("Content-Length", "0"),
+        ("Cache-Control", "no-store"),
+    ]
+    return f"{status.value} {status.phrase}", headers, b""
+
+
+def _read_json_body(environ: dict[str, object], max_bytes: int) -> dict[str, object]:
     try:
         length = int(str(environ.get("CONTENT_LENGTH") or "0"))
     except ValueError:
         length = 0
+    if length < 0:
+        raise ValueError("Negative request body length")
+    if length > max_bytes:
+        raise RequestBodyTooLargeError(
+            f"Request body of {length} bytes exceeds the {max_bytes} byte limit"
+        )
     raw = environ["wsgi.input"].read(length) if length > 0 else b"{}"
     if not raw:
         return {}
     return json.loads(raw.decode("utf-8"))
 
 
-def _serve_static(path: str) -> tuple[str, list[tuple[str, str]], bytes]:
+def _serve_static(static_dir: Path, path: str) -> tuple[str, list[tuple[str, str]], bytes]:
     relative = "index.html" if path in {"", "/"} else path.lstrip("/")
-    candidate = (STATIC_DIR / relative).resolve()
-    if STATIC_DIR.resolve() not in candidate.parents and candidate != STATIC_DIR.resolve():
+    candidate = (static_dir / relative).resolve()
+    if static_dir.resolve() not in candidate.parents and candidate != static_dir.resolve():
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "Not found"})
     if not candidate.exists() or not candidate.is_file():
-        candidate = STATIC_DIR / "index.html"
+        candidate = static_dir / "index.html"
     body = candidate.read_bytes()
     content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
     if content_type.startswith("text/") or candidate.suffix in {".js", ".css"}:
@@ -138,11 +167,84 @@ def _resolve_asset_reveal_path(library_root: Path, payload: dict[str, object]) -
     raise ValueError(f"Unknown reveal target: {target}")
 
 
-def create_app(library_root: str):
+def _apply_gate_outcome(
+    outcome: GateOutcome,
+    extra_headers: list[tuple[str, str]],
+) -> tuple[str, list[tuple[str, str]], bytes] | None:
+    """Translate a gate verdict into a short-circuit response, or allow the request.
+
+    Returning ``None`` means the request is authenticated and may proceed.
+    """
+    if outcome.action == "allow":
+        return None
+    if outcome.action == "bootstrap":
+        if outcome.set_cookie is not None:
+            extra_headers.append(("Set-Cookie", outcome.set_cookie))
+        return _redirect_response(outcome.location or "/")
+    return _json_response(
+        outcome.status,
+        {"error": "Forbidden", "detail": outcome.detail},
+    )
+
+
+def _finalize_headers(
+    headers: list[tuple[str, str]],
+    extra_headers: list[tuple[str, str]],
+    security: SessionGate | None,
+) -> list[tuple[str, str]]:
+    merged = list(headers)
+    merged.extend(extra_headers)
+    if security is not None:
+        merged.extend(SECURITY_HEADERS)
+    return merged
+
+
+class LocalWebApp:
+    """A callable WSGI application with an explicit lifecycle.
+
+    The window layer never touches the worker threads directly. It calls
+    ``begin_shutdown`` to stop accepting mutations, then ``shutdown`` to release
+    the import controller and worker loop.
+    """
+
+    def __init__(
+        self,
+        *,
+        handler,
+        worker_loop: WorkerLoopController,
+        import_controller: ImportController,
+        stopping: threading.Event,
+    ) -> None:
+        self._handler = handler
+        self._worker_loop = worker_loop
+        self._import_controller = import_controller
+        self._stopping = stopping
+
+    def __call__(self, environ, start_response):
+        return self._handler(environ, start_response)
+
+    def begin_shutdown(self) -> None:
+        self._stopping.set()
+
+    def shutdown(self) -> None:
+        self._stopping.set()
+        self._import_controller.shutdown()
+        self._worker_loop.shutdown()
+
+
+def create_app(
+    library_root: str,
+    *,
+    security: SessionGate | None = None,
+    static_root: Path | None = None,
+    max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+) -> "LocalWebApp":
     library_root_path = Path(library_root).expanduser().resolve()
     initialize_library(library_root_path)
     worker_loop = WorkerLoopController(library_root_path)
     import_controller = ImportController(library_root_path)
+    static_dir = static_root or STATIC_DIR
+    stopping = threading.Event()
 
     def app(environ, start_response):
         method = str(environ.get("REQUEST_METHOD", "GET")).upper()
@@ -151,6 +253,27 @@ def create_app(library_root: str):
         parsed = urlparse(f"{raw_path}?{raw_query_string}" if raw_query_string else raw_path)
         path = parsed.path
         query = parse_qs(parsed.query)
+
+        extra_headers: list[tuple[str, str]] = []
+        if security is not None:
+            outcome = security.evaluate(
+                method,
+                query,
+                request_headers_from_environ(environ),
+            )
+            gate_response = _apply_gate_outcome(outcome, extra_headers)
+            if gate_response is not None:
+                status_line, headers, body = gate_response
+                start_response(status_line, _finalize_headers(headers, extra_headers, security))
+                return [body]
+
+        if stopping.is_set() and method not in ("GET", "HEAD"):
+            status_line, headers, body = _json_response(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "ShuttingDown", "detail": "The application is shutting down."},
+            )
+            start_response(status_line, _finalize_headers(headers, extra_headers, security))
+            return [body]
 
         try:
             if path == "/api/state" and method == "GET":
@@ -192,19 +315,19 @@ def create_app(library_root: str):
                     worker_loop.snapshot().to_dict(),
                 )
             elif path == "/api/health" and method == "POST":
-                _read_json_body(environ)
+                _read_json_body(environ, max_body_bytes)
                 result = run_runtime_health_check(
                     library_root=library_root_path,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/import-folder" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 result = import_folder(library_root_path, str(payload["path"]))
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/import" and method == "GET":
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.snapshot().to_dict())
             elif path == "/api/import/start" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 start_indexing = bool(payload.get("start_indexing", False))
                 if start_indexing:
                     runtime_ready, runtime_message = is_runtime_ready_for_indexing(library_root_path)
@@ -220,7 +343,7 @@ def create_app(library_root: str):
             elif path == "/api/import/resume" and method == "POST":
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.resume().to_dict())
             elif path == "/api/pick-folder" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 title = str(payload.get("title") or "Choose a folder")
                 initial_path = (
                     str(payload["initial_path"])
@@ -235,7 +358,7 @@ def create_app(library_root: str):
                     },
                 )
             elif path == "/api/pick-file" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 title = str(payload.get("title") or "Choose a file")
                 initial_path = (
                     str(payload["initial_path"])
@@ -258,14 +381,14 @@ def create_app(library_root: str):
                     },
                 )
             elif path == "/api/run-jobs" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 result = run_jobs(
                     library_root_path,
                     max_jobs=int(payload.get("max_jobs", 20)),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/import-and-start-index" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
                     import_and_start_indexing(
@@ -282,7 +405,7 @@ def create_app(library_root: str):
                 result = get_asset_detail(library_root_path, asset_id=asset_id)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/remove-source-record" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 result = remove_source_record(
                     library_root_path,
                     asset_id=str(payload["asset_id"]),
@@ -290,14 +413,14 @@ def create_app(library_root: str):
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/delete-asset" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 result = delete_asset(
                     library_root_path,
                     asset_id=str(payload["asset_id"]),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/assets/batch-action" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 asset_ids = payload.get("asset_ids")
                 if not isinstance(asset_ids, list):
                     raise ValueError("asset_ids must be an array")
@@ -312,7 +435,7 @@ def create_app(library_root: str):
                     raise ValueError(f"Unsupported batch action: {action}")
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/reveal-asset-file" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 target_path = _resolve_asset_reveal_path(library_root_path, payload)
                 reveal_path_in_file_explorer(target_path)
                 status_line, headers, body = _json_response(
@@ -326,7 +449,7 @@ def create_app(library_root: str):
                 result = retry_failed_jobs(library_root_path)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/pending-jobs/delete" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 job_ids = payload.get("job_ids")
                 if not isinstance(job_ids, list):
                     raise ValueError("job_ids must be an array")
@@ -344,7 +467,7 @@ def create_app(library_root: str):
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search-image" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 result = search_image(
                     library_root_path,
                     image_path=str(payload["path"]),
@@ -353,7 +476,7 @@ def create_app(library_root: str):
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search/cancel" and method == "POST":
-                payload = _read_json_body(environ)
+                payload = _read_json_body(environ, max_body_bytes)
                 request_id = str(payload.get("request_id") or "")
                 was_active = cancel_inference_request(request_id)
                 status_line, headers, body = _json_response(
@@ -382,10 +505,15 @@ def create_app(library_root: str):
                     {"error": "NotFound", "detail": f"Unknown API endpoint: {path}"},
                 )
             else:
-                status_line, headers, body = _serve_static(path)
+                status_line, headers, body = _serve_static(static_dir, path)
         except InferenceCancelledError as exc:
             status_line, headers, body = _json_response(
                 HTTPStatus.CONFLICT,
+                {"error": type(exc).__name__, "detail": str(exc)},
+            )
+        except RequestBodyTooLargeError as exc:
+            status_line, headers, body = _json_response(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
                 {"error": type(exc).__name__, "detail": str(exc)},
             )
         except Exception as exc:
@@ -394,15 +522,15 @@ def create_app(library_root: str):
                 {"error": type(exc).__name__, "detail": str(exc)},
             )
 
-        start_response(status_line, headers)
+        start_response(status_line, _finalize_headers(headers, extra_headers, security))
         return [body]
 
-    def shutdown() -> None:
-        import_controller.shutdown()
-        worker_loop.shutdown()
-
-    app.shutdown = shutdown  # type: ignore[attr-defined]
-    return app
+    return LocalWebApp(
+        handler=app,
+        worker_loop=worker_loop,
+        import_controller=import_controller,
+        stopping=stopping,
+    )
 
 
 def run_web_app(
