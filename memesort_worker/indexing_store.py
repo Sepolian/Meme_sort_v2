@@ -10,11 +10,17 @@ import sqlite3
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from . import asset_catalog
+from . import job_queue
+from . import ocr_artifacts
 from .semantic_retrieval import vector_to_blob
+
+if TYPE_CHECKING:
+    from .ocr_backend import OcrBackend
 
 
 @dataclass(frozen=True)
@@ -42,6 +48,7 @@ class IndexingStore:
         self._conn = asset_catalog.connect(
             asset_catalog.database_path(library_root)
         )
+        self._queue = job_queue.JobQueue(self._conn)
 
     def close(self) -> None:
         self._conn.close()
@@ -52,10 +59,44 @@ class IndexingStore:
     def __exit__(self, *args: object) -> None:
         self.close()
 
-    @property
-    def connection(self) -> sqlite3.Connection:
-        """Expose connection for JobQueue (temporary compatibility)."""
-        return self._conn
+    # ------------------------------------------------------------------
+    # Job queue operations
+    # ------------------------------------------------------------------
+
+    def prepare_jobs(
+        self, max_jobs: int | None = None
+    ) -> tuple[int, int, list[job_queue.Job]]:
+        """Prepare jobs for processing. Returns (requeued, retried, pending)."""
+        return self._queue.prepare(max_jobs)
+
+    def claim_job(self, job: job_queue.Job) -> bool:
+        """Attempt to claim a job for processing."""
+        return self._queue.claim(job)
+
+    def complete_job(self, job: job_queue.Job) -> None:
+        """Mark a job as completed."""
+        self._queue.complete(job)
+
+    def fail_job(self, job: job_queue.Job, exc: Exception) -> None:
+        """Mark a job as failed."""
+        self._queue.fail(job, exc)
+
+    # ------------------------------------------------------------------
+    # OCR operations
+    # ------------------------------------------------------------------
+
+    def run_ocr_job(
+        self,
+        payload: dict[str, object],
+        ocr_backend: "OcrBackend",
+    ) -> None:
+        """Execute an OCR job for an asset."""
+        ocr_artifacts.run_ocr_asset_job(
+            self._conn,
+            self._library_root,
+            payload,
+            ocr_backend,
+        )
 
     def get_asset_library_path(self, asset_id: str) -> Path | None:
         """Return the library-relative path for an asset, or None if not found."""

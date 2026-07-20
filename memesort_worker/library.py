@@ -10,7 +10,7 @@ from . import asset_preprocessing
 from . import job_queue
 from . import ocr_artifacts
 from .semantic_retrieval import scan_duplicate_vector_rows
-from .recipe_provider import RuntimeRecipeProvider, default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider, resolve_gif_frame_count
 
 
 # Re-export constants from asset_catalog for backward compatibility
@@ -248,11 +248,7 @@ def _safe_image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int | None, i
 
 
 def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
-    value = recipe_row["gif_frame_count"]
-    frame_count = _get_default_gif_frame_count() if value is None else int(value)
-    if frame_count <= 0:
-        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
-    return frame_count
+    return resolve_gif_frame_count(recipe_row["gif_frame_count"], str(recipe_row["id"]))
 
 
 def initialize_library(

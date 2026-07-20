@@ -121,3 +121,19 @@ def reset_default_provider() -> None:
     """Clear the cached default provider (for testing)."""
     global _default_provider
     _default_provider = None
+
+
+def resolve_gif_frame_count(
+    raw_value: int | None,
+    recipe_id: str,
+    provider: RuntimeRecipeProvider | None = None,
+) -> int:
+    """Resolve gif_frame_count from a recipe value, using provider default if None.
+
+    Raises ValueError if the resolved frame count is not positive.
+    """
+    provider = provider or default_provider()
+    frame_count = provider.default_gif_frame_count if raw_value is None else int(raw_value)
+    if frame_count <= 0:
+        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_id}: {frame_count}")
+    return frame_count

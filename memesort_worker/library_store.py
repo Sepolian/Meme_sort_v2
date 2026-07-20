@@ -13,7 +13,7 @@ from . import asset_catalog
 from . import library
 from . import job_queue
 from . import ocr_artifacts
-from .recipe_provider import RuntimeRecipeProvider, default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider, resolve_gif_frame_count
 from .semantic_retrieval import AssetEmbedding, blob_to_vector
 
 
@@ -53,12 +53,7 @@ def _gif_frame_count_for_recipe(
     recipe_row: sqlite3.Row,
     provider: RuntimeRecipeProvider | None = None,
 ) -> int:
-    provider = provider or default_provider()
-    value = recipe_row["gif_frame_count"]
-    frame_count = provider.default_gif_frame_count if value is None else int(value)
-    if frame_count <= 0:
-        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
-    return frame_count
+    return resolve_gif_frame_count(recipe_row["gif_frame_count"], str(recipe_row["id"]), provider)
 
 
 class LibraryStore:

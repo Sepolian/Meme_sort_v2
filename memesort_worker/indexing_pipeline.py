@@ -9,11 +9,10 @@ from . import asset_catalog
 from . import asset_preprocessing
 from . import library
 from . import job_queue
-from . import ocr_artifacts
 from .embedding_backend import EmbeddingBackend, get_embedding_backend
 from .indexing_store import IndexingStore, RecipeRow
 from .ocr_backend import OcrBackend, get_ocr_backend
-from .recipe_provider import RuntimeRecipeProvider, default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider, resolve_gif_frame_count
 from .runtime_service import is_runtime_ready_for_indexing
 
 
@@ -36,12 +35,11 @@ def run_pending_jobs(
     ocr_backend: OcrBackend | None = None
     store = IndexingStore(library_root_path)
     try:
-        queue = job_queue.JobQueue(store.connection)
         (
             requeued_running_jobs,
             retried_failed_jobs,
             pending_jobs,
-        ) = queue.prepare(max_jobs)
+        ) = store.prepare_jobs(max_jobs)
 
         processed_jobs = 0
         completed_jobs = 0
@@ -52,7 +50,7 @@ def run_pending_jobs(
             processed_jobs += 1
 
             try:
-                if not queue.claim(job):
+                if not store.claim_job(job):
                     skipped_jobs += 1
                     continue
 
@@ -65,20 +63,15 @@ def run_pending_jobs(
                 elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:
                         ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
-                    ocr_artifacts.run_ocr_asset_job(
-                        store.connection,
-                        library_root_path,
-                        job.payload,
-                        ocr_backend,
-                    )
+                    store.run_ocr_job(job.payload, ocr_backend)
                 else:
                     skipped_jobs += 1
                     raise ValueError(f"Unsupported job type: {job.job_type}")
 
-                queue.complete(job)
+                store.complete_job(job)
                 completed_jobs += 1
             except Exception as exc:
-                queue.fail(job, exc)
+                store.fail_job(job, exc)
                 failed_jobs += 1
 
         return library.RunJobsResult(
@@ -121,11 +114,7 @@ def _gif_frame_count_for_recipe(
     recipe: RecipeRow,
     provider: RuntimeRecipeProvider | None = None,
 ) -> int:
-    provider = provider or default_provider()
-    frame_count = provider.default_gif_frame_count if recipe.gif_frame_count is None else int(recipe.gif_frame_count)
-    if frame_count <= 0:
-        raise ValueError(f"Invalid gif_frame_count on recipe {recipe.recipe_id}: {frame_count}")
-    return frame_count
+    return resolve_gif_frame_count(recipe.gif_frame_count, recipe.recipe_id, provider)
 
 
 def _run_embed_asset_job(
