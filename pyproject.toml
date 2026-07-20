@@ -10,14 +10,10 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.4.6",
     "pillow>=12.2.0",
-]
-
-[project.optional-dependencies]
-# Native desktop window backend. On Windows this drives the Evergreen WebView2
-# runtime. The exact version is pinned in the lockfile only after the
-# compatibility spike verifies Python 3.13 + WebView2 + PyInstaller.
-desktop = [
-    "pywebview>=5.0",
+    # Native desktop window backend. Windows-only, matching the project's
+    # platform contract; it drives the Evergreen WebView2 runtime and pulls the
+    # pythonnet-based backend on Windows automatically.
+    "pywebview>=5.0 ; sys_platform == 'win32'",
 ]
 
 [project.scripts]
