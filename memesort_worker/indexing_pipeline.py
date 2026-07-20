@@ -14,7 +14,7 @@ from . import job_queue
 from . import ocr_artifacts
 from .embedding_backend import EmbeddingBackend, EmbeddingBackendError, get_embedding_backend
 from .ocr_backend import OcrBackend, get_ocr_backend
-from .recipe_provider import default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .runtime_service import is_runtime_ready_for_indexing
 from .semantic_retrieval import vector_to_blob
 
@@ -22,6 +22,7 @@ from .semantic_retrieval import vector_to_blob
 def run_pending_jobs(
     library_root: Path | str,
     max_jobs: int | None = None,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> library.RunJobsResult:
     runtime_ready, runtime_message = is_runtime_ready_for_indexing(
         library_root
@@ -31,7 +32,7 @@ def run_pending_jobs(
             "Vulkan runtime is not authorized for indexing in this app session: "
             f"{runtime_message}"
         )
-    init_result = asset_catalog.initialize_library(library_root)
+    init_result = asset_catalog.initialize_library(library_root, provider)
     library_root_path = Path(init_result.library_root)
     backend: EmbeddingBackend | None = None
     ocr_backend: OcrBackend | None = None
@@ -62,7 +63,7 @@ def run_pending_jobs(
                 elif job.job_type is job_queue.JobType.EMBED_ASSET:
                     if backend is None:
                         backend = get_embedding_backend()
-                    _run_embed_asset_job(conn, library_root_path, job.payload, backend)
+                    _run_embed_asset_job(conn, library_root_path, job.payload, backend, provider)
                 elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:
                         ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
@@ -174,8 +175,11 @@ def _run_generate_thumbnail_job(
     )
 
 
-def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
-    provider = default_provider()
+def _gif_frame_count_for_recipe(
+    recipe_row: sqlite3.Row,
+    provider: RuntimeRecipeProvider | None = None,
+) -> int:
+    provider = provider or default_provider()
     value = recipe_row["gif_frame_count"]
     frame_count = provider.default_gif_frame_count if value is None else int(value)
     if frame_count <= 0:
@@ -188,6 +192,7 @@ def _run_embed_asset_job(
     library_root_path: Path,
     payload: dict[str, object],
     backend: EmbeddingBackend,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> None:
     asset_id = str(payload["asset_id"])
     recipe_id = str(payload["recipe_id"])
@@ -218,13 +223,13 @@ def _run_embed_asset_job(
     if existing is not None:
         return
 
-    provider = default_provider()
+    provider = provider or default_provider()
     image_path = library_root_path / str(asset_row["library_path"])
     image_bytes = image_path.read_bytes()
     output_dimension = int(recipe_row["output_dimension"])
     instruction = provider.instruction_text_for_key(str(recipe_row["instruction_key"]))
     preprocess_version = str(recipe_row["preprocess_version"])
-    gif_frame_count = _gif_frame_count_for_recipe(recipe_row)
+    gif_frame_count = _gif_frame_count_for_recipe(recipe_row, provider)
     spec = provider.preprocess_spec_for_version(preprocess_version)
 
     if str(payload.get("media_type")) == "image/gif":

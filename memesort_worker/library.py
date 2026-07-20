@@ -366,14 +366,18 @@ def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
     return frame_count
 
 
-def initialize_library(root: Path | str) -> LibraryInitResult:
-    return asset_catalog.initialize_library(root)
+def initialize_library(
+    root: Path | str,
+    provider: RuntimeRecipeProvider | None = None,
+) -> LibraryInitResult:
+    return asset_catalog.initialize_library(root, provider)
 
 
 def import_folder(
     library_root: Path | str,
     source_folder: Path | str,
     wait_for_permission: Callable[[], None] | None = None,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> ImportFolderResult:
     """Import supported files, optionally waiting at each file boundary.
 
@@ -387,6 +391,7 @@ def import_folder(
         source_folder,
         wait_for_permission=wait_for_permission,
         image_dimensions_fn=_safe_image_dimensions_from_bytes,
+        provider=provider,
     )
 
 

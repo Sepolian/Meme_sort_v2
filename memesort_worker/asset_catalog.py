@@ -19,7 +19,7 @@ from typing import Callable
 from . import asset_preprocessing
 from . import job_queue
 from . import ocr_artifacts
-from .recipe_provider import default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider
 
 
 DATABASE_NAME = "library.sqlite"
@@ -329,8 +329,11 @@ def ensure_recipe(conn: sqlite3.Connection, recipe_spec: dict[str, object]) -> s
     return recipe_id
 
 
-def ensure_manifest_recipe(conn: sqlite3.Connection) -> str:
-    provider = default_provider()
+def ensure_manifest_recipe(
+    conn: sqlite3.Connection,
+    provider: RuntimeRecipeProvider | None = None,
+) -> str:
+    provider = provider or default_provider()
     return ensure_recipe(conn, dict(provider.manifest_recipe))
 
 
@@ -409,9 +412,12 @@ def get_recipe_row(conn: sqlite3.Connection, recipe_id: str) -> sqlite3.Row:
     return row
 
 
-def activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]:
-    provider = default_provider()
-    recipe_id = ensure_manifest_recipe(conn)
+def activate_manifest_recipe(
+    conn: sqlite3.Connection,
+    provider: RuntimeRecipeProvider | None = None,
+) -> tuple[str, bool, int]:
+    provider = provider or default_provider()
+    recipe_id = ensure_manifest_recipe(conn, provider)
     active_recipe_id = get_active_recipe_id(conn)
     state = get_worker_state_json(conn, "semantic_recipe_activation")
     already_active = (
@@ -598,7 +604,10 @@ def require_existing_asset_ids(conn: sqlite3.Connection, asset_ids: list[str]) -
 # ---------------------------------------------------------------------------
 
 
-def initialize_library(root: Path | str) -> LibraryInitResult:
+def initialize_library(
+    root: Path | str,
+    provider: RuntimeRecipeProvider | None = None,
+) -> LibraryInitResult:
     library_root = resolve_path(root)
     library_root.mkdir(parents=True, exist_ok=True)
     for relative_dir in LIBRARY_DIRS:
@@ -611,7 +620,7 @@ def initialize_library(root: Path | str) -> LibraryInitResult:
     try:
         with conn:
             create_schema(conn)
-            recipe_id, _, _ = activate_manifest_recipe(conn)
+            recipe_id, _, _ = activate_manifest_recipe(conn, provider)
             ocr_artifacts.ensure_default_ocr_recipe(conn)
             ocr_artifacts.ensure_missing_ocr_jobs(conn, now=utc_now())
     finally:
@@ -630,9 +639,10 @@ def import_folder(
     source_folder: Path | str,
     wait_for_permission: Callable[[], None] | None = None,
     image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> ImportFolderResult:
     """Import supported files, optionally waiting at each file boundary."""
-    init_result = initialize_library(library_root)
+    init_result = initialize_library(library_root, provider)
     library_root_path = Path(init_result.library_root)
     source_root = resolve_path(source_folder)
     if not source_root.exists() or not source_root.is_dir():

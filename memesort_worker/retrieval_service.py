@@ -8,7 +8,7 @@ from . import library
 from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
 from .inference_service import search_inference_request
-from .recipe_provider import default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import rank_asset_embeddings
 
@@ -58,6 +58,7 @@ def search_image_path(
     image_path: Path | str,
     top_k: int = 10,
     request_id: str | None = None,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> library.ImageSearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -75,7 +76,7 @@ def search_image_path(
         if not embeddings:
             results: list[dict[str, object]] = []
         else:
-            provider = default_provider()
+            provider = provider or default_provider()
             spec = provider.preprocess_spec_for_version(store.active_recipe.preprocess_version)
             backend = get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):

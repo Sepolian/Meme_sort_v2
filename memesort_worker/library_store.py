@@ -13,7 +13,7 @@ from . import asset_catalog
 from . import library
 from . import job_queue
 from . import ocr_artifacts
-from .recipe_provider import default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .semantic_retrieval import AssetEmbedding, blob_to_vector
 
 
@@ -39,8 +39,9 @@ def _recipe_label(
     output_dimension: int,
     runtime_profile: str,
     gif_frame_count: int,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> str:
-    provider = default_provider()
+    provider = provider or default_provider()
     model_name = model_id.split("/")[-1]
     base = f"{model_name} / {output_dimension}d / {runtime_profile}"
     if gif_frame_count == provider.default_gif_frame_count:
@@ -48,8 +49,11 @@ def _recipe_label(
     return f"{base} / gif-f{gif_frame_count}"
 
 
-def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
-    provider = default_provider()
+def _gif_frame_count_for_recipe(
+    recipe_row: sqlite3.Row,
+    provider: RuntimeRecipeProvider | None = None,
+) -> int:
+    provider = provider or default_provider()
     value = recipe_row["gif_frame_count"]
     frame_count = provider.default_gif_frame_count if value is None else int(value)
     if frame_count <= 0:
@@ -60,25 +64,30 @@ def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
 class LibraryStore:
     """Persistence interface for library state that callers should not assemble from private helpers."""
 
-    def __init__(self, library_root: Path | str) -> None:
-        init_result = asset_catalog.initialize_library(library_root)
+    def __init__(
+        self,
+        library_root: Path | str,
+        provider: RuntimeRecipeProvider | None = None,
+    ) -> None:
+        init_result = asset_catalog.initialize_library(library_root, provider)
         self.library_root_path = Path(init_result.library_root)
         self._conn = asset_catalog.connect(asset_catalog.database_path(self.library_root_path))
         active_recipe_id = asset_catalog.get_active_recipe_id(self._conn)
         recipe_row = asset_catalog.get_recipe_row(self._conn, active_recipe_id)
-        provider = default_provider()
+        provider = provider or default_provider()
         self.active_recipe = ActiveIndexRecipe(
             recipe_id=active_recipe_id,
             label=_recipe_label(
                 str(recipe_row["model_id"]),
                 int(recipe_row["output_dimension"]),
                 str(recipe_row["runtime_profile"]),
-                _gif_frame_count_for_recipe(recipe_row),
+                _gif_frame_count_for_recipe(recipe_row, provider),
+                provider,
             ),
             output_dimension=int(recipe_row["output_dimension"]),
             instruction_text=provider.instruction_text_for_key(str(recipe_row["instruction_key"])),
             preprocess_version=str(recipe_row["preprocess_version"]),
-            gif_frame_count=_gif_frame_count_for_recipe(recipe_row),
+            gif_frame_count=_gif_frame_count_for_recipe(recipe_row, provider),
         )
 
     def __enter__(self) -> "LibraryStore":
