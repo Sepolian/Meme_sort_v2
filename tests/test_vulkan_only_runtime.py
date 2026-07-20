@@ -8,10 +8,10 @@ import sys
 import tempfile
 import unittest
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-import numpy as np
 from PIL import Image
 
 from memesort_worker.app_commands import search_text
@@ -278,51 +278,91 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, f"stderr: {result.stderr}")
         self.assertIn("OK", result.stdout)
 
-    def test_search_image_path_passes_provider_to_library_store(self) -> None:
-        """Regression: search_image_path must pass provider to LibraryStore.
-
-        Without this, a custom provider would cause LibraryStore to use
-        default_provider(), potentially reactivating the default recipe.
-        """
+    def test_search_image_path_preserves_custom_provider_recipe(self) -> None:
+        """A custom-provider image query must not reactivate the default recipe."""
         from memesort_worker.retrieval_service import search_image_path
-        from memesort_worker.library_store import LibraryStore
 
-        custom_provider = default_provider()
+        default = default_provider()
+        default_spec = next(iter(default.preprocess_specs_by_version.values()))
+        custom_version = f"{default_spec.version}-provider-regression"
+        custom_fingerprint = "provider-regression-fingerprint"
+        custom_provider = replace(
+            default,
+            recipe_fingerprint=custom_fingerprint,
+            manifest_recipe={
+                **default.manifest_recipe,
+                "model_revision": custom_fingerprint,
+                "preprocess_version": custom_version,
+            },
+            preprocess_specs_by_version={
+                custom_version: replace(default_spec, version=custom_version),
+            },
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
+            source_root = Path(temp_dir) / "source"
+            source_root.mkdir()
+            Image.new("RGB", (10, 10), "red").save(source_root / "asset.png")
             initialize_library(library_root, provider=custom_provider)
+            import_folder(library_root, source_root, provider=custom_provider)
 
-            # Create a test image to search with
             query_image = Path(temp_dir) / "query.png"
             Image.new("RGB", (10, 10), "blue").save(query_image, format="PNG")
 
-            # Patch LibraryStore to capture the provider argument
-            original_init = LibraryStore.__init__
-            captured_provider = []
+            database = library_root / "library.sqlite"
+            conn = sqlite3.connect(database)
+            try:
+                before_active_recipe = str(
+                    conn.execute(
+                        "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
+                        "WHERE key = 'active_recipe_id'"
+                    ).fetchone()[0]
+                )
+                before_activation = str(
+                    conn.execute(
+                        "SELECT value_json FROM worker_state "
+                        "WHERE key = 'semantic_recipe_activation'"
+                    ).fetchone()[0]
+                )
+                before_embed_jobs = conn.execute(
+                    "SELECT id, recipe_id, status, payload_json FROM job "
+                    "WHERE type = 'embed_asset' ORDER BY id"
+                ).fetchall()
+            finally:
+                conn.close()
 
-            def capturing_init(self, library_root, provider=None):
-                captured_provider.append(provider)
-                return original_init(self, library_root, provider=provider)
+            result = search_image_path(
+                library_root,
+                query_image,
+                provider=custom_provider,
+            )
+            self.assertEqual([], result.results)
 
-            with patch.object(LibraryStore, "__init__", capturing_init):
-                with patch(
-                    "memesort_worker.retrieval_service.get_embedding_backend"
-                ) as mock_backend:
-                    mock_backend.return_value.embed_image_bytes.return_value = (
-                        np.ones(2048, dtype=np.float32)
-                    )
-                    try:
-                        search_image_path(
-                            library_root,
-                            query_image,
-                            provider=custom_provider,
-                        )
-                    except Exception:
-                        pass  # We only care about the provider being passed
+            conn = sqlite3.connect(database)
+            try:
+                active_recipe = str(
+                    conn.execute(
+                        "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
+                        "WHERE key = 'active_recipe_id'"
+                    ).fetchone()[0]
+                )
+                activation = str(
+                    conn.execute(
+                        "SELECT value_json FROM worker_state "
+                        "WHERE key = 'semantic_recipe_activation'"
+                    ).fetchone()[0]
+                )
+                embed_jobs = conn.execute(
+                    "SELECT id, recipe_id, status, payload_json FROM job "
+                    "WHERE type = 'embed_asset' ORDER BY id"
+                ).fetchall()
+            finally:
+                conn.close()
 
-            self.assertEqual(1, len(captured_provider))
-            self.assertIs(custom_provider, captured_provider[0])
+        self.assertEqual(before_active_recipe, active_recipe)
+        self.assertEqual(before_activation, activation)
+        self.assertEqual(before_embed_jobs, embed_jobs)
 
 
 if __name__ == "__main__":
