@@ -12,8 +12,19 @@ dependencies = [
     "pillow>=12.2.0",
 ]
 
+[project.optional-dependencies]
+# Native desktop window backend. On Windows this drives the Evergreen WebView2
+# runtime. The exact version is pinned in the lockfile only after the
+# compatibility spike verifies Python 3.13 + WebView2 + PyInstaller.
+desktop = [
+    "pywebview>=5.0",
+]
+
 [project.scripts]
 memesort-worker = "memesort_worker.cli:main"
+
+[project.gui-scripts]
+memesort-desktop = "memesort_worker.desktop_entry:main"
 
 [tool.setuptools]
 packages = ["memesort_worker"]

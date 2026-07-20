@@ -7,7 +7,7 @@ from http import HTTPStatus
 from pathlib import Path
 from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, urlparse
-from wsgiref.simple_server import WSGIServer, make_server
+from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
 from .import_controller import ImportController
@@ -64,6 +64,18 @@ class RequestBodyTooLargeError(ValueError):
 class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     allow_reuse_address = True
     daemon_threads = True
+
+
+class QuietWSGIRequestHandler(WSGIRequestHandler):
+    """Suppress default access logging.
+
+    The bootstrap URL carries the one-time session secret in its query string,
+    so the standard request-line log would write the secret (and library paths)
+    to stderr. Silencing it keeps secrets and paths out of logs.
+    """
+
+    def log_message(self, format, *args):  # noqa: A002 - stdlib signature
+        return
 
 
 def _serve_library_file(library_root: Path, media_path: str) -> tuple[str, list[tuple[str, str]], bytes]:
@@ -542,7 +554,13 @@ def run_web_app(
     app = create_app(library_root)
     try:
         authorize_runtime_for_session(Path(library_root).expanduser().resolve())
-        with make_server(host, port, app, server_class=ThreadedWSGIServer) as server:
+        with make_server(
+            host,
+            port,
+            app,
+            server_class=ThreadedWSGIServer,
+            handler_class=QuietWSGIRequestHandler,
+        ) as server:
             socket_host, socket_port = server.socket.getsockname()[:2]
             payload = {
                 "host": socket_host,

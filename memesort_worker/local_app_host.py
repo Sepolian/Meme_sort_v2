@@ -10,7 +10,12 @@ from wsgiref.simple_server import make_server
 from .app_paths import AppPaths
 from .runtime_service import RuntimeAuthorizationError, authorize_runtime_for_session
 from .web_security import SessionGate
-from .webapp import LocalWebApp, ThreadedWSGIServer, create_app
+from .webapp import (
+    LocalWebApp,
+    QuietWSGIRequestHandler,
+    ThreadedWSGIServer,
+    create_app,
+)
 
 
 class LocalAppHostError(RuntimeError):
@@ -121,6 +126,7 @@ class LocalAppHost:
             port,
             app,
             server_class=ThreadedWSGIServer,
+            handler_class=QuietWSGIRequestHandler,
         )
         self._server = server
 
