@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
-import uuid
 from pathlib import Path
 
 import numpy as np
@@ -12,11 +10,11 @@ from . import asset_preprocessing
 from . import library
 from . import job_queue
 from . import ocr_artifacts
-from .embedding_backend import EmbeddingBackend, EmbeddingBackendError, get_embedding_backend
+from .embedding_backend import EmbeddingBackend, get_embedding_backend
+from .indexing_store import IndexingStore, RecipeRow
 from .ocr_backend import OcrBackend, get_ocr_backend
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .runtime_service import is_runtime_ready_for_indexing
-from .semantic_retrieval import vector_to_blob
 
 
 def run_pending_jobs(
@@ -36,9 +34,9 @@ def run_pending_jobs(
     library_root_path = Path(init_result.library_root)
     backend: EmbeddingBackend | None = None
     ocr_backend: OcrBackend | None = None
-    conn = asset_catalog.connect(asset_catalog.database_path(library_root_path))
+    store = IndexingStore(library_root_path)
     try:
-        queue = job_queue.JobQueue(conn)
+        queue = job_queue.JobQueue(store.connection)
         (
             requeued_running_jobs,
             retried_failed_jobs,
@@ -59,16 +57,16 @@ def run_pending_jobs(
                     continue
 
                 if job.job_type is job_queue.JobType.GENERATE_THUMBNAIL:
-                    _run_generate_thumbnail_job(conn, library_root_path, job.payload)
+                    _run_generate_thumbnail_job(store, library_root_path, job.payload)
                 elif job.job_type is job_queue.JobType.EMBED_ASSET:
                     if backend is None:
                         backend = get_embedding_backend()
-                    _run_embed_asset_job(conn, library_root_path, job.payload, backend, provider)
+                    _run_embed_asset_job(store, library_root_path, job.payload, backend, provider)
                 elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:
                         ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
                     ocr_artifacts.run_ocr_asset_job(
-                        conn,
+                        store.connection,
                         library_root_path,
                         job.payload,
                         ocr_backend,
@@ -96,28 +94,19 @@ def run_pending_jobs(
     finally:
         if ocr_backend is not None:
             ocr_backend.close()
-        conn.close()
+        store.close()
 
 
 def _run_generate_thumbnail_job(
-    conn: sqlite3.Connection,
+    store: IndexingStore,
     library_root_path: Path,
     payload: dict[str, object],
 ) -> None:
     asset_id = str(payload["asset_id"])
-    asset_row = conn.execute(
-        """
-        SELECT library_path
-        FROM asset
-        WHERE id = ?
-          AND deleted_at IS NULL
-        """,
-        (asset_id,),
-    ).fetchone()
-    if asset_row is None:
+    source_path = store.get_asset_library_path(asset_id)
+    if source_path is None:
         raise ValueError(f"Asset not found for thumbnail job: {asset_id}")
 
-    source_path = library_root_path / str(asset_row["library_path"])
     thumb_path = library_root_path / "thumbnails" / f"{asset_id}.jpg"
     with Image.open(source_path) as image:
         rgb = image.convert("RGB")
@@ -125,70 +114,22 @@ def _run_generate_thumbnail_job(
         rgb.save(thumb_path, format="JPEG", quality=90)
         width, height = rgb.size
 
-    now = asset_catalog.utc_now()
-    existing_rendition = conn.execute(
-        """
-        SELECT id
-        FROM rendition
-        WHERE asset_id = ?
-          AND kind = 'thumbnail'
-        """,
-        (asset_id,),
-    ).fetchone()
-    if existing_rendition is None:
-        conn.execute(
-            """
-            INSERT INTO rendition (id, asset_id, kind, path, width, height, frame_index, created_at)
-            VALUES (?, ?, 'thumbnail', ?, ?, ?, NULL, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                asset_id,
-                f"thumbnails/{asset_id}.jpg",
-                width,
-                height,
-                now,
-            ),
-        )
-    else:
-        conn.execute(
-            """
-            UPDATE rendition
-            SET path = ?, width = ?, height = ?, created_at = ?
-            WHERE id = ?
-            """,
-            (
-                f"thumbnails/{asset_id}.jpg",
-                width,
-                height,
-                now,
-                str(existing_rendition["id"]),
-            ),
-        )
-    conn.execute(
-        """
-        UPDATE asset
-        SET updated_at = ?
-        WHERE id = ?
-        """,
-        (now, asset_id),
-    )
+    store.upsert_thumbnail_rendition(asset_id, width, height)
 
 
 def _gif_frame_count_for_recipe(
-    recipe_row: sqlite3.Row,
+    recipe: RecipeRow,
     provider: RuntimeRecipeProvider | None = None,
 ) -> int:
     provider = provider or default_provider()
-    value = recipe_row["gif_frame_count"]
-    frame_count = provider.default_gif_frame_count if value is None else int(value)
+    frame_count = provider.default_gif_frame_count if recipe.gif_frame_count is None else int(recipe.gif_frame_count)
     if frame_count <= 0:
-        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
+        raise ValueError(f"Invalid gif_frame_count on recipe {recipe.recipe_id}: {frame_count}")
     return frame_count
 
 
 def _run_embed_asset_job(
-    conn: sqlite3.Connection,
+    store: IndexingStore,
     library_root_path: Path,
     payload: dict[str, object],
     backend: EmbeddingBackend,
@@ -196,41 +137,20 @@ def _run_embed_asset_job(
 ) -> None:
     asset_id = str(payload["asset_id"])
     recipe_id = str(payload["recipe_id"])
-    recipe_row = asset_catalog.get_recipe_row(conn, recipe_id)
-    asset_row = conn.execute(
-        """
-        SELECT library_path
-        FROM asset
-        WHERE id = ?
-          AND deleted_at IS NULL
-        """,
-        (asset_id,),
-    ).fetchone()
-    if asset_row is None:
+    recipe = store.get_recipe(recipe_id)
+    image_path = store.get_asset_library_path(asset_id)
+    if image_path is None:
         raise ValueError(f"Asset not found for embed job: {asset_id}")
 
-    existing = conn.execute(
-        """
-        SELECT id
-        FROM embedding_item
-        WHERE asset_id = ?
-          AND recipe_id = ?
-          AND kind = 'image'
-        LIMIT 1
-        """,
-        (asset_id, recipe_id),
-    ).fetchone()
-    if existing is not None:
+    if store.has_embedding(asset_id, recipe_id):
         return
 
     provider = provider or default_provider()
-    image_path = library_root_path / str(asset_row["library_path"])
     image_bytes = image_path.read_bytes()
-    output_dimension = int(recipe_row["output_dimension"])
-    instruction = provider.instruction_text_for_key(str(recipe_row["instruction_key"]))
-    preprocess_version = str(recipe_row["preprocess_version"])
-    gif_frame_count = _gif_frame_count_for_recipe(recipe_row, provider)
-    spec = provider.preprocess_spec_for_version(preprocess_version)
+    output_dimension = recipe.output_dimension
+    instruction = provider.instruction_text_for_key(recipe.instruction_key)
+    gif_frame_count = _gif_frame_count_for_recipe(recipe, provider)
+    spec = provider.preprocess_spec_for_version(recipe.preprocess_version)
 
     if str(payload.get("media_type")) == "image/gif":
         frame_payloads = asset_preprocessing.extract_gif_frame_bytes(
@@ -244,7 +164,7 @@ def _run_embed_asset_job(
                 output_dimension,
                 instruction=instruction,
             )
-            _insert_embedding_item(conn, asset_id, recipe_id, output_dimension, f"frame:{frame_index}", vector)
+            store.insert_embedding(asset_id, recipe_id, output_dimension, f"frame:{frame_index}", vector)
     else:
         processed_image_bytes = asset_preprocessing.preprocess_image_bytes(
             image_bytes,
@@ -255,51 +175,6 @@ def _run_embed_asset_job(
             output_dimension,
             instruction=instruction,
         )
-        _insert_embedding_item(conn, asset_id, recipe_id, output_dimension, "original", vector)
+        store.insert_embedding(asset_id, recipe_id, output_dimension, "original", vector)
 
-    conn.execute(
-        """
-        UPDATE asset
-        SET updated_at = ?
-        WHERE id = ?
-        """,
-        (asset_catalog.utc_now(), asset_id),
-    )
-
-
-def _insert_embedding_item(
-    conn: sqlite3.Connection,
-    asset_id: str,
-    recipe_id: str,
-    output_dimension: int,
-    source_ref: str,
-    vector: np.ndarray,
-) -> None:
-    if vector.shape[0] != output_dimension:
-        raise EmbeddingBackendError(
-            f"Embedding backend returned dim {vector.shape[0]}, expected {output_dimension}"
-        )
-    conn.execute(
-        """
-        INSERT INTO embedding_item (
-            id,
-            asset_id,
-            recipe_id,
-            kind,
-            source_ref,
-            vector_dim,
-            vector_blob,
-            created_at
-        )
-        VALUES (?, ?, ?, 'image', ?, ?, ?, ?)
-        """,
-        (
-            str(uuid.uuid4()),
-            asset_id,
-            recipe_id,
-            source_ref,
-            output_dimension,
-            sqlite3.Binary(vector_to_blob(vector)),
-            asset_catalog.utc_now(),
-        ),
-    )
+    store.touch_asset(asset_id)
