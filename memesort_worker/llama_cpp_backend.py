@@ -476,6 +476,15 @@ def _activate_managed_server(server: LlamaCppServer) -> None:
 
 @atexit.register
 def _close_managed_servers() -> None:
+    close_managed_servers()
+
+
+def close_managed_servers() -> None:
+    """Stop every managed llama-server process and release runtime loggers.
+
+    This is the explicit shutdown path invoked by the application host. The
+    ``atexit`` registration above only remains as a crash fallback.
+    """
     for server in list(_MANAGED_SERVERS):
         server.close()
     _close_runtime_loggers()
