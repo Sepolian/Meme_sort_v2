@@ -12,7 +12,6 @@ APP_DIR_NAME = "MemeSort"
 # Environment overrides. Tests and packaging drive path resolution through these
 # instead of assuming the source checkout is the product root.
 ENV_APP_ROOT = "MEMESORT_APP_ROOT"
-ENV_MUTABLE_ROOT = "MEMESORT_MUTABLE_ROOT"
 ENV_LIBRARY_ROOT = "MEMESORT_LIBRARY_ROOT"
 
 MANIFEST_FILENAME = "runtime-manifest.json"
@@ -22,45 +21,31 @@ _STATIC_DIR_NAME = "web_static"
 
 @dataclass(frozen=True)
 class AppPaths:
-    """Resolved filesystem layout for one MemeSort session.
+    """Resolved location of the read-only application files for one session.
 
-    ``application_root`` and everything derived from it points at read-only
-    installed files.  ``mutable_root`` and its children hold runtime, models,
-    logs and (optionally) the managed library, and are the only locations the
-    application writes to.  The distinction lets a per-user installer keep the
-    program directory read-only while user data lives under
-    ``%LOCALAPPDATA%``.
+    Its job is to stop modules assuming ``Path(__file__).parents[...]`` is the
+    product root, so static assets and the runtime manifest resolve correctly in
+    a development checkout, a PyInstaller frozen build, and under test. The
+    runtime and models keep installing where ``runtime-manifest.json`` places
+    them (repo-relative ``.runtime`` / ``.models``); this type does not relocate
+    them.
     """
 
     application_root: Path
     manifest_path: Path
     static_root: Path
-    mutable_root: Path
-    runtime_root: Path
-    models_root: Path
-    logs_root: Path
     default_library_root: Path
 
     @classmethod
     def discover(cls, env: Mapping[str, str] | None = None) -> "AppPaths":
         environ = os.environ if env is None else env
         application_root, static_root, manifest_path = _resolve_application_layout(environ)
-        mutable_root = _resolve_mutable_root(environ)
         return cls(
             application_root=application_root,
             manifest_path=manifest_path,
             static_root=static_root,
-            mutable_root=mutable_root,
-            runtime_root=mutable_root / "runtime",
-            models_root=mutable_root / "models",
-            logs_root=mutable_root / "logs",
             default_library_root=_resolve_default_library_root(environ),
         )
-
-    def ensure_mutable_tree(self) -> None:
-        """Create the writable directories this session owns."""
-        for path in (self.mutable_root, self.runtime_root, self.models_root, self.logs_root):
-            path.mkdir(parents=True, exist_ok=True)
 
 
 def _resolve_application_layout(env: Mapping[str, str]) -> tuple[Path, Path, Path]:
@@ -100,23 +85,12 @@ def _static_root_for(application_root: Path) -> Path:
     return application_root / _STATIC_DIR_NAME
 
 
-def _resolve_mutable_root(env: Mapping[str, str]) -> Path:
-    override = env.get(ENV_MUTABLE_ROOT)
-    if override:
-        return Path(override).expanduser().resolve()
-    local_appdata = env.get("LOCALAPPDATA")
-    if local_appdata:
-        return (Path(local_appdata) / APP_DIR_NAME).resolve()
-    return (Path.home() / "AppData" / "Local" / APP_DIR_NAME).resolve()
-
-
 def _resolve_default_library_root(env: Mapping[str, str]) -> Path:
     override = env.get(ENV_LIBRARY_ROOT)
     if override:
         return Path(override).expanduser().resolve()
     # Preserve the historical roaming location so existing libraries keep working
-    # without a silent move.  Migration to the mutable root is an explicit,
-    # opt-in step, never a side effect of discovery.
+    # without a silent move.
     appdata = env.get("APPDATA")
     if appdata:
         return (Path(appdata) / APP_DIR_NAME).resolve()

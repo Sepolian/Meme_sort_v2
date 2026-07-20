@@ -7,7 +7,6 @@ import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from .app_paths import AppPaths
 from .launcher import default_library_root
 from .local_app_host import LocalAppHost, LocalAppHostConfig
 from .single_instance import SingleInstanceGuard
@@ -36,10 +35,14 @@ def launch_desktop_shell(
     at the host's authenticated bootstrap URL and performs a bounded, idempotent
     shutdown when the window closes.
     """
-    paths = AppPaths.discover()
-    paths.ensure_mutable_tree()
     session_id = uuid.uuid4().hex
-    _configure_logging(paths, session_id)
+    resolved_library_root = (
+        Path(library_root).expanduser().resolve()
+        if library_root
+        else default_library_root().resolve()
+    )
+    logs_root = resolved_library_root / "logs"
+    _configure_logging(logs_root, session_id)
 
     guard = SingleInstanceGuard()
     if not guard.acquire():
@@ -47,11 +50,6 @@ def launch_desktop_shell(
         _LOG.info("second_instance_refused session=%s", session_id)
         return 0
 
-    resolved_library_root = (
-        Path(library_root).expanduser().resolve()
-        if library_root
-        else default_library_root().resolve()
-    )
     _LOG.info(
         "desktop_start session=%s library_root=%s browser=%s",
         session_id,
@@ -64,7 +62,7 @@ def launch_desktop_shell(
         info = host.start()
     except Exception as exc:  # pragma: no cover - defensive startup guard
         _LOG.exception("host_start_failed session=%s", session_id)
-        _show_startup_error(str(exc), paths.logs_root)
+        _show_startup_error(str(exc), logs_root)
         guard.release()
         return 1
 
@@ -95,8 +93,6 @@ def run_smoke_test(library_root: str | None = None) -> int:
     import urllib.error
     import urllib.request
 
-    paths = AppPaths.discover()
-    paths.ensure_mutable_tree()
     resolved_library_root = (
         Path(library_root).expanduser().resolve()
         if library_root
@@ -154,12 +150,12 @@ def _webview_available() -> bool:
     return True
 
 
-def _configure_logging(paths: AppPaths, session_id: str) -> None:
+def _configure_logging(logs_root: Path, session_id: str) -> None:
     if getattr(_LOG, "_memesort_configured", False):
         return
-    paths.logs_root.mkdir(parents=True, exist_ok=True)
+    logs_root.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(
-        paths.logs_root / "desktop.log",
+        logs_root / "desktop.log",
         maxBytes=1_000_000,
         backupCount=3,
         encoding="utf-8",
