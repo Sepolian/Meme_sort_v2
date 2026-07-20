@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 from PIL import Image
 
 from memesort_worker.app_commands import search_text
@@ -276,6 +277,52 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, f"stderr: {result.stderr}")
         self.assertIn("OK", result.stdout)
+
+    def test_search_image_path_passes_provider_to_library_store(self) -> None:
+        """Regression: search_image_path must pass provider to LibraryStore.
+
+        Without this, a custom provider would cause LibraryStore to use
+        default_provider(), potentially reactivating the default recipe.
+        """
+        from memesort_worker.retrieval_service import search_image_path
+        from memesort_worker.library_store import LibraryStore
+
+        custom_provider = default_provider()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            initialize_library(library_root, provider=custom_provider)
+
+            # Create a test image to search with
+            query_image = Path(temp_dir) / "query.png"
+            Image.new("RGB", (10, 10), "blue").save(query_image, format="PNG")
+
+            # Patch LibraryStore to capture the provider argument
+            original_init = LibraryStore.__init__
+            captured_provider = []
+
+            def capturing_init(self, library_root, provider=None):
+                captured_provider.append(provider)
+                return original_init(self, library_root, provider=provider)
+
+            with patch.object(LibraryStore, "__init__", capturing_init):
+                with patch(
+                    "memesort_worker.retrieval_service.get_embedding_backend"
+                ) as mock_backend:
+                    mock_backend.return_value.embed_image_bytes.return_value = (
+                        np.ones(2048, dtype=np.float32)
+                    )
+                    try:
+                        search_image_path(
+                            library_root,
+                            query_image,
+                            provider=custom_provider,
+                        )
+                    except Exception:
+                        pass  # We only care about the provider being passed
+
+            self.assertEqual(1, len(captured_provider))
+            self.assertIs(custom_provider, captured_provider[0])
 
 
 if __name__ == "__main__":

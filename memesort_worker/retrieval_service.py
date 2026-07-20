@@ -70,14 +70,14 @@ def search_image_path(
     if suffix not in library.SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported image file extension: {suffix or '(none)'}")
 
-    with LibraryStore(library_root) as store:
+    with LibraryStore(library_root, provider=provider) as store:
         embeddings = store.list_active_embeddings()
 
         if not embeddings:
             results: list[dict[str, object]] = []
         else:
-            provider = provider or default_provider()
-            spec = provider.preprocess_spec_for_version(store.active_recipe.preprocess_version)
+            resolved_provider = provider or default_provider()
+            spec = resolved_provider.preprocess_spec_for_version(store.active_recipe.preprocess_version)
             backend = get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 image_bytes = query_path.read_bytes()
