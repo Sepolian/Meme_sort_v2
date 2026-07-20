@@ -15,14 +15,15 @@ from PIL import Image
 
 from memesort_worker.app_commands import search_text
 from memesort_worker.app_state import build_app_state
+from memesort_worker.asset_preprocessing import preprocess_image_bytes
 from memesort_worker.embedding_backend import get_embedding_backend
 from memesort_worker.library import (
     initialize_library,
     import_folder,
     list_assets,
-    _preprocess_image_bytes,
 )
 from memesort_worker import library as library_module
+from memesort_worker.recipe_provider import default_provider
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
@@ -218,12 +219,16 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 conn.close()
 
     def test_manifest_preprocessing_applies_exif_and_white_alpha(self) -> None:
+        provider = default_provider()
+        spec = provider.preprocess_spec_for_version(
+            load_runtime_manifest().preprocessing.version
+        )
         transparent = Image.new("RGBA", (1, 1), (255, 0, 0, 0))
         transparent_bytes = io.BytesIO()
         transparent.save(transparent_bytes, format="PNG")
-        processed = _preprocess_image_bytes(
+        processed = preprocess_image_bytes(
             transparent_bytes.getvalue(),
-            load_runtime_manifest().preprocessing.version,
+            spec,
         )
         with Image.open(io.BytesIO(processed)) as image:
             self.assertEqual("RGB", image.mode)
@@ -234,9 +239,9 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         exif[274] = 6
         oriented_bytes = io.BytesIO()
         oriented.save(oriented_bytes, format="JPEG", exif=exif)
-        processed = _preprocess_image_bytes(
+        processed = preprocess_image_bytes(
             oriented_bytes.getvalue(),
-            load_runtime_manifest().preprocessing.version,
+            spec,
         )
         with Image.open(io.BytesIO(processed)) as image:
             self.assertEqual((1, 2), image.size)

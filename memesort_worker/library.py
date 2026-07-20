@@ -5,14 +5,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-import numpy as np
-
 from . import asset_catalog
 from . import asset_preprocessing
-from . import ocr_artifacts
 from . import job_queue
+from . import ocr_artifacts
 from .semantic_retrieval import scan_duplicate_vector_rows
-from .recipe_provider import RuntimeRecipeProvider, PreprocessSpec, default_provider
+from .recipe_provider import RuntimeRecipeProvider, default_provider
 
 
 # Re-export constants from asset_catalog for backward compatibility
@@ -214,24 +212,12 @@ class SetupStateResult:
 
 
 # Delegate internal helpers to asset_catalog
-def _utc_now() -> str:
-    return asset_catalog.utc_now()
-
-
-def _resolve(path: Path | str) -> Path:
-    return asset_catalog.resolve_path(path)
-
-
 def _database_path(library_root: Path) -> Path:
     return asset_catalog.database_path(library_root)
 
 
 def _connect(database_path: Path) -> sqlite3.Connection:
     return asset_catalog.connect(database_path)
-
-
-def _create_schema(conn: sqlite3.Connection) -> None:
-    return asset_catalog.create_schema(conn)
 
 
 def _recipe_label(
@@ -249,49 +235,6 @@ def _recipe_label(
     return f"{base} / gif-f{gif_frame_count}"
 
 
-def _ensure_recipe(conn: sqlite3.Connection, recipe_spec: dict[str, object]) -> str:
-    return asset_catalog.ensure_recipe(conn, recipe_spec)
-
-
-def _ensure_manifest_recipe(conn: sqlite3.Connection) -> str:
-    return asset_catalog.ensure_manifest_recipe(conn)
-
-
-def _activate_manifest_recipe(conn: sqlite3.Connection) -> tuple[str, bool, int]:
-    return asset_catalog.activate_manifest_recipe(conn)
-
-
-def _ensure_ocr_recipe(conn: sqlite3.Connection, recipe_spec: dict[str, object]) -> str:
-    return ocr_artifacts.ensure_ocr_recipe(conn, recipe_spec)
-
-
-def _ensure_default_ocr_recipe(conn: sqlite3.Connection) -> str:
-    return ocr_artifacts.ensure_default_ocr_recipe(conn)
-
-
-def _ensure_missing_ocr_jobs(conn: sqlite3.Connection) -> int:
-    return ocr_artifacts.ensure_missing_ocr_jobs(conn, now=_utc_now())
-
-
-def _get_worker_state_json(
-    conn: sqlite3.Connection,
-    key: str,
-) -> dict[str, object] | None:
-    return asset_catalog.get_worker_state_json(conn, key)
-
-
-def _set_worker_state_json(
-    conn: sqlite3.Connection,
-    key: str,
-    payload: dict[str, object],
-) -> None:
-    return asset_catalog.set_worker_state_json(conn, key, payload)
-
-
-def _set_active_recipe_id(conn: sqlite3.Connection, recipe_id: str) -> None:
-    return asset_catalog.set_active_recipe_id(conn, recipe_id)
-
-
 def _get_active_recipe_id(conn: sqlite3.Connection) -> str:
     return asset_catalog.get_active_recipe_id(conn)
 
@@ -300,62 +243,8 @@ def _get_recipe_row(conn: sqlite3.Connection, recipe_id: str) -> sqlite3.Row:
     return asset_catalog.get_recipe_row(conn, recipe_id)
 
 
-def _get_ocr_recipe_row(conn: sqlite3.Connection, ocr_recipe_id: str) -> sqlite3.Row:
-    return ocr_artifacts.get_ocr_recipe_row(conn, ocr_recipe_id)
-
-
-def _searchable_ocr_text(lines: list[dict[str, object]], min_confidence: float) -> str:
-    return ocr_artifacts.searchable_ocr_text(lines, min_confidence)
-
-
-def _store_ocr_result(
-    conn: sqlite3.Connection,
-    asset_id: str,
-    ocr_recipe_id: str,
-    ocr_output: dict[str, object],
-) -> str:
-    return ocr_artifacts.store_ocr_result(conn, asset_id, ocr_recipe_id, ocr_output)
-
-
-def _instruction_text_for_key(instruction_key: str) -> str:
-    return _get_provider().instruction_text_for_key(instruction_key)
-
-
-def _preprocess_image_bytes(
-    image_bytes: bytes,
-    preprocess_version: str,
-) -> bytes:
-    provider = _get_provider()
-    spec = provider.preprocess_spec_for_version(preprocess_version)
-    return asset_preprocessing.preprocess_image_bytes(image_bytes, spec)
-
-
-def _image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int, int]:
-    return asset_preprocessing.image_dimensions_from_bytes(image_bytes)
-
-
 def _safe_image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int | None, int | None]:
     return asset_preprocessing.safe_image_dimensions_from_bytes(image_bytes)
-
-
-def _extract_gif_frame_bytes(
-    image_bytes: bytes,
-    preprocess_version: str,
-    frame_count: int | None = None,
-) -> list[tuple[int, bytes]]:
-    provider = _get_provider()
-    spec = provider.preprocess_spec_for_version(preprocess_version)
-    if frame_count is None:
-        frame_count = provider.default_gif_frame_count
-    return asset_preprocessing.extract_gif_frame_bytes(image_bytes, spec, frame_count)
-
-
-def _composite_manifest_rgb(image: "Image.Image", spec: "PreprocessSpec | None" = None) -> "Image.Image":
-    if spec is None:
-        spec = _get_provider().preprocess_spec_for_version(
-            next(iter(_get_provider().preprocess_specs_by_version))
-        )
-    return asset_preprocessing.composite_rgb(image, spec)
 
 
 def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
