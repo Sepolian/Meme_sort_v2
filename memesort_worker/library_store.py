@@ -9,9 +9,11 @@ from typing import Iterator
 
 import numpy as np
 
+from . import asset_catalog
 from . import library
 from . import job_queue
 from . import ocr_artifacts
+from .recipe_provider import default_provider
 from .semantic_retrieval import AssetEmbedding, blob_to_vector
 
 
@@ -32,27 +34,51 @@ class LibraryReadSnapshot:
     pending_jobs: list[dict[str, object]]
 
 
+def _recipe_label(
+    model_id: str,
+    output_dimension: int,
+    runtime_profile: str,
+    gif_frame_count: int,
+) -> str:
+    provider = default_provider()
+    model_name = model_id.split("/")[-1]
+    base = f"{model_name} / {output_dimension}d / {runtime_profile}"
+    if gif_frame_count == provider.default_gif_frame_count:
+        return base
+    return f"{base} / gif-f{gif_frame_count}"
+
+
+def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
+    provider = default_provider()
+    value = recipe_row["gif_frame_count"]
+    frame_count = provider.default_gif_frame_count if value is None else int(value)
+    if frame_count <= 0:
+        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
+    return frame_count
+
+
 class LibraryStore:
     """Persistence interface for library state that callers should not assemble from private helpers."""
 
     def __init__(self, library_root: Path | str) -> None:
-        init_result = library.initialize_library(library_root)
+        init_result = asset_catalog.initialize_library(library_root)
         self.library_root_path = Path(init_result.library_root)
-        self._conn = library._connect(library._database_path(self.library_root_path))
-        active_recipe_id = library._get_active_recipe_id(self._conn)
-        recipe_row = library._get_recipe_row(self._conn, active_recipe_id)
+        self._conn = asset_catalog.connect(asset_catalog.database_path(self.library_root_path))
+        active_recipe_id = asset_catalog.get_active_recipe_id(self._conn)
+        recipe_row = asset_catalog.get_recipe_row(self._conn, active_recipe_id)
+        provider = default_provider()
         self.active_recipe = ActiveIndexRecipe(
             recipe_id=active_recipe_id,
-            label=library._recipe_label(
+            label=_recipe_label(
                 str(recipe_row["model_id"]),
                 int(recipe_row["output_dimension"]),
                 str(recipe_row["runtime_profile"]),
-                library._gif_frame_count_for_recipe(recipe_row),
+                _gif_frame_count_for_recipe(recipe_row),
             ),
             output_dimension=int(recipe_row["output_dimension"]),
-            instruction_text=library._instruction_text_for_key(str(recipe_row["instruction_key"])),
+            instruction_text=provider.instruction_text_for_key(str(recipe_row["instruction_key"])),
             preprocess_version=str(recipe_row["preprocess_version"]),
-            gif_frame_count=library._gif_frame_count_for_recipe(recipe_row),
+            gif_frame_count=_gif_frame_count_for_recipe(recipe_row),
         )
 
     def __enter__(self) -> "LibraryStore":
@@ -210,11 +236,11 @@ class LibraryStore:
         return "stale_only" if has_stale_embeddings else "missing_index"
 
     def get_worker_state_json(self, key: str) -> dict[str, object] | None:
-        return library._get_worker_state_json(self._conn, key)
+        return asset_catalog.get_worker_state_json(self._conn, key)
 
     def set_worker_state_json(self, key: str, payload: dict[str, object]) -> None:
         with self._conn:
-            library._set_worker_state_json(self._conn, key, payload)
+            asset_catalog.set_worker_state_json(self._conn, key, payload)
 
     def list_active_embeddings(
         self,

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import io
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -238,6 +240,37 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         )
         with Image.open(io.BytesIO(processed)) as image:
             self.assertEqual((1, 2), image.size)
+
+    def test_library_import_does_not_read_manifest_file(self) -> None:
+        """Importing memesort_worker.library must not perform file I/O on the manifest.
+
+        This is a Phase 1 acceptance criterion: the manifest is read lazily
+        via the recipe provider, not at module import time.
+        """
+        script = (
+            "import builtins, sys\n"
+            "_real_open = builtins.open\n"
+            "_manifest_reads = []\n"
+            "def _tracking_open(*args, **kwargs):\n"
+            "    if args and 'runtime-manifest' in str(args[0]):\n"
+            "        _manifest_reads.append(str(args[0]))\n"
+            "    return _real_open(*args, **kwargs)\n"
+            "builtins.open = _tracking_open\n"
+            "import memesort_worker.library\n"
+            "builtins.open = _real_open\n"
+            "if _manifest_reads:\n"
+            "    print(f'FAIL: manifest read at import: {_manifest_reads}', file=sys.stderr)\n"
+            "    sys.exit(1)\n"
+            "print('OK')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(0, result.returncode, f"stderr: {result.stderr}")
+        self.assertIn("OK", result.stdout)
 
 
 if __name__ == "__main__":

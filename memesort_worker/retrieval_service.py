@@ -3,10 +3,12 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from . import asset_preprocessing
 from . import library
 from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
 from .inference_service import search_inference_request
+from .recipe_provider import default_provider
 from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import rank_asset_embeddings
 
@@ -73,13 +75,15 @@ def search_image_path(
         if not embeddings:
             results: list[dict[str, object]] = []
         else:
+            provider = default_provider()
+            spec = provider.preprocess_spec_for_version(store.active_recipe.preprocess_version)
             backend = get_embedding_backend()
             with search_inference_request(request_id or str(uuid.uuid4())):
                 image_bytes = query_path.read_bytes()
                 if suffix == ".gif":
-                    frame_payloads = library._extract_gif_frame_bytes(
+                    frame_payloads = asset_preprocessing.extract_gif_frame_bytes(
                         image_bytes,
-                        store.active_recipe.preprocess_version,
+                        spec,
                         frame_count=store.active_recipe.gif_frame_count,
                     )
                     query_vectors = [
@@ -91,9 +95,9 @@ def search_image_path(
                         for _, frame_bytes in frame_payloads
                     ]
                 else:
-                    processed_bytes = library._preprocess_image_bytes(
+                    processed_bytes = asset_preprocessing.preprocess_image_bytes(
                         image_bytes,
-                        store.active_recipe.preprocess_version,
+                        spec,
                     )
                     query_vectors = [
                         backend.embed_image_bytes(

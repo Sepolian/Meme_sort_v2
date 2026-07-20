@@ -7,11 +7,14 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from . import asset_catalog
+from . import asset_preprocessing
 from . import library
 from . import job_queue
 from . import ocr_artifacts
 from .embedding_backend import EmbeddingBackend, EmbeddingBackendError, get_embedding_backend
 from .ocr_backend import OcrBackend, get_ocr_backend
+from .recipe_provider import default_provider
 from .runtime_service import is_runtime_ready_for_indexing
 from .semantic_retrieval import vector_to_blob
 
@@ -28,11 +31,11 @@ def run_pending_jobs(
             "Vulkan runtime is not authorized for indexing in this app session: "
             f"{runtime_message}"
         )
-    init_result = library.initialize_library(library_root)
+    init_result = asset_catalog.initialize_library(library_root)
     library_root_path = Path(init_result.library_root)
     backend: EmbeddingBackend | None = None
     ocr_backend: OcrBackend | None = None
-    conn = library._connect(library._database_path(library_root_path))
+    conn = asset_catalog.connect(asset_catalog.database_path(library_root_path))
     try:
         queue = job_queue.JobQueue(conn)
         (
@@ -121,6 +124,7 @@ def _run_generate_thumbnail_job(
         rgb.save(thumb_path, format="JPEG", quality=90)
         width, height = rgb.size
 
+    now = asset_catalog.utc_now()
     existing_rendition = conn.execute(
         """
         SELECT id
@@ -142,7 +146,7 @@ def _run_generate_thumbnail_job(
                 f"thumbnails/{asset_id}.jpg",
                 width,
                 height,
-                library._utc_now(),
+                now,
             ),
         )
     else:
@@ -156,7 +160,7 @@ def _run_generate_thumbnail_job(
                 f"thumbnails/{asset_id}.jpg",
                 width,
                 height,
-                library._utc_now(),
+                now,
                 str(existing_rendition["id"]),
             ),
         )
@@ -166,8 +170,17 @@ def _run_generate_thumbnail_job(
         SET updated_at = ?
         WHERE id = ?
         """,
-        (library._utc_now(), asset_id),
+        (now, asset_id),
     )
+
+
+def _gif_frame_count_for_recipe(recipe_row: sqlite3.Row) -> int:
+    provider = default_provider()
+    value = recipe_row["gif_frame_count"]
+    frame_count = provider.default_gif_frame_count if value is None else int(value)
+    if frame_count <= 0:
+        raise ValueError(f"Invalid gif_frame_count on recipe {recipe_row['id']}: {frame_count}")
+    return frame_count
 
 
 def _run_embed_asset_job(
@@ -178,7 +191,7 @@ def _run_embed_asset_job(
 ) -> None:
     asset_id = str(payload["asset_id"])
     recipe_id = str(payload["recipe_id"])
-    recipe_row = library._get_recipe_row(conn, recipe_id)
+    recipe_row = asset_catalog.get_recipe_row(conn, recipe_id)
     asset_row = conn.execute(
         """
         SELECT library_path
@@ -205,17 +218,19 @@ def _run_embed_asset_job(
     if existing is not None:
         return
 
+    provider = default_provider()
     image_path = library_root_path / str(asset_row["library_path"])
     image_bytes = image_path.read_bytes()
     output_dimension = int(recipe_row["output_dimension"])
-    instruction = library._instruction_text_for_key(str(recipe_row["instruction_key"]))
+    instruction = provider.instruction_text_for_key(str(recipe_row["instruction_key"]))
     preprocess_version = str(recipe_row["preprocess_version"])
-    gif_frame_count = library._gif_frame_count_for_recipe(recipe_row)
+    gif_frame_count = _gif_frame_count_for_recipe(recipe_row)
+    spec = provider.preprocess_spec_for_version(preprocess_version)
 
     if str(payload.get("media_type")) == "image/gif":
-        frame_payloads = library._extract_gif_frame_bytes(
+        frame_payloads = asset_preprocessing.extract_gif_frame_bytes(
             image_bytes,
-            preprocess_version,
+            spec,
             frame_count=gif_frame_count,
         )
         for frame_index, frame_bytes in frame_payloads:
@@ -226,9 +241,9 @@ def _run_embed_asset_job(
             )
             _insert_embedding_item(conn, asset_id, recipe_id, output_dimension, f"frame:{frame_index}", vector)
     else:
-        processed_image_bytes = library._preprocess_image_bytes(
+        processed_image_bytes = asset_preprocessing.preprocess_image_bytes(
             image_bytes,
-            preprocess_version,
+            spec,
         )
         vector = backend.embed_image_bytes(
             processed_image_bytes,
@@ -243,7 +258,7 @@ def _run_embed_asset_job(
         SET updated_at = ?
         WHERE id = ?
         """,
-        (library._utc_now(), asset_id),
+        (asset_catalog.utc_now(), asset_id),
     )
 
 
@@ -280,6 +295,6 @@ def _insert_embedding_item(
             source_ref,
             output_dimension,
             sqlite3.Binary(vector_to_blob(vector)),
-            library._utc_now(),
+            asset_catalog.utc_now(),
         ),
     )
