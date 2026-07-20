@@ -2,16 +2,27 @@
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
 repo_root = Path.cwd()
 static_dir = repo_root / "memesort_worker" / "web_static"
+manifest_file = repo_root / "runtime-manifest.json"
 
+# Bundle the immutable application files only. Large user data (the models,
+# native runtime, development virtualenvs and the managed library) is downloaded
+# and stored under %LOCALAPPDATA% at runtime, never packed into the executable.
 datas = [
     (str(static_dir), "memesort_worker/web_static"),
+    (str(manifest_file), "."),
 ]
 
-hiddenimports = [
-    "PIL._tkinter_finder",
-]
+# The native window backend (pywebview + WebView2 via pythonnet) resolves parts
+# of its platform layer dynamically, so its submodules and data must be
+# collected explicitly.
+hiddenimports = list(collect_submodules("webview"))
+hiddenimports += ["clr", "clr_loader"]
+
+datas += collect_data_files("webview")
 
 a = Analysis(
     [str(repo_root / "memesort_worker" / "desktop_entry.py")],

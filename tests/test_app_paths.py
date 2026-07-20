@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from memesort_worker.app_paths import (
     ENV_APP_ROOT,
@@ -80,6 +82,25 @@ class AppPathsDiscoveryTests(unittest.TestCase):
             self.assertTrue(paths.runtime_root.is_dir())
             self.assertTrue(paths.models_root.is_dir())
             self.assertTrue(paths.logs_root.is_dir())
+
+    def test_frozen_layout_matches_the_bundled_data_locations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_root = Path(temp_dir) / "_internal"
+            (bundle_root / "memesort_worker" / "web_static").mkdir(parents=True)
+            (bundle_root / "runtime-manifest.json").write_text("{}", encoding="utf-8")
+            exe_dir = Path(temp_dir)
+
+            with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(
+                sys, "_MEIPASS", str(bundle_root), create=True
+            ), mock.patch.object(sys, "executable", str(exe_dir / "MemeSort.exe")):
+                paths = AppPaths.discover(env={})
+
+            self.assertEqual(paths.application_root, exe_dir.resolve())
+            self.assertEqual(
+                paths.static_root,
+                bundle_root / "memesort_worker" / "web_static",
+            )
+            self.assertEqual(paths.manifest_path, bundle_root / "runtime-manifest.json")
 
 
 if __name__ == "__main__":
