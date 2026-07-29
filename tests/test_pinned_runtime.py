@@ -18,7 +18,6 @@ from memesort_worker.pinned_runtime import PinnedRuntime, PinnedRuntimeClosedErr
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_service import (
     RuntimeAuthorizationError,
-    get_current_health_check,
     get_last_health_check,
 )
 from memesort_worker.webapp import create_app
@@ -106,7 +105,7 @@ class PinnedRuntimeTests(unittest.TestCase):
         if manifest.llama_server_path.is_file() and manifest.main_model_path.is_file():
             self.assertIn("stale", detail)
 
-    def test_instance_health_check_does_not_write_global_session_health(self) -> None:
+    def test_instance_health_check_stays_on_the_instance_and_persists(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
             initialize_library(library_root)
@@ -121,12 +120,10 @@ class PinnedRuntimeTests(unittest.TestCase):
             ):
                 result = runtime.run_health_check()
 
-            session_health = get_current_health_check(library_root)
             persisted = get_last_health_check(library_root)
 
         self.assertFalse(result.smoke_test_ok)
         self.assertIs(result, runtime.current_health_check())
-        self.assertIsNone(session_health)
         self.assertIsNotNone(persisted)
 
     def test_create_app_rejects_a_runtime_bound_to_another_library(self) -> None:

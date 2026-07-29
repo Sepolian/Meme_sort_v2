@@ -311,11 +311,11 @@ class StubRuntimeGate:
     def is_ready_for_indexing(self) -> tuple[bool, str]:
         return self._verdict
 
+    def current_health_check(self):
+        return None
+
 
 class ReadProjectionCharacterizationTests(unittest.TestCase):
-    def setUp(self) -> None:
-        runtime_service._clear_current_health_checks()
-
     def _write_image(self, path: Path, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         Image.new("RGB", (40, 30), color).save(path, format="PNG")
 
@@ -720,7 +720,10 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
     def test_setup_state_payload_for_fresh_library(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = self._build_state(Path(temp_dir), "no_assets")
-            state = runtime_service.get_setup_state(library_root).to_dict()
+            state = runtime_service.get_setup_state(
+                library_root,
+                StubRuntimeGate(False, "runtime health has not been checked"),
+            ).to_dict()
 
         self.assertEqual(SETUP_STATE_KEYS, set(state))
         self.assertFalse(state["health_check_has_run"])
@@ -743,7 +746,10 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             library_root = self._build_state(root, "pending_initial_index")
-            state = runtime_service.get_setup_state(library_root).to_dict()
+            state = runtime_service.get_setup_state(
+                library_root,
+                StubRuntimeGate(False, "runtime health has not been checked"),
+            ).to_dict()
 
             self.assertTrue(state["assets_present"])
             self.assertTrue(state["pending_assets_present"])

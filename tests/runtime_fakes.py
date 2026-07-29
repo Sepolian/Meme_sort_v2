@@ -88,6 +88,9 @@ class FakeIndexingRuntime:
     def is_ready_for_indexing(self) -> tuple[bool, str]:
         return self._ready, self._ready_message
 
+    def current_health_check(self):
+        return None
+
     def get_embedding_backend(self) -> FakeEmbeddingBackend:
         return self.embedding_backend
 

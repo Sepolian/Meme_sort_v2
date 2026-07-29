@@ -30,12 +30,11 @@ from memesort_worker.llama_cpp_backend import (
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_admission import VulkanDeviceInfo
+from memesort_worker.pinned_runtime import PinnedRuntime
 from memesort_worker.runtime_service import run_runtime_health_check
 from memesort_worker.runtime_service import (
-    _clear_current_health_checks,
     _save_last_health_check,
     get_last_health_check,
-    is_runtime_ready_for_indexing,
 )
 
 
@@ -267,14 +266,14 @@ class LlamaCppBackendTests(unittest.TestCase):
                 error=None,
             )
             _save_last_health_check(library_root, passed)
-            with patch.object(Path, "is_file", return_value=True):
-                ready_in_session, _ = is_runtime_ready_for_indexing(library_root)
-            _clear_current_health_checks()
-            with patch.object(Path, "is_file", return_value=True):
-                ready, detail = is_runtime_ready_for_indexing(library_root)
+            runtime = PinnedRuntime(library_root)
+            try:
+                with patch.object(Path, "is_file", return_value=True):
+                    ready, detail = runtime.is_ready_for_indexing()
+            finally:
+                runtime.close()
             persisted = get_last_health_check(library_root)
 
-        self.assertTrue(ready_in_session)
         self.assertFalse(ready)
         self.assertIn("session", detail.lower())
         self.assertIsNotNone(persisted)

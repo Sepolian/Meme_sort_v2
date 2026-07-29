@@ -107,7 +107,6 @@ class PinnedRuntime:
         self._require_open()
         result = run_runtime_health_check(
             library_root=self.library_root,
-            record_session_health=False,
             embedding_backend_factory=self.get_embedding_backend,
         )
         with self._lock:

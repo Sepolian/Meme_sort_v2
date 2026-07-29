@@ -26,17 +26,17 @@ class AppStateResult:
 
 def build_app_state(
     library_root: Path | str,
+    runtime,
     worker_loop_snapshot: WorkerLoopSnapshot | None = None,
     import_task_snapshot: dict[str, object] | None = None,
-    runtime=None,
 ) -> AppStateResult:
     library_root_path = Path(library_root).expanduser().resolve()
     with LibraryStore(library_root_path) as store:
         library_snapshot = store.read_library_snapshot()
     setup_state = get_setup_state(
         library_root_path,
+        runtime,
         assets_result=library_snapshot.asset_summary,
-        runtime=runtime,
     )
 
     return AppStateResult(

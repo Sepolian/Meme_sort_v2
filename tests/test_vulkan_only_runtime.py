@@ -51,7 +51,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
             root = Path(temp_dir) / "library"
             initialize_library(root)
             assets = list_assets(root)
-            state = build_app_state(root)
+            state = build_app_state(root, FakeIndexingRuntime())
 
         self.assertEqual(get_runtime_descriptor().to_dict(), state.runtime)
         self.assertIn(" / vulkan", assets.active_recipe_label)

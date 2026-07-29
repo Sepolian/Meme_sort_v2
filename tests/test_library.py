@@ -39,7 +39,7 @@ from memesort_worker.library import (
 )
 from runtime_fakes import FakeIndexingRuntime
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
-from memesort_worker.runtime_service import authorize_runtime_for_session
+from memesort_worker.pinned_runtime import PinnedRuntime
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.inference_service import InferenceScheduler
 from memesort_worker.library_store import LibraryStore
@@ -504,7 +504,9 @@ class LibraryTests(unittest.TestCase):
                 autospec=True,
                 side_effect=LibraryStore.list_asset_summaries,
             ) as list_asset_summaries:
-                payload = build_app_state(Path(temp_dir) / "library").to_dict()
+                payload = build_app_state(
+                    Path(temp_dir) / "library", FakeIndexingRuntime()
+                ).to_dict()
 
         self.assertEqual(get_runtime_descriptor().to_dict(), payload["runtime"])
         self.assertEqual(1, list_asset_summaries.call_count)
@@ -515,20 +517,35 @@ class LibraryTests(unittest.TestCase):
     def test_web_startup_runs_current_session_vulkan_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            with patch("memesort_worker.runtime_service.run_runtime_health_check") as health_check:
-                health_check.return_value.smoke_test_ok = True
-                authorize_runtime_for_session(library_root)
+            runtime = PinnedRuntime(library_root)
+            try:
+                with patch(
+                    "memesort_worker.pinned_runtime.run_runtime_health_check"
+                ) as health_check:
+                    health_check.return_value.smoke_test_ok = True
+                    runtime.authorize()
+            finally:
+                runtime.close()
 
-        health_check.assert_called_once_with(library_root=library_root)
+        health_check.assert_called_once_with(
+            library_root=runtime.library_root,
+            embedding_backend_factory=runtime.get_embedding_backend,
+        )
 
     def test_web_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
-            with patch("memesort_worker.runtime_service.run_runtime_health_check") as health_check:
-                health_check.return_value.smoke_test_ok = False
-                health_check.return_value.error = "Vulkan0 is unavailable."
-                with self.assertRaisesRegex(RuntimeError, "Vulkan0 is unavailable"):
-                    authorize_runtime_for_session(library_root)
+            runtime = PinnedRuntime(library_root)
+            try:
+                with patch(
+                    "memesort_worker.pinned_runtime.run_runtime_health_check"
+                ) as health_check:
+                    health_check.return_value.smoke_test_ok = False
+                    health_check.return_value.error = "Vulkan0 is unavailable."
+                    with self.assertRaisesRegex(RuntimeError, "Vulkan0 is unavailable"):
+                        runtime.authorize()
+            finally:
+                runtime.close()
 
     def test_web_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

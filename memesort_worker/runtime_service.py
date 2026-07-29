@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import threading
 from pathlib import Path
 from typing import Callable
 
@@ -20,68 +19,24 @@ _HEALTH_CHECK_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUB"
     "AScY42YAAAAASUVORK5CYII="
 )
-_SESSION_HEALTH_LOCK = threading.Lock()
-_SESSION_HEALTH: dict[str, library.RuntimeHealthResult] = {}
 
 
 class RuntimeAuthorizationError(RuntimeError):
     """The Pinned Runtime did not authorize work in this application session."""
 
 
-def _library_key(library_root: Path | str) -> str:
-    return str(Path(library_root).expanduser().resolve()).casefold()
-
-
 def _save_last_health_check(
     library_root: Path | str,
     result: library.RuntimeHealthResult,
-    record_session_health: bool = True,
 ) -> None:
     with LibraryStore(library_root) as store:
         store.set_worker_state_json("last_runtime_health_check", result.to_dict())
-    if record_session_health:
-        with _SESSION_HEALTH_LOCK:
-            _SESSION_HEALTH[_library_key(library_root)] = result
-
-
-def get_current_health_check(
-    library_root: Path | str,
-) -> library.RuntimeHealthResult | None:
-    with _SESSION_HEALTH_LOCK:
-        return _SESSION_HEALTH.get(_library_key(library_root))
 
 
 def runtime_health_matches_manifest(
     health_check: library.RuntimeHealthResult,
 ) -> bool:
     return health_check.runtime_fingerprint == load_runtime_manifest().runtime_fingerprint
-
-
-def is_runtime_ready_for_indexing(
-    library_root: Path | str,
-) -> tuple[bool, str]:
-    library.initialize_library(library_root)
-    manifest = load_runtime_manifest()
-    if not manifest.llama_server_path.is_file():
-        return False, "Pinned llama-server is not installed. Run setup."
-    if not manifest.main_model_path.is_file():
-        return False, "Pinned main GGUF is not installed. Run setup."
-    if not manifest.projector_path.is_file():
-        return False, "Pinned multimodal projector is not installed. Run setup."
-
-    current_health = get_current_health_check(library_root)
-    if current_health is None:
-        return False, "Vulkan runtime health has not been checked in this app session."
-    if not runtime_health_matches_manifest(current_health):
-        return False, "This session's runtime health check is stale for the active manifest."
-    if not current_health.smoke_test_ok:
-        return False, current_health.error or "Vulkan runtime health check failed."
-    return True, "Runtime is ready for indexing."
-
-
-def _clear_current_health_checks() -> None:
-    with _SESSION_HEALTH_LOCK:
-        _SESSION_HEALTH.clear()
 
 
 def get_last_health_check(
@@ -122,7 +77,6 @@ def get_last_health_check(
 
 def run_runtime_health_check(
     library_root: Path | str | None = None,
-    record_session_health: bool = True,
     embedding_backend_factory: Callable[[], object] | None = None,
 ) -> library.RuntimeHealthResult:
     manifest = load_runtime_manifest()
@@ -138,21 +92,8 @@ def run_runtime_health_check(
         manifest=manifest,
         library_root=library_root,
         diagnostic_steps=diagnostic_steps,
-        record_session_health=record_session_health,
         embedding_backend_factory=embedding_backend_factory,
     )
-
-
-def authorize_runtime_for_session(
-    library_root: Path | str,
-) -> library.RuntimeHealthResult:
-    result = run_runtime_health_check(library_root=library_root)
-    if not result.smoke_test_ok:
-        raise RuntimeAuthorizationError(
-            result.error
-            or "Vulkan runtime health check failed; work was not authorized."
-        )
-    return result
 
 
 def _create_owned_embedding_backend():
@@ -166,7 +107,6 @@ def _run_llama_cpp_runtime_health_check(
     manifest,
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
-    record_session_health: bool = True,
     embedding_backend_factory: Callable[[], object] | None = None,
 ) -> library.RuntimeHealthResult:
     if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
@@ -194,11 +134,7 @@ def _run_llama_cpp_runtime_health_check(
             error="Pinned GGUF model bundle is missing.",
         )
         if library_root is not None:
-            _save_last_health_check(
-                library_root,
-                result=result,
-                record_session_health=record_session_health,
-            )
+            _save_last_health_check(library_root, result=result)
         return result
 
     failure_step = "resolve-gguf-bundle"
@@ -305,11 +241,7 @@ def _run_llama_cpp_runtime_health_check(
             error=str(exc),
         )
         if library_root is not None:
-            _save_last_health_check(
-                library_root,
-                result=result,
-                record_session_health=record_session_health,
-            )
+            _save_last_health_check(library_root, result=result)
         return result
     finally:
         if owned_backend is not None:
@@ -336,30 +268,22 @@ def _run_llama_cpp_runtime_health_check(
         error=None,
     )
     if library_root is not None:
-        _save_last_health_check(
-            library_root,
-            result=result,
-            record_session_health=record_session_health,
-        )
+        _save_last_health_check(library_root, result=result)
     return result
 
 
 def get_setup_state(
     library_root: Path | str,
+    runtime,
     assets_result: library.AssetListResult | None = None,
-    runtime=None,
 ) -> library.SetupStateResult:
     manifest = load_runtime_manifest()
     if assets_result is None:
         with LibraryStore(library_root) as store:
             assets_result = store.list_asset_summaries()
     last_health_check = get_last_health_check(library_root)
-    if runtime is not None:
-        current_health_check = runtime.current_health_check()
-        runtime_ready, runtime_ready_detail = runtime.is_ready_for_indexing()
-    else:
-        current_health_check = get_current_health_check(library_root)
-        runtime_ready, runtime_ready_detail = is_runtime_ready_for_indexing(library_root)
+    current_health_check = runtime.current_health_check()
+    runtime_ready, runtime_ready_detail = runtime.is_ready_for_indexing()
 
     assets_present = bool(assets_result.assets)
     indexed_assets_present = any(asset["status"] == "indexed" for asset in assets_result.assets)
