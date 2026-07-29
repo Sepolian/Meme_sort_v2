@@ -35,9 +35,14 @@ def _health_result(smoke_test_ok: bool, fingerprint: str | None = None) -> Runti
 
 
 class PinnedRuntimeTests(unittest.TestCase):
+    def _runtime(self, library_root: Path) -> PinnedRuntime:
+        runtime = PinnedRuntime(library_root)
+        self.addCleanup(runtime.close)
+        return runtime
+
     def test_authorize_stores_health_on_the_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            runtime = PinnedRuntime(Path(temp_dir) / "library")
+            runtime = self._runtime(Path(temp_dir) / "library")
             with patch(
                 "memesort_worker.pinned_runtime.run_runtime_health_check",
                 return_value=_health_result(True),
@@ -49,7 +54,7 @@ class PinnedRuntimeTests(unittest.TestCase):
 
     def test_authorize_failure_raises_and_keeps_failed_health(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            runtime = PinnedRuntime(Path(temp_dir) / "library")
+            runtime = self._runtime(Path(temp_dir) / "library")
             with patch(
                 "memesort_worker.pinned_runtime.run_runtime_health_check",
                 return_value=_health_result(False),
@@ -65,8 +70,8 @@ class PinnedRuntimeTests(unittest.TestCase):
     def test_health_on_one_runtime_does_not_authorize_another(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            runtime_a = PinnedRuntime(root / "library-a")
-            runtime_b = PinnedRuntime(root / "library-b")
+            runtime_a = self._runtime(root / "library-a")
+            runtime_b = self._runtime(root / "library-b")
             with patch(
                 "memesort_worker.pinned_runtime.run_runtime_health_check",
                 return_value=_health_result(True),
@@ -81,7 +86,7 @@ class PinnedRuntimeTests(unittest.TestCase):
 
     def test_stale_manifest_fingerprint_is_not_authorized(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            runtime = PinnedRuntime(Path(temp_dir) / "library")
+            runtime = self._runtime(Path(temp_dir) / "library")
             with patch(
                 "memesort_worker.pinned_runtime.run_runtime_health_check",
                 return_value=_health_result(True, fingerprint="stale-fingerprint"),
@@ -112,6 +117,22 @@ class PinnedRuntimeTests(unittest.TestCase):
         self.assertIn("closed", detail)
         with self.assertRaises(PinnedRuntimeClosedError):
             runtime.run_health_check()
+
+    def test_closing_one_runtime_keeps_the_shared_server_for_live_runtimes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = PinnedRuntime(root / "library-a")
+            second = PinnedRuntime(root / "library-b")
+            with patch(
+                "memesort_worker.llama_cpp_backend.close_managed_servers"
+            ) as close_servers:
+                first.close()
+                self.assertEqual(0, close_servers.call_count)
+                second.close()
+                self.assertEqual(1, close_servers.call_count)
+
+        self.assertTrue(first.closed)
+        self.assertTrue(second.closed)
 
 
 class LocalAppHostRuntimeLifecycleTests(unittest.TestCase):

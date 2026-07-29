@@ -482,8 +482,9 @@ def _close_managed_servers() -> None:
 def close_managed_servers() -> None:
     """Stop every managed llama-server process and release runtime loggers.
 
-    This is the explicit shutdown path invoked by the application host. The
-    ``atexit`` registration above only remains as a crash fallback.
+    Invoked by the shared inference server lease when the last live
+    ``PinnedRuntime`` closes. The ``atexit`` registration above only remains
+    as a crash fallback.
     """
     for server in list(_MANAGED_SERVERS):
         server.close()

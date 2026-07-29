@@ -41,6 +41,7 @@ class IndexingPipelineRuntimeInjectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = self._import_one_image(Path(temp_dir))
             production_runtime = PinnedRuntime(library_root)
+            self.addCleanup(production_runtime.close)
             ready, message = production_runtime.is_ready_for_indexing()
             self.assertFalse(ready)
 
