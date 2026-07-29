@@ -1,13 +1,16 @@
 """Characterization tests for public read projections.
 
-These tests record the payloads produced by the read interfaces the web
+These tests pin the payloads produced by the read interfaces the web
 routes call today, across the six documented asset states: no assets,
 pending initial index, indexed, failed, stale-only, and reindex-pending.
-They exist so later refactors can prove behaviour is preserved.
+The oracle is a set of frozen expected fixtures plus raw SQL facts, so
+the projections are verified independently of the projection code.
 """
 
 from __future__ import annotations
 
+import hashlib
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -127,6 +130,125 @@ SETUP_STATE_KEYS = {
     "active_recipe_label",
     "runtime_readiness",
     "checklist",
+}
+
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\+00:00|Z)")
+
+# Expected (indexed_recipe_labels, stale_recipe_labels) per asset state.
+EXPECTED_RECIPE_LABELS_BY_STATE = {
+    "pending_initial_index": ([], []),
+    "indexed": (["{recipe_label}"], []),
+    "failed": ([], []),
+    "stale_only": (["{recipe_label}"], ["{recipe_label}"]),
+    "reindex_pending": (["{recipe_label}"], ["{recipe_label}"]),
+}
+
+
+def _job_sort_key(job: dict[str, object]) -> tuple[str, str, str]:
+    return (str(job["type"]), str(job["status"]), str(job["job_id"]))
+
+
+def _expected_job(
+    job_type: str,
+    status: str,
+    attempt_count: int,
+    job_id: str = "{uuid}",
+    recipe_id: str | None = None,
+) -> dict[str, object]:
+    return {
+        "job_id": job_id,
+        "type": job_type,
+        "status": status,
+        "asset_id": "{asset}",
+        "recipe_id": recipe_id,
+        "attempt_count": attempt_count,
+        "created_at": "{ts}",
+        "updated_at": "{ts}",
+        "error_code": None,
+        "error_detail": None,
+    }
+
+
+def _expected_library_status(
+    asset_counts: dict[str, int],
+    job_counts: dict[str, int],
+    total_assets: int,
+    total_jobs: int,
+    recent_jobs: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "library_root": "{library_root}",
+        "active_recipe_id": "{recipe}",
+        "active_recipe_label": "{recipe_label}",
+        "asset_counts": asset_counts,
+        "job_counts": job_counts,
+        "total_assets": total_assets,
+        "total_jobs": total_jobs,
+        "recent_jobs": sorted(recent_jobs, key=_job_sort_key),
+    }
+
+
+EXPECTED_LIBRARY_STATUS_BY_STATE = {
+    "no_assets": _expected_library_status({}, {}, 0, 0, []),
+    "pending_initial_index": _expected_library_status(
+        {"pending_initial_index": 1},
+        {"pending": 3},
+        1,
+        3,
+        [
+            _expected_job("embed_asset", "pending", 0, recipe_id="{recipe}"),
+            _expected_job("generate_thumbnail", "pending", 0),
+            _expected_job("ocr_asset", "pending", 0),
+        ],
+    ),
+    "indexed": _expected_library_status(
+        {"indexed": 1},
+        {"completed": 3},
+        1,
+        3,
+        [
+            _expected_job("embed_asset", "completed", 1, recipe_id="{recipe}"),
+            _expected_job("generate_thumbnail", "completed", 1),
+            _expected_job("ocr_asset", "completed", 1),
+        ],
+    ),
+    "failed": _expected_library_status(
+        {"failed": 1},
+        {"failed": 1, "pending": 2},
+        1,
+        3,
+        [
+            _expected_job("embed_asset", "failed", 0, recipe_id="{recipe}"),
+            _expected_job("generate_thumbnail", "pending", 0),
+            _expected_job("ocr_asset", "pending", 0),
+        ],
+    ),
+    "stale_only": _expected_library_status(
+        {"stale_only": 1},
+        {"completed": 3},
+        1,
+        3,
+        [
+            _expected_job("embed_asset", "completed", 1, recipe_id="{recipe}"),
+            _expected_job("generate_thumbnail", "completed", 1),
+            _expected_job("ocr_asset", "completed", 1),
+        ],
+    ),
+    "reindex_pending": _expected_library_status(
+        {"reindex_pending": 1},
+        {"completed": 3, "pending": 1},
+        1,
+        4,
+        [
+            _expected_job("embed_asset", "completed", 1, recipe_id="{recipe}"),
+            _expected_job(
+                "embed_asset", "pending", 0, job_id="reindex-job", recipe_id="{recipe}"
+            ),
+            _expected_job("generate_thumbnail", "completed", 1),
+            _expected_job("ocr_asset", "completed", 1),
+        ],
+    ),
 }
 
 
@@ -288,40 +410,114 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             return library_root
         raise AssertionError(f"unknown state {state}")
 
+    def _oracle_literals(self, root: Path, library_root: Path) -> list[tuple[str, str]]:
+        """Collect replacement literals from raw SQL, independent of the projections."""
+        conn = self._connect(library_root)
+        try:
+            asset_ids = [
+                str(row["id"]) for row in conn.execute("SELECT id FROM asset")
+            ]
+            recipe_id = asset_catalog.get_active_recipe_id(conn)
+            recipe = conn.execute(
+                "SELECT model_id, output_dimension, runtime_profile "
+                "FROM embedding_recipe WHERE id = ?",
+                (recipe_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        label = (
+            f"{str(recipe['model_id']).split('/')[-1]} / "
+            f"{int(recipe['output_dimension'])}d / {recipe['runtime_profile']}"
+        )
+        literals = [(label, "{recipe_label}"), (str(recipe_id), "{recipe}")]
+        literals.extend((asset_id, "{asset}") for asset_id in asset_ids)
+        literals.append((str(library_root), "{library_root}"))
+        literals.append((str(root / "source" / "reaction.png"), "{source_png}"))
+        return literals
+
+    def _freeze(self, payload, literals: list[tuple[str, str]]):
+        if isinstance(payload, dict):
+            return {key: self._freeze(value, literals) for key, value in payload.items()}
+        if isinstance(payload, list):
+            return [self._freeze(value, literals) for value in payload]
+        if isinstance(payload, str):
+            for literal, token in literals:
+                payload = payload.replace(literal, token)
+            payload = _TIMESTAMP_RE.sub("{ts}", payload)
+            return _UUID_RE.sub("{uuid}", payload)
+        return payload
+
+    def _expected_summary(self, root: Path, state: str) -> dict[str, object]:
+        has_thumbnail = state in {"indexed", "stale_only", "reindex_pending"}
+        content_hash = hashlib.sha256(
+            (root / "source" / "reaction.png").read_bytes()
+        ).hexdigest()
+        return {
+            "asset_id": "{asset}",
+            "library_path": "originals/{asset}.png",
+            "library_url": "/media/originals/{asset}.png",
+            "thumbnail_url": (
+                "/media/thumbnails/{asset}.jpg" if has_thumbnail else None
+            ),
+            "media_type": "image/png",
+            "content_hash": content_hash,
+            "width": 40,
+            "height": 30,
+            "imported_at": "{ts}",
+            "updated_at": "{ts}",
+            "source_record_count": 1,
+            "source_records": [{"source_path": "{source_png}"}],
+            "status": EXPECTED_STATUS_BY_STATE[state],
+        }
+
     def test_status_matrix_old_and_new_projections_agree(self) -> None:
         for state in ASSET_STATES:
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temp_dir:
-                library_root = self._build_state(Path(temp_dir), state)
-                old_assets = list_assets(library_root).assets
+                root = Path(temp_dir)
+                library_root = self._build_state(root, state)
+                literals = self._oracle_literals(root, library_root)
+                old_assets = self._freeze(list_assets(library_root).assets, literals)
                 with LibraryStore(library_root) as store:
-                    new_assets = store.list_asset_summaries().assets
+                    new_assets = self._freeze(
+                        store.list_asset_summaries().assets, literals
+                    )
 
-                expected_status = EXPECTED_STATUS_BY_STATE[state]
-                if expected_status is None:
+                if EXPECTED_STATUS_BY_STATE[state] is None:
                     self.assertEqual([], old_assets)
                     self.assertEqual([], new_assets)
                     continue
 
+                expected_summary = self._expected_summary(root, state)
+                self.assertEqual([expected_summary], new_assets, state)
                 self.assertEqual(1, len(old_assets))
-                self.assertEqual(1, len(new_assets))
-                self.assertEqual(expected_status, old_assets[0]["status"])
-                self.assertEqual(expected_status, new_assets[0]["status"])
-                self.assertEqual(FULL_ASSET_PROJECTION_KEYS, set(old_assets[0]))
-                self.assertEqual(SUMMARY_PROJECTION_KEYS, set(new_assets[0]))
+                full = old_assets[0]
+                self.assertEqual(FULL_ASSET_PROJECTION_KEYS, set(full))
                 for key in SHARED_PROJECTION_KEYS:
                     self.assertEqual(
-                        old_assets[0][key], new_assets[0][key], f"{state}:{key}"
+                        expected_summary[key], full[key], f"{state}:{key}"
                     )
+                indexed_labels, stale_labels = EXPECTED_RECIPE_LABELS_BY_STATE[state]
+                self.assertEqual(indexed_labels, full["indexed_recipe_labels"], state)
+                self.assertEqual(stale_labels, full["stale_recipe_labels"], state)
 
     def test_library_status_payloads_agree_across_implementations(self) -> None:
         for state in ASSET_STATES:
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temp_dir:
-                library_root = self._build_state(Path(temp_dir), state)
+                root = Path(temp_dir)
+                library_root = self._build_state(root, state)
+                literals = self._oracle_literals(root, library_root)
                 old_status = get_library_status(library_root).to_dict()
                 with LibraryStore(library_root) as store:
                     new_status = store.get_library_status().to_dict()
-                self.assertEqual(LIBRARY_STATUS_KEYS, set(old_status))
-                self.assertEqual(old_status, new_status, state)
+
+                expected = EXPECTED_LIBRARY_STATUS_BY_STATE[state]
+                for payload in (old_status, new_status):
+                    frozen = self._freeze(payload, literals)
+                    self.assertEqual(LIBRARY_STATUS_KEYS, set(frozen))
+                    frozen["recent_jobs"] = sorted(
+                        frozen["recent_jobs"], key=_job_sort_key
+                    )
+                    self.assertEqual(expected, frozen, state)
 
     def test_asset_detail_matches_list_projection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
