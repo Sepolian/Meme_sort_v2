@@ -1,0 +1,22 @@
+# Acceptance gate: run the automated suite (tests/, including
+# tests/test_library.py) on every push and pull request. Reuses the
+# documented test command from README.md:
+#   python -m unittest discover -s tests -p "test_*.py"
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    # Windows matches the project's platform contract (pywebview is
+    # declared only for sys_platform == 'win32').
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run the tests/ suite
+        run: python -m unittest discover -s tests -p "test_*.py"
