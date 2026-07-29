@@ -157,24 +157,24 @@ class PinnedRuntimeTests(unittest.TestCase):
         with self.assertRaises(PinnedRuntimeClosedError):
             runtime.run_health_check()
 
-    def test_closing_one_runtime_keeps_the_other_runtime_backend_alive(self) -> None:
+    def test_live_runtimes_share_one_backend_and_last_close_tears_it_down(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             first = PinnedRuntime(root / "library-a")
             second = PinnedRuntime(root / "library-b")
-            backend_a = Mock()
-            backend_b = Mock()
+            backend = Mock()
             with patch(
                 "memesort_worker.embedding_backend.LlamaCppEmbeddingBackend",
-                side_effect=[backend_a, backend_b],
-            ):
-                self.assertIs(backend_a, first.get_embedding_backend())
-                self.assertIs(backend_b, second.get_embedding_backend())
+                return_value=backend,
+            ) as backend_class:
+                self.assertIs(backend, first.get_embedding_backend())
+                self.assertIs(backend, second.get_embedding_backend())
+            self.assertEqual(1, backend_class.call_count)
+            self.assertIs(first.scheduler, second.scheduler)
             first.close()
-            self.assertEqual(1, backend_a.close.call_count)
-            self.assertEqual(0, backend_b.close.call_count)
+            self.assertEqual(0, backend.close.call_count)
             second.close()
-            self.assertEqual(1, backend_b.close.call_count)
+            self.assertEqual(1, backend.close.call_count)
 
         self.assertTrue(first.closed)
         self.assertTrue(second.closed)

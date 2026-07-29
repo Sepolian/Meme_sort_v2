@@ -90,7 +90,7 @@ _Avoid_: Semantic backend, Vulkan OCR
 - Search priority is non-preemptive; batching is not implemented.
 - OCR is CPU-only and isolated from the semantic runtime.
 - Persisted health is informational. A health check in the current application session authorizes indexing.
-- The Pinned Runtime lifecycle is instance-owned: the application host (or CLI command) creates a `PinnedRuntime`, authorizes through it, passes it to the indexing pipeline, and closes that same instance on shutdown. Each `PinnedRuntime` owns its inference scheduler, embedding backend, and llama-server process; closing the runtime stops them. A process-wide lock still serializes inference so at most one llama-server request runs at a time.
+- The Pinned Runtime lifecycle is instance-owned: the application host (or CLI command) creates a `PinnedRuntime`, authorizes through it, passes it to the indexing pipeline, and closes that same instance on shutdown. All live runtimes in a process share one refcounted inference engine — one serialized scheduler, one embedding backend, one llama-server process — and closing the last runtime tears the engine down.
 
 ## Example dialogue
 

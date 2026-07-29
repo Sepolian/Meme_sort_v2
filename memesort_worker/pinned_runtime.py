@@ -1,12 +1,12 @@
 """Instance-owned Pinned Runtime lifecycle.
 
-A ``PinnedRuntime`` owns runtime authorization state, one serialized
-inference scheduler, and the llama.cpp embedding backend (and therefore the
-llama-server process) for one application session.  It is created by the
-composition root (``LocalAppHost`` or ``create_app``) and closed by the same
-owner; closing the runtime tears down exactly the resources it created.
-Indexing and search both go through this instance, so one host still uses
-one llama-server and one serialized scheduler (a manifest invariant).
+A ``PinnedRuntime`` owns runtime authorization state for one application
+session and holds a reference to the process's shared inference engine: one
+serialized inference scheduler plus the llama.cpp embedding backend (and
+therefore the llama-server process).  The engine is refcounted across live
+runtimes, so concurrent hosts in one process still share one llama-server
+and one serialized scheduler (a manifest invariant), and closing the last
+runtime tears the engine down and clears the module slot.
 """
 
 from __future__ import annotations
@@ -28,6 +28,57 @@ class PinnedRuntimeClosedError(RuntimeError):
     """The Pinned Runtime instance was already closed."""
 
 
+class _SharedInferenceEngine:
+    """One serialized scheduler and one llama.cpp backend per process."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.scheduler = InferenceScheduler()
+        self._embedding_backend = None
+
+    def get_embedding_backend(self):
+        with self._lock:
+            if self._embedding_backend is None:
+                from .embedding_backend import LlamaCppEmbeddingBackend
+
+                self._embedding_backend = LlamaCppEmbeddingBackend(self.scheduler)
+            return self._embedding_backend
+
+    def close(self) -> None:
+        with self._lock:
+            backend = self._embedding_backend
+            self._embedding_backend = None
+        if backend is not None:
+            backend.close()
+
+
+_ENGINE_LOCK = threading.Lock()
+_ENGINE: _SharedInferenceEngine | None = None
+_ENGINE_REFS = 0
+
+
+def _acquire_shared_engine() -> _SharedInferenceEngine:
+    global _ENGINE, _ENGINE_REFS
+    with _ENGINE_LOCK:
+        if _ENGINE is None:
+            _ENGINE = _SharedInferenceEngine()
+        _ENGINE_REFS += 1
+        return _ENGINE
+
+
+def _release_shared_engine(engine: _SharedInferenceEngine) -> None:
+    global _ENGINE, _ENGINE_REFS
+    with _ENGINE_LOCK:
+        if engine is not _ENGINE:
+            return
+        _ENGINE_REFS -= 1
+        if _ENGINE_REFS > 0:
+            return
+        _ENGINE = None
+        _ENGINE_REFS = 0
+    engine.close()
+
+
 class PinnedRuntime:
     """Own authorization, inference access, and shutdown for one app session."""
 
@@ -36,8 +87,7 @@ class PinnedRuntime:
         self._lock = threading.Lock()
         self._session_health: library.RuntimeHealthResult | None = None
         self._closed = False
-        self._scheduler = InferenceScheduler()
-        self._embedding_backend = None
+        self._engine = _acquire_shared_engine()
 
     @property
     def closed(self) -> bool:
@@ -46,7 +96,7 @@ class PinnedRuntime:
 
     @property
     def scheduler(self) -> InferenceScheduler:
-        return self._scheduler
+        return self._engine.scheduler
 
     def _require_open(self) -> None:
         with self._lock:
@@ -100,29 +150,24 @@ class PinnedRuntime:
         return True, "Runtime is ready for indexing."
 
     def get_embedding_backend(self):
-        """Return this runtime's llama.cpp embedding backend, creating it lazily.
+        """Return the shared llama.cpp embedding backend, creating it lazily.
 
-        The backend is bound to this runtime's scheduler so indexing and
-        search on the same host share one llama-server and one serialized
-        scheduler.
+        The backend is bound to the shared engine's scheduler, so every live
+        runtime in this process uses one llama-server and one serialized
+        scheduler for both indexing and search.
         """
         self._require_open()
-        with self._lock:
-            if self._embedding_backend is None:
-                from .embedding_backend import LlamaCppEmbeddingBackend
-
-                self._embedding_backend = LlamaCppEmbeddingBackend(self._scheduler)
-            return self._embedding_backend
+        return self._engine.get_embedding_backend()
 
     def search_request(self, request_id: str):
-        """Enter a prioritized search context on this runtime's scheduler."""
+        """Enter a prioritized search context on the shared scheduler."""
         self._require_open()
-        return search_inference_request(self._scheduler, request_id)
+        return search_inference_request(self._engine.scheduler, request_id)
 
     def cancel_search(self, request_id: str) -> bool:
-        """Cancel a queued or running search request on this runtime."""
+        """Cancel a queued or running search request on the shared scheduler."""
         self._require_open()
-        return self._scheduler.cancel(request_id)
+        return self._engine.scheduler.cancel(request_id)
 
     def get_ocr_backend(self):
         """Return a CPU-only OCR backend; the caller owns closing it."""
@@ -137,8 +182,5 @@ class PinnedRuntime:
                 return
             self._closed = True
             self._session_health = None
-            backend = self._embedding_backend
-            self._embedding_backend = None
 
-        if backend is not None:
-            backend.close()
+        _release_shared_engine(self._engine)
