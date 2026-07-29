@@ -18,5 +18,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install the project environment
+        run: uv sync --locked
       - name: Run the tests/ suite
-        run: python -m unittest discover -s tests -p "test_*.py"
+        run: uv run python -m unittest discover -s tests -p "test_*.py"
