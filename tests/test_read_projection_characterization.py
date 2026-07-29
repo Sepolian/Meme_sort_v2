@@ -519,25 +519,110 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
                     )
                     self.assertEqual(expected, frozen, state)
 
-    def test_asset_detail_matches_list_projection(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = self._build_state(Path(temp_dir), "indexed")
-            listed = list_assets(library_root)
-            asset_id = str(listed.assets[0]["asset_id"])
-            detail = get_asset_detail(library_root, asset_id=asset_id)
+    def _expected_asset_detail(self, root: Path) -> dict[str, object]:
+        content_hash = hashlib.sha256(
+            (root / "source" / "reaction.png").read_bytes()
+        ).hexdigest()
+        return {
+            "library_root": "{library_root}",
+            "active_recipe_id": "{recipe}",
+            "active_recipe_label": "{recipe_label}",
+            "asset": {
+                "asset_id": "{asset}",
+                "library_path": "originals/{asset}.png",
+                "library_url": "/media/originals/{asset}.png",
+                "thumbnail_url": "/media/thumbnails/{asset}.jpg",
+                "media_type": "image/png",
+                "content_hash": content_hash,
+                "width": 40,
+                "height": 30,
+                "imported_at": "{ts}",
+                "updated_at": "{ts}",
+                "source_record_count": 1,
+                "source_records": [
+                    {
+                        "source_path": "{source_png}",
+                        "imported_at": "{ts}",
+                        "last_seen_at": "{ts}",
+                    }
+                ],
+                "indexed_recipe_labels": ["{recipe_label}"],
+                "stale_recipe_labels": [],
+                "status": "indexed",
+                "ocr_status": "ready",
+                "ocr_results": [
+                    {
+                        "result_id": "{uuid}",
+                        "engine": "stub-ocr",
+                        "engine_version": "3.6.0",
+                        "model_key": "PP-OCRv5",
+                        "text": "{asset}",
+                        "searchable_text": "{asset}",
+                        "confidence": 1.0,
+                        "language_hint": "test",
+                        "line_json": [
+                            {"bbox": [], "confidence": 1.0, "text": "{asset}"}
+                        ],
+                        "bbox_json": [[]],
+                        "preprocess_version": "original-still-v1",
+                        "min_confidence": 0.5,
+                        "created_at": "{ts}",
+                    }
+                ],
+                "renditions": [
+                    {
+                        "kind": "thumbnail",
+                        "path": "thumbnails/{asset}.jpg",
+                        "url": "/media/thumbnails/{asset}.jpg",
+                        "width": 40,
+                        "height": 30,
+                        "frame_index": None,
+                        "created_at": "{ts}",
+                    }
+                ],
+                "jobs": [
+                    {
+                        "job_id": "{uuid}",
+                        "type": "embed_asset",
+                        "status": "completed",
+                        "recipe_id": "{recipe}",
+                        "attempt_count": 1,
+                    },
+                    {
+                        "job_id": "{uuid}",
+                        "type": "generate_thumbnail",
+                        "status": "completed",
+                        "recipe_id": None,
+                        "attempt_count": 1,
+                    },
+                    {
+                        "job_id": "{uuid}",
+                        "type": "ocr_asset",
+                        "status": "completed",
+                        "recipe_id": None,
+                        "attempt_count": 1,
+                    },
+                ],
+            },
+        }
 
-            payload = detail.to_dict()
-            self.assertEqual(
-                {"library_root", "active_recipe_id", "active_recipe_label", "asset"},
-                set(payload),
+    def test_asset_detail_payload_is_frozen(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = self._build_state(root, "indexed")
+            literals = self._oracle_literals(root, library_root)
+            conn = self._connect(library_root)
+            try:
+                asset_id = str(conn.execute("SELECT id FROM asset").fetchone()["id"])
+            finally:
+                conn.close()
+
+            detail = get_asset_detail(library_root, asset_id=asset_id)
+            frozen = self._freeze(detail.to_dict(), literals)
+            frozen["asset"]["jobs"] = sorted(
+                frozen["asset"]["jobs"], key=_job_sort_key
             )
-            self.assertEqual(listed.assets[0], detail.asset)
-            self.assertEqual(listed.active_recipe_id, detail.active_recipe_id)
-            self.assertEqual(listed.active_recipe_label, detail.active_recipe_label)
-            self.assertEqual("indexed", detail.asset["status"])
-            self.assertEqual("ready", detail.asset["ocr_status"])
-            self.assertTrue(str(detail.asset["thumbnail_url"]).startswith("/media/"))
-            self.assertTrue(str(detail.asset["library_url"]).startswith("/media/"))
+            self.assertEqual(self._expected_asset_detail(root), frozen)
 
     def test_asset_detail_unknown_id_raises(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
