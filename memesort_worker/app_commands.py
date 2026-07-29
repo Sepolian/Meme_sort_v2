@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Protocol
 
 from .asset_catalog import BatchAssetActionResult, import_folder, rebuild_active_indexes
-from .runtime_service import is_runtime_ready_for_indexing
 
 
 class WorkerLoop(Protocol):
@@ -20,13 +19,19 @@ class ImportTaskController(Protocol):
         ...
 
 
+class RuntimeGate(Protocol):
+    def is_ready_for_indexing(self) -> tuple[bool, str]:
+        ...
+
+
 def import_and_start_indexing(
     library_root: Path | str,
     import_path: Path | str,
     worker_loop: WorkerLoop,
+    runtime: RuntimeGate,
 ) -> dict[str, object]:
     """Authorize the runtime, import synchronously, then resume the worker."""
-    runtime_ready, runtime_message = is_runtime_ready_for_indexing(library_root)
+    runtime_ready, runtime_message = runtime.is_ready_for_indexing()
     if not runtime_ready:
         raise ValueError(runtime_message)
     import_result = import_folder(library_root, import_path)
@@ -42,11 +47,12 @@ def start_background_import(
     import_path: str,
     import_controller: ImportTaskController,
     worker_loop: WorkerLoop,
+    runtime: RuntimeGate,
     start_indexing: bool,
 ):
     """Authorize before importing; resume the worker only after a completed import."""
     if start_indexing:
-        runtime_ready, runtime_message = is_runtime_ready_for_indexing(library_root)
+        runtime_ready, runtime_message = runtime.is_ready_for_indexing()
         if not runtime_ready:
             raise ValueError(runtime_message)
     return import_controller.start(

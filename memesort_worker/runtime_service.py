@@ -312,14 +312,19 @@ def _run_llama_cpp_runtime_health_check(
 def get_setup_state(
     library_root: Path | str,
     assets_result: library.AssetListResult | None = None,
+    runtime=None,
 ) -> library.SetupStateResult:
     manifest = load_runtime_manifest()
     if assets_result is None:
         with LibraryStore(library_root) as store:
             assets_result = store.list_asset_summaries()
     last_health_check = get_last_health_check(library_root)
-    current_health_check = get_current_health_check(library_root)
-    runtime_ready, runtime_ready_detail = is_runtime_ready_for_indexing(library_root)
+    if runtime is not None:
+        current_health_check = runtime.current_health_check()
+        runtime_ready, runtime_ready_detail = runtime.is_ready_for_indexing()
+    else:
+        current_health_check = get_current_health_check(library_root)
+        runtime_ready, runtime_ready_detail = is_runtime_ready_for_indexing(library_root)
 
     assets_present = bool(assets_result.assets)
     indexed_assets_present = any(asset["status"] == "indexed" for asset in assets_result.assets)

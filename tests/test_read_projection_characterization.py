@@ -181,6 +181,14 @@ class RecordingWorkerLoop:
         return _Snapshot()
 
 
+class StubRuntimeGate:
+    def __init__(self, ready: bool, message: str) -> None:
+        self._verdict = (ready, message)
+
+    def is_ready_for_indexing(self) -> tuple[bool, str]:
+        return self._verdict
+
+
 class ReadProjectionCharacterizationTests(unittest.TestCase):
     def setUp(self) -> None:
         runtime_service._clear_current_health_checks()
@@ -398,12 +406,13 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             self._write_image(source_root / "reaction.png")
             worker_loop = RecordingWorkerLoop()
 
-            with patch(
-                "memesort_worker.app_commands.is_runtime_ready_for_indexing",
-                return_value=(False, "runtime is not ready"),
-            ):
-                with self.assertRaisesRegex(ValueError, "runtime is not ready"):
-                    import_and_start_indexing(library_root, source_root, worker_loop)
+            with self.assertRaisesRegex(ValueError, "runtime is not ready"):
+                import_and_start_indexing(
+                    library_root,
+                    source_root,
+                    worker_loop,
+                    StubRuntimeGate(False, "runtime is not ready"),
+                )
 
             self.assertEqual(0, worker_loop.resume_calls)
             self.assertEqual([], list_assets(library_root).assets)
@@ -417,11 +426,12 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             self._write_image(source_root / "reaction.png")
             worker_loop = RecordingWorkerLoop()
 
-            with patch(
-                "memesort_worker.app_commands.is_runtime_ready_for_indexing",
-                return_value=(True, "ready"),
-            ):
-                response = import_and_start_indexing(library_root, source_root, worker_loop)
+            response = import_and_start_indexing(
+                library_root,
+                source_root,
+                worker_loop,
+                StubRuntimeGate(True, "ready"),
+            )
 
         self.assertEqual({"import_result", "worker_loop"}, set(response))
         self.assertEqual(1, worker_loop.resume_calls)

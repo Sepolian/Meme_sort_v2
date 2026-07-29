@@ -8,7 +8,8 @@ from pathlib import Path
 from wsgiref.simple_server import make_server
 
 from .app_paths import AppPaths
-from .runtime_service import RuntimeAuthorizationError, authorize_runtime_for_session
+from .pinned_runtime import PinnedRuntime
+from .runtime_service import RuntimeAuthorizationError
 from .web_security import SessionGate
 from .webapp import (
     LocalWebApp,
@@ -79,6 +80,7 @@ class LocalAppHost:
         self._server_thread: threading.Thread | None = None
         self._gate: SessionGate | None = None
         self._info: LocalAppHostInfo | None = None
+        self._runtime: PinnedRuntime | None = None
         self._authorization_error: str | None = None
 
     @property
@@ -113,10 +115,13 @@ class LocalAppHost:
         gate = SessionGate(origin_host=origin_host)
 
         static_root = self._config.static_root or AppPaths.discover().static_root
+        runtime = PinnedRuntime(library_root)
+        self._runtime = runtime
         app = create_app(
             str(library_root),
             security=gate,
             static_root=static_root,
+            runtime=runtime,
         )
         self._app = app
         self._gate = gate
@@ -142,7 +147,7 @@ class LocalAppHost:
             # Best effort: the window must open even before the runtime is
             # installed so first-run setup can happen inside the UI.
             try:
-                authorize_runtime_for_session(library_root)
+                runtime.authorize()
             except RuntimeAuthorizationError as exc:
                 self._authorization_error = str(exc)
 
@@ -178,7 +183,9 @@ class LocalAppHost:
         if app is not None:
             steps.append(_timed_step("stop-workers", app.shutdown))
 
-        steps.append(_timed_step("close-runtime", _close_managed_runtime))
+        runtime = self._runtime
+        if runtime is not None:
+            steps.append(_timed_step("close-runtime", runtime.close))
 
         thread = self._server_thread
         if thread is not None:
@@ -213,16 +220,12 @@ class LocalAppHost:
                 app.shutdown()
             except Exception:
                 pass
-        try:
-            _close_managed_runtime()
-        except Exception:
-            pass
-
-
-def _close_managed_runtime() -> None:
-    from .llama_cpp_backend import close_managed_servers
-
-    close_managed_servers()
+        runtime = self._runtime
+        if runtime is not None:
+            try:
+                runtime.close()
+            except Exception:
+                pass
 
 
 def _reserve_ephemeral_port(host: str) -> int:

@@ -34,11 +34,8 @@ from .asset_catalog import (
 from .indexing_pipeline import run_pending_jobs
 from .library_store import LibraryStore
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
+from .pinned_runtime import PinnedRuntime
 from .retrieval_service import find_similar_assets, search_image_path, search_text
-from .runtime_service import (
-    authorize_runtime_for_session,
-    run_runtime_health_check,
-)
 from .web_security import (
     SECURITY_HEADERS,
     GateOutcome,
@@ -190,11 +187,15 @@ class LocalWebApp:
         worker_loop: WorkerLoopController,
         import_controller: ImportController,
         stopping: threading.Event,
+        runtime: PinnedRuntime,
+        owns_runtime: bool,
     ) -> None:
         self._handler = handler
         self._worker_loop = worker_loop
         self._import_controller = import_controller
         self._stopping = stopping
+        self.runtime = runtime
+        self._owns_runtime = owns_runtime
 
     def __call__(self, environ, start_response):
         return self._handler(environ, start_response)
@@ -206,6 +207,8 @@ class LocalWebApp:
         self._stopping.set()
         self._import_controller.shutdown()
         self._worker_loop.shutdown()
+        if self._owns_runtime:
+            self.runtime.close()
 
 
 def create_app(
@@ -214,9 +217,13 @@ def create_app(
     security: SessionGate | None = None,
     static_root: Path | None = None,
     max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+    runtime: PinnedRuntime | None = None,
 ) -> "LocalWebApp":
     library_root_path = Path(library_root).expanduser().resolve()
     initialize_library(library_root_path)
+    owns_runtime = runtime is None
+    if runtime is None:
+        runtime = PinnedRuntime(library_root_path)
     worker_loop = WorkerLoopController(library_root_path)
     import_controller = ImportController(library_root_path)
     static_dir = static_root or STATIC_DIR
@@ -257,6 +264,7 @@ def create_app(
                     library_root_path,
                     worker_loop_snapshot=worker_loop.snapshot(),
                     import_task_snapshot=import_controller.snapshot().to_dict(),
+                    runtime=runtime,
                 ).to_dict()
                 status_line, headers, body = _json_response(HTTPStatus.OK, payload)
             elif path == "/api/library-status" and method == "GET":
@@ -295,9 +303,7 @@ def create_app(
                 )
             elif path == "/api/health" and method == "POST":
                 _read_json_body(environ, max_body_bytes)
-                result = run_runtime_health_check(
-                    library_root=library_root_path,
-                )
+                result = runtime.run_health_check()
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/import-folder" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
@@ -312,6 +318,7 @@ def create_app(
                     str(payload["path"]),
                     import_controller,
                     worker_loop,
+                    runtime,
                     start_indexing=bool(payload.get("start_indexing", False)),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.ACCEPTED, snapshot.to_dict())
@@ -372,6 +379,7 @@ def create_app(
                         library_root_path,
                         str(payload["path"]),
                         worker_loop,
+                        runtime,
                     ),
                 )
             elif path == "/api/assets" and method == "GET":
@@ -518,6 +526,8 @@ def create_app(
         worker_loop=worker_loop,
         import_controller=import_controller,
         stopping=stopping,
+        runtime=runtime,
+        owns_runtime=owns_runtime,
     )
 
 
@@ -529,7 +539,7 @@ def run_web_app(
 ) -> None:
     app = create_app(library_root)
     try:
-        authorize_runtime_for_session(Path(library_root).expanduser().resolve())
+        app.runtime.authorize()
         with make_server(
             host,
             port,
