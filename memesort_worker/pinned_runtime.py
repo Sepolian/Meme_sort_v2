@@ -141,6 +141,20 @@ class PinnedRuntime:
 
         return get_embedding_backend()
 
+    def search_request(self, request_id: str):
+        """Enter a prioritized search context on this runtime's scheduler."""
+        self._require_open()
+        from .inference_service import search_inference_request
+
+        return search_inference_request(request_id)
+
+    def cancel_search(self, request_id: str) -> bool:
+        """Cancel a queued or running search request on this runtime."""
+        self._require_open()
+        from .inference_service import cancel_inference_request
+
+        return cancel_inference_request(request_id)
+
     def get_ocr_backend(self):
         """Return a CPU-only OCR backend; the caller owns closing it."""
         self._require_open()

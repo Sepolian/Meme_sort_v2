@@ -123,6 +123,7 @@ def main() -> None:
                 library_root,
                 query=query,
                 top_k=args.top_k,
+                runtime=runtime,
             )
             query_seconds_total += time.perf_counter() - query_started_at
 

@@ -5,9 +5,7 @@ from pathlib import Path
 
 from . import asset_preprocessing
 from . import library
-from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
-from .inference_service import search_inference_request
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .retrieval_composition import compose_text_search_results
 from .semantic_retrieval import rank_asset_embeddings
@@ -18,6 +16,8 @@ def search_text(
     query: str,
     top_k: int = 10,
     request_id: str | None = None,
+    *,
+    runtime,
 ) -> library.SearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -29,8 +29,8 @@ def search_text(
         if not embeddings:
             visual_results: list[dict[str, object]] = []
         else:
-            backend = get_embedding_backend()
-            with search_inference_request(request_id or str(uuid.uuid4())):
+            backend = runtime.get_embedding_backend()
+            with runtime.search_request(request_id or str(uuid.uuid4())):
                 query_vector = backend.embed_text(
                     query,
                     store.active_recipe.output_dimension,
@@ -59,6 +59,8 @@ def search_image_path(
     top_k: int = 10,
     request_id: str | None = None,
     provider: RuntimeRecipeProvider | None = None,
+    *,
+    runtime,
 ) -> library.ImageSearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -78,8 +80,8 @@ def search_image_path(
         else:
             resolved_provider = provider or default_provider()
             spec = resolved_provider.preprocess_spec_for_version(store.active_recipe.preprocess_version)
-            backend = get_embedding_backend()
-            with search_inference_request(request_id or str(uuid.uuid4())):
+            backend = runtime.get_embedding_backend()
+            with runtime.search_request(request_id or str(uuid.uuid4())):
                 image_bytes = query_path.read_bytes()
                 if suffix == ".gif":
                     frame_payloads = asset_preprocessing.extract_gif_frame_bytes(

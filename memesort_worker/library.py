@@ -321,6 +321,8 @@ def search_text(
     library_root: Path | str,
     query: str,
     top_k: int = 10,
+    *,
+    runtime,
 ) -> SearchResult:
     from .retrieval_service import search_text as _search_text
 
@@ -328,6 +330,7 @@ def search_text(
         library_root,
         query=query,
         top_k=top_k,
+        runtime=runtime,
     )
 
 
@@ -335,6 +338,8 @@ def search_image_path(
     library_root: Path | str,
     image_path: Path | str,
     top_k: int = 10,
+    *,
+    runtime,
 ) -> ImageSearchResult:
     from .retrieval_service import search_image_path as _search_image_path
 
@@ -342,6 +347,7 @@ def search_image_path(
         library_root,
         image_path=image_path,
         top_k=top_k,
+        runtime=runtime,
     )
 
 

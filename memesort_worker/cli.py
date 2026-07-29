@@ -136,20 +136,30 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "search":
-        result = search_text(
-            args.library_root,
-            query=args.query,
-            top_k=args.top_k,
-        )
+        runtime = PinnedRuntime(args.library_root)
+        try:
+            result = search_text(
+                args.library_root,
+                query=args.query,
+                top_k=args.top_k,
+                runtime=runtime,
+            )
+        finally:
+            runtime.close()
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
 
     if args.command == "search-image":
-        result = search_image_path(
-            args.library_root,
-            image_path=args.path,
-            top_k=args.top_k,
-        )
+        runtime = PinnedRuntime(args.library_root)
+        try:
+            result = search_image_path(
+                args.library_root,
+                image_path=args.path,
+                top_k=args.top_k,
+                runtime=runtime,
+            )
+        finally:
+            runtime.close()
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
 

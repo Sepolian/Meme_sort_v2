@@ -11,7 +11,11 @@ from pathlib import Path
 
 import numpy as np
 
-from memesort_worker.inference_service import InferenceCancelledError
+from memesort_worker.inference_service import (
+    InferenceCancelledError,
+    InferenceScheduler,
+    search_inference_request,
+)
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
@@ -79,6 +83,7 @@ class FakeIndexingRuntime:
         self._ready_message = ready_message
         self.embedding_backend = embedding_backend or FakeEmbeddingBackend()
         self.ocr_backend = ocr_backend or FakeOcrBackend()
+        self.scheduler = InferenceScheduler()
 
     def is_ready_for_indexing(self) -> tuple[bool, str]:
         return self._ready, self._ready_message
@@ -88,3 +93,9 @@ class FakeIndexingRuntime:
 
     def get_ocr_backend(self) -> FakeOcrBackend:
         return self.ocr_backend
+
+    def search_request(self, request_id: str):
+        return search_inference_request(request_id)
+
+    def cancel_search(self, request_id: str) -> bool:
+        return self.scheduler.cancel(request_id)

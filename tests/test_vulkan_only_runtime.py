@@ -27,6 +27,7 @@ from memesort_worker import library as library_module
 from memesort_worker.recipe_provider import default_provider
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from runtime_fakes import FakeIndexingRuntime
 
 
 class VulkanOnlyRuntimeTests(unittest.TestCase):
@@ -84,14 +85,16 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 self.assertFalse(hasattr(library_module, name))
 
     def test_search_api_has_no_backend_override(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir, patch(
-            "memesort_worker.retrieval_service.get_embedding_backend"
+        runtime = FakeIndexingRuntime()
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            runtime, "get_embedding_backend"
         ) as backend_factory:
             with self.assertRaisesRegex(TypeError, "unexpected keyword argument"):
                 search_text(
                     Path(temp_dir) / "library",
                     query="test",
                     top_k=3,
+                    runtime=runtime,
                     backend_name="debug",
                 )
         backend_factory.assert_not_called()
@@ -336,6 +339,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                 library_root,
                 query_image,
                 provider=custom_provider,
+                runtime=FakeIndexingRuntime(),
             )
             self.assertEqual([], result.results)
 

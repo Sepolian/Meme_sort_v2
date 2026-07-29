@@ -310,10 +310,8 @@ class LibraryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
             backend = self._run_all_jobs_with_stubs(library_root)
-            with patch(
-                "memesort_worker.retrieval_service.get_embedding_backend", return_value=backend
-            ):
-                result = search_text(library_root, query="reaction", top_k=5)
+            runtime = FakeIndexingRuntime(embedding_backend=backend)
+            result = search_text(library_root, query="reaction", top_k=5, runtime=runtime)
 
         self.assertEqual(1, len(result.results))
         self.assertIn(" / vulkan", result.active_recipe_label)
@@ -322,8 +320,9 @@ class LibraryTests(unittest.TestCase):
     def test_search_without_embeddings_does_not_start_inference(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
-            with patch("memesort_worker.retrieval_service.get_embedding_backend") as backend_factory:
-                result = search_text(library_root, query="reaction", top_k=5)
+            runtime = FakeIndexingRuntime()
+            with patch.object(runtime, "get_embedding_backend") as backend_factory:
+                result = search_text(library_root, query="reaction", top_k=5, runtime=runtime)
 
         self.assertEqual([], result.results)
         backend_factory.assert_not_called()
@@ -606,8 +605,8 @@ class LibraryTests(unittest.TestCase):
                 )
 
             try:
-                with patch(
-                    "memesort_worker.retrieval_service.get_embedding_backend", return_value=backend
+                with patch.object(
+                    app.runtime, "get_embedding_backend", return_value=backend
                 ):
                     first = threading.Thread(target=search, args=(first_id, "first"))
                     cancelled = threading.Thread(

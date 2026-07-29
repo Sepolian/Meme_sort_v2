@@ -11,10 +11,7 @@ from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
 from .import_controller import ImportController
-from .inference_service import (
-    InferenceCancelledError,
-    cancel_inference_request,
-)
+from .inference_service import InferenceCancelledError
 from .app_state import build_app_state
 from .app_commands import (
     import_and_start_indexing,
@@ -466,6 +463,7 @@ def create_app(
                     query=query_text,
                     top_k=top_k,
                     request_id=request_id,
+                    runtime=runtime,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search-image" and method == "POST":
@@ -475,12 +473,13 @@ def create_app(
                     image_path=str(payload["path"]),
                     top_k=int(payload.get("top_k", 18)),
                     request_id=str(payload.get("request_id") or ""),
+                    runtime=runtime,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search/cancel" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
                 request_id = str(payload.get("request_id") or "")
-                was_active = cancel_inference_request(request_id)
+                was_active = runtime.cancel_search(request_id)
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
                     {
