@@ -371,6 +371,24 @@ def collect_asset_job_rows(conn: sqlite3.Connection, asset_id: str) -> list[sqli
     ).fetchall()
 
 
+def collect_job_rows_for_assets(
+    conn: sqlite3.Connection,
+    asset_ids: list[str],
+) -> list[sqlite3.Row]:
+    if not asset_ids:
+        return []
+    placeholders = ", ".join("?" for _ in asset_ids)
+    return conn.execute(
+        f"""
+        SELECT asset_id, id, type, status, recipe_id, attempt_count
+        FROM job
+        WHERE asset_id IN ({placeholders})
+        ORDER BY created_at ASC, id ASC
+        """,
+        tuple(asset_ids),
+    ).fetchall()
+
+
 def collect_status_job_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """

@@ -435,6 +435,27 @@ def collect_asset_ocr_rows(conn: sqlite3.Connection, asset_id: str) -> list[sqli
     ).fetchall()
 
 
+def collect_ocr_rows_for_assets(
+    conn: sqlite3.Connection,
+    asset_ids: list[str],
+) -> list[sqlite3.Row]:
+    if not asset_ids:
+        return []
+    placeholders = ", ".join("?" for _ in asset_ids)
+    return conn.execute(
+        f"""
+        SELECT ocr.asset_id, ocr.id, ocr.engine, ocr.text, ocr.searchable_text, ocr.confidence, ocr.language_hint,
+               ocr.line_json, ocr.bbox_json, ocr.created_at,
+               recipe.engine_version, recipe.model_key, recipe.preprocess_version, recipe.min_confidence
+        FROM ocr_result ocr
+        JOIN ocr_recipe recipe ON recipe.id = ocr.ocr_recipe_id
+        WHERE ocr.asset_id IN ({placeholders})
+        ORDER BY ocr.created_at DESC, ocr.id DESC
+        """,
+        tuple(asset_ids),
+    ).fetchall()
+
+
 def project_asset_ocr_results(rows: list[sqlite3.Row]) -> list[dict[str, object]]:
     return [
         {
