@@ -21,6 +21,7 @@ from memesort_worker.runtime_service import (
     get_current_health_check,
     get_last_health_check,
 )
+from memesort_worker.webapp import create_app
 
 
 def _health_result(smoke_test_ok: bool, fingerprint: str | None = None) -> RuntimeHealthResult:
@@ -127,6 +128,13 @@ class PinnedRuntimeTests(unittest.TestCase):
         self.assertIs(result, runtime.current_health_check())
         self.assertIsNone(session_health)
         self.assertIsNotNone(persisted)
+
+    def test_create_app_rejects_a_runtime_bound_to_another_library(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root / "library-a")
+            with self.assertRaisesRegex(ValueError, "library root"):
+                create_app(str(root / "library-b"), runtime=runtime)
 
     def test_close_is_idempotent_and_stops_managed_servers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

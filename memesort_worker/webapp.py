@@ -224,6 +224,12 @@ def create_app(
     owns_runtime = runtime is None
     if runtime is None:
         runtime = PinnedRuntime(library_root_path)
+    elif runtime.library_root != library_root_path:
+        raise ValueError(
+            "The supplied Pinned Runtime is bound to "
+            f"{runtime.library_root}, not the app's library root "
+            f"{library_root_path}."
+        )
     worker_loop = WorkerLoopController(library_root_path, runtime)
     import_controller = ImportController(library_root_path)
     static_dir = static_root or STATIC_DIR
