@@ -19,10 +19,6 @@ from PIL import Image
 
 from memesort_worker import asset_catalog
 from memesort_worker import runtime_service
-from memesort_worker.asset_browse import (
-    get_library_status as browse_get_library_status,
-    list_pending_jobs,
-)
 from memesort_worker.app_commands import import_and_start_indexing
 from memesort_worker.library import (
     get_asset_detail,
@@ -319,7 +315,8 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temp_dir:
                 library_root = self._build_state(Path(temp_dir), state)
                 old_status = get_library_status(library_root).to_dict()
-                new_status = browse_get_library_status(library_root).to_dict()
+                with LibraryStore(library_root) as store:
+                    new_status = store.get_library_status().to_dict()
                 self.assertEqual(LIBRARY_STATUS_KEYS, set(old_status))
                 self.assertEqual(old_status, new_status, state)
 
@@ -352,7 +349,8 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
     def test_pending_jobs_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = self._build_state(Path(temp_dir), "pending_initial_index")
-            jobs = list_pending_jobs(library_root)
+            with LibraryStore(library_root) as store:
+                jobs = store.list_pending_jobs()
 
         self.assertEqual(3, len(jobs))
         self.assertEqual(

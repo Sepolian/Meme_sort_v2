@@ -16,32 +16,27 @@ from .inference_service import (
     cancel_inference_request,
 )
 from .app_state import build_app_state
-from .asset_browse import get_library_status, list_pending_jobs
 from .app_commands import (
     import_and_start_indexing,
-    run_jobs,
-    search_image,
-    search_text,
+    rebuild_assets_and_resume,
+    resolve_asset_reveal_path,
+    start_background_import,
 )
-from .library import (
-    delete_assets,
+from .asset_catalog import (
     delete_asset,
+    delete_assets,
     delete_pending_jobs,
-    get_asset_detail,
     import_folder,
     initialize_library,
-    list_assets,
     remove_source_record,
     retry_failed_jobs,
-    rebuild_active_indexes,
-    scan_duplicate_assets,
 )
+from .indexing_pipeline import run_pending_jobs
+from .library_store import LibraryStore
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
-from .retrieval_service import find_similar_assets
+from .retrieval_service import find_similar_assets, search_image_path, search_text
 from .runtime_service import (
     authorize_runtime_for_session,
-    get_setup_state,
-    is_runtime_ready_for_indexing,
     run_runtime_health_check,
 )
 from .web_security import (
@@ -146,37 +141,6 @@ def _serve_static(static_dir: Path, path: str) -> tuple[str, list[tuple[str, str
     if content_type.startswith("text/") or candidate.suffix in {".js", ".css"}:
         content_type = f"{content_type}; charset=utf-8"
     return _text_response(HTTPStatus.OK, body, content_type)
-
-
-def _contained_library_path(library_root: Path, relative_path: str) -> Path:
-    candidate = (library_root / relative_path).resolve()
-    resolved_root = library_root.resolve()
-    if resolved_root not in candidate.parents and candidate != resolved_root:
-        raise ValueError("Asset path is outside the library root")
-    return candidate
-
-
-def _resolve_asset_reveal_path(library_root: Path, payload: dict[str, object]) -> Path:
-    asset_id = str(payload["asset_id"])
-    target = str(payload.get("target") or "managed")
-    asset = get_asset_detail(library_root, asset_id=asset_id).asset
-
-    if target == "managed":
-        return _contained_library_path(library_root, str(asset["library_path"]))
-
-    if target == "source":
-        source_path = str(payload.get("source_path") or "")
-        source_records = asset.get("source_records") or []
-        known_source_paths = {
-            str(record.get("source_path"))
-            for record in source_records
-            if isinstance(record, dict) and record.get("source_path")
-        }
-        if source_path not in known_source_paths:
-            raise ValueError(f"Source record not found for asset {asset_id}: {source_path}")
-        return Path(source_path).expanduser().resolve()
-
-    raise ValueError(f"Unknown reveal target: {target}")
 
 
 def _apply_gate_outcome(
@@ -296,12 +260,15 @@ def create_app(
                 ).to_dict()
                 status_line, headers, body = _json_response(HTTPStatus.OK, payload)
             elif path == "/api/library-status" and method == "GET":
-                result = get_library_status(library_root_path)
+                with LibraryStore(library_root_path) as store:
+                    result = store.get_library_status()
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/pending-jobs" and method == "GET":
+                with LibraryStore(library_root_path) as store:
+                    jobs = store.list_pending_jobs()
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
-                    {"jobs": list_pending_jobs(library_root_path)},
+                    {"jobs": jobs},
                 )
             elif path == "/api/worker-loop" and method == "GET":
                 status_line, headers, body = _json_response(
@@ -340,14 +307,12 @@ def create_app(
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.snapshot().to_dict())
             elif path == "/api/import/start" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
-                start_indexing = bool(payload.get("start_indexing", False))
-                if start_indexing:
-                    runtime_ready, runtime_message = is_runtime_ready_for_indexing(library_root_path)
-                    if not runtime_ready:
-                        raise ValueError(runtime_message)
-                snapshot = import_controller.start(
+                snapshot = start_background_import(
+                    library_root_path,
                     str(payload["path"]),
-                    on_completed=worker_loop.resume if start_indexing else None,
+                    import_controller,
+                    worker_loop,
+                    start_indexing=bool(payload.get("start_indexing", False)),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.ACCEPTED, snapshot.to_dict())
             elif path == "/api/import/pause" and method == "POST":
@@ -394,7 +359,7 @@ def create_app(
                 )
             elif path == "/api/run-jobs" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
-                result = run_jobs(
+                result = run_pending_jobs(
                     library_root_path,
                     max_jobs=int(payload.get("max_jobs", 20)),
                 )
@@ -410,11 +375,13 @@ def create_app(
                     ),
                 )
             elif path == "/api/assets" and method == "GET":
-                result = list_assets(library_root_path)
+                with LibraryStore(library_root_path) as store:
+                    result = store.list_assets_detailed()
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/asset-detail" and method == "GET":
                 asset_id = str(query.get("asset_id", [""])[0])
-                result = get_asset_detail(library_root_path, asset_id=asset_id)
+                with LibraryStore(library_root_path) as store:
+                    result = store.get_asset_detail(asset_id)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/remove-source-record" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
@@ -440,21 +407,29 @@ def create_app(
                 if action == "delete":
                     result = delete_assets(library_root_path, [str(asset_id) for asset_id in asset_ids])
                 elif action == "rebuild-active-index":
-                    result = rebuild_active_indexes(library_root_path, [str(asset_id) for asset_id in asset_ids])
-                    if result.reindex_jobs_created:
-                        worker_loop.resume()
+                    result = rebuild_assets_and_resume(
+                        library_root_path,
+                        [str(asset_id) for asset_id in asset_ids],
+                        worker_loop,
+                    )
                 else:
                     raise ValueError(f"Unsupported batch action: {action}")
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/reveal-asset-file" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
-                target_path = _resolve_asset_reveal_path(library_root_path, payload)
+                target = str(payload.get("target") or "managed")
+                target_path = resolve_asset_reveal_path(
+                    library_root_path,
+                    asset_id=str(payload["asset_id"]),
+                    target=target,
+                    source_path=str(payload.get("source_path") or ""),
+                )
                 reveal_path_in_file_explorer(target_path)
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
                     {
                         "revealed_path": str(target_path),
-                        "target": str(payload.get("target") or "managed"),
+                        "target": target,
                     },
                 )
             elif path == "/api/retry-failed-jobs" and method == "POST":
@@ -480,7 +455,7 @@ def create_app(
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/search-image" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
-                result = search_image(
+                result = search_image_path(
                     library_root_path,
                     image_path=str(payload["path"]),
                     top_k=int(payload.get("top_k", 18)),
@@ -506,7 +481,8 @@ def create_app(
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/duplicates" and method == "GET":
                 threshold = float(query.get("threshold", ["0.92"])[0])
-                result = scan_duplicate_assets(library_root_path, threshold=threshold)
+                with LibraryStore(library_root_path) as store:
+                    result = store.scan_duplicate_assets(threshold)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path.startswith("/media/") and method == "GET":
                 media_path = path.removeprefix("/media/")

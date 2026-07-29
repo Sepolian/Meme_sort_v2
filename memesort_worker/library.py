@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
 from . import asset_catalog
 from . import asset_preprocessing
-from . import job_queue
 from . import ocr_artifacts
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 
@@ -210,15 +208,6 @@ class SetupStateResult:
         return asdict(self)
 
 
-# Delegate internal helpers to asset_catalog
-def _database_path(library_root: Path) -> Path:
-    return asset_catalog.database_path(library_root)
-
-
-def _connect(database_path: Path) -> sqlite3.Connection:
-    return asset_catalog.connect(database_path)
-
-
 def _safe_image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int | None, int | None]:
     return asset_preprocessing.safe_image_dimensions_from_bytes(image_bytes)
 
@@ -252,22 +241,6 @@ def import_folder(
     )
 
 
-def _compute_sha256(file_path: Path) -> str:
-    return asset_catalog.compute_sha256(file_path)
-
-
-def _upsert_source_record(conn: sqlite3.Connection, asset_id: str, source_path: str, now: str) -> str:
-    return asset_catalog.upsert_source_record(conn, asset_id, source_path, now)
-
-
-def _delete_asset_rows(
-    conn: sqlite3.Connection,
-    library_root_path: Path,
-    asset_id: str,
-) -> tuple[int, int, int]:
-    return asset_catalog.delete_asset_rows(conn, library_root_path, asset_id)
-
-
 def remove_source_record(
     library_root: Path | str,
     asset_id: str,
@@ -289,14 +262,6 @@ def delete_assets(library_root: Path | str, asset_ids: list[str]) -> BatchAssetA
 
 def rebuild_active_indexes(library_root: Path | str, asset_ids: list[str]) -> BatchAssetActionResult:
     return asset_catalog.rebuild_active_indexes(library_root, asset_ids)
-
-
-def _normalize_batch_asset_ids(asset_ids: list[str]) -> list[str]:
-    return asset_catalog.normalize_batch_asset_ids(asset_ids)
-
-
-def _require_existing_asset_ids(conn: sqlite3.Connection, asset_ids: list[str]) -> None:
-    return asset_catalog.require_existing_asset_ids(conn, asset_ids)
 
 
 def retry_failed_jobs(library_root: Path | str) -> RetryJobsResult:
@@ -350,10 +315,6 @@ def get_library_status(library_root: Path | str) -> LibraryStatusResult:
 
     with LibraryStore(library_root) as store:
         return store.get_library_status()
-
-
-def _requeue_incomplete_jobs(conn: sqlite3.Connection) -> tuple[int, int]:
-    return job_queue.requeue_incomplete_jobs(conn)
 
 
 def run_pending_jobs(

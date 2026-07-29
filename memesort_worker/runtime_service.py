@@ -4,7 +4,6 @@ import base64
 import threading
 from pathlib import Path
 
-from .asset_browse import list_asset_summaries
 from . import library
 from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
@@ -316,7 +315,8 @@ def get_setup_state(
 ) -> library.SetupStateResult:
     manifest = load_runtime_manifest()
     if assets_result is None:
-        assets_result = list_asset_summaries(library_root)
+        with LibraryStore(library_root) as store:
+            assets_result = store.list_asset_summaries()
     last_health_check = get_last_health_check(library_root)
     current_health_check = get_current_health_check(library_root)
     runtime_ready, runtime_ready_detail = is_runtime_ready_for_indexing(library_root)

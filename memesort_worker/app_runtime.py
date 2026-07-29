@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .app_commands import run_jobs
+from .indexing_pipeline import run_pending_jobs
 
 
 @dataclass
@@ -140,7 +140,7 @@ class WorkerLoopController:
         self._append_event("tick-started", {})
 
         try:
-            result = run_jobs(
+            result = run_pending_jobs(
                 self._library_root,
                 max_jobs=20,
             ).to_dict()

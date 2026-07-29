@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from memesort_worker.app_commands import search_text
+from memesort_worker.retrieval_service import search_text
 from memesort_worker.app_state import build_app_state
 from memesort_worker.asset_preprocessing import preprocess_image_bytes
 from memesort_worker.embedding_backend import get_embedding_backend
@@ -85,8 +85,8 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
 
     def test_search_api_has_no_backend_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch(
-            "memesort_worker.app_commands._search_text"
-        ) as search:
+            "memesort_worker.retrieval_service.get_embedding_backend"
+        ) as backend_factory:
             with self.assertRaisesRegex(TypeError, "unexpected keyword argument"):
                 search_text(
                     Path(temp_dir) / "library",
@@ -94,7 +94,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                     top_k=3,
                     backend_name="debug",
                 )
-        search.assert_not_called()
+        backend_factory.assert_not_called()
 
     def test_embedding_factory_has_no_backend_selector(self) -> None:
         for backend_name in ("debug", "qwen3-vl", "cpu", "cuda"):

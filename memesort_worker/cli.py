@@ -6,18 +6,11 @@ from typing import Sequence
 
 from .desktop_app import launch_desktop_shell, run_smoke_test
 from .launcher import launch_local_mvp_app
-from .app_commands import (
-    run_jobs,
-    search_image,
-    search_text,
-)
-from .library import (
-    import_folder,
-    initialize_library,
-    list_assets,
-)
+from .asset_catalog import import_folder, initialize_library
+from .indexing_pipeline import run_pending_jobs as run_jobs
+from .library_store import LibraryStore
 from .runtime_service import RuntimeAuthorizationError, authorize_runtime_for_session
-from .retrieval_service import find_similar_assets
+from .retrieval_service import find_similar_assets, search_image_path, search_text
 from .webapp import run_web_app
 
 
@@ -119,7 +112,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "list-assets":
-        result = list_assets(args.library_root)
+        with LibraryStore(args.library_root) as store:
+            result = store.list_assets_detailed()
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
 
@@ -145,7 +139,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "search-image":
-        result = search_image(
+        result = search_image_path(
             args.library_root,
             image_path=args.path,
             top_k=args.top_k,

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .app_runtime import WorkerLoopSnapshot
-from .asset_browse import read_library_snapshot
+from .library_store import LibraryStore
 from .runtime_descriptor import get_runtime_descriptor
 from .runtime_service import get_setup_state
 
@@ -30,7 +30,8 @@ def build_app_state(
     import_task_snapshot: dict[str, object] | None = None,
 ) -> AppStateResult:
     library_root_path = Path(library_root).expanduser().resolve()
-    library_snapshot = read_library_snapshot(library_root_path)
+    with LibraryStore(library_root_path) as store:
+        library_snapshot = store.read_library_snapshot()
     setup_state = get_setup_state(
         library_root_path,
         assets_result=library_snapshot.asset_summary,

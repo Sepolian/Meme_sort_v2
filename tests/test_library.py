@@ -563,7 +563,7 @@ class LibraryTests(unittest.TestCase):
             )
             try:
                 with patch(
-                    "memesort_worker.webapp.rebuild_active_indexes",
+                    "memesort_worker.app_commands.rebuild_active_indexes",
                     return_value=expected,
                 ) as rebuild:
                     status, payload = self._request(
