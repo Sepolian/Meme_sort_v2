@@ -1,12 +1,10 @@
 """Instance-owned Pinned Runtime lifecycle.
 
 A ``PinnedRuntime`` owns runtime authorization state for one application
-session and holds a reference to the process's shared inference engine: one
-serialized inference scheduler plus the llama.cpp embedding backend (and
-therefore the llama-server process).  The engine is refcounted across live
-runtimes, so concurrent hosts in one process still share one llama-server
-and one serialized scheduler (a manifest invariant), and closing the last
-runtime tears the engine down and clears the module slot.
+session and obtains inference resources from a composition-owned
+``InferenceEngineManager``. A manager shares one serialized scheduler, one
+embedding backend, and one llama-server across the runtimes its composition
+root creates; closing the last runtime tears those resources down.
 """
 
 from __future__ import annotations
@@ -28,8 +26,8 @@ class PinnedRuntimeClosedError(RuntimeError):
     """The Pinned Runtime instance was already closed."""
 
 
-class _SharedInferenceEngine:
-    """One serialized scheduler and one llama.cpp backend per process."""
+class _InferenceEngine:
+    """One serialized scheduler and one llama.cpp backend."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -52,42 +50,47 @@ class _SharedInferenceEngine:
             backend.close()
 
 
-_ENGINE_LOCK = threading.Lock()
-_ENGINE: _SharedInferenceEngine | None = None
-_ENGINE_REFS = 0
+class InferenceEngineManager:
+    """Composition-owned, refcounted inference resources for live runtimes."""
 
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._engine: _InferenceEngine | None = None
+        self._references = 0
 
-def _acquire_shared_engine() -> _SharedInferenceEngine:
-    global _ENGINE, _ENGINE_REFS
-    with _ENGINE_LOCK:
-        if _ENGINE is None:
-            _ENGINE = _SharedInferenceEngine()
-        _ENGINE_REFS += 1
-        return _ENGINE
+    def acquire(self) -> _InferenceEngine:
+        with self._lock:
+            if self._engine is None:
+                self._engine = _InferenceEngine()
+            self._references += 1
+            return self._engine
 
-
-def _release_shared_engine(engine: _SharedInferenceEngine) -> None:
-    global _ENGINE, _ENGINE_REFS
-    with _ENGINE_LOCK:
-        if engine is not _ENGINE:
-            return
-        _ENGINE_REFS -= 1
-        if _ENGINE_REFS > 0:
-            return
-        _ENGINE = None
-        _ENGINE_REFS = 0
-    engine.close()
+    def release(self, engine: _InferenceEngine) -> None:
+        with self._lock:
+            if engine is not self._engine:
+                return
+            self._references -= 1
+            if self._references > 0:
+                return
+            self._engine = None
+            self._references = 0
+        engine.close()
 
 
 class PinnedRuntime:
     """Own authorization, inference access, and shutdown for one app session."""
 
-    def __init__(self, library_root: Path | str) -> None:
+    def __init__(
+        self,
+        library_root: Path | str,
+        engine_manager: InferenceEngineManager | None = None,
+    ) -> None:
         self.library_root = Path(library_root).expanduser().resolve()
         self._lock = threading.Lock()
         self._session_health: library.RuntimeHealthResult | None = None
         self._closed = False
-        self._engine = _acquire_shared_engine()
+        self._engine_manager = engine_manager or InferenceEngineManager()
+        self._engine = self._engine_manager.acquire()
 
     @property
     def closed(self) -> bool:
@@ -149,22 +152,21 @@ class PinnedRuntime:
         return True, "Runtime is ready for indexing."
 
     def get_embedding_backend(self):
-        """Return the shared llama.cpp embedding backend, creating it lazily.
+        """Return this manager's llama.cpp embedding backend, creating it lazily.
 
-        The backend is bound to the shared engine's scheduler, so every live
-        runtime in this process uses one llama-server and one serialized
-        scheduler for both indexing and search.
+        The backend is bound to this manager's scheduler, so every runtime
+        created by the same composition root shares inference resources.
         """
         self._require_open()
         return self._engine.get_embedding_backend()
 
     def search_request(self, request_id: str):
-        """Enter a prioritized search context on the shared scheduler."""
+        """Enter a prioritized search context on this manager's scheduler."""
         self._require_open()
         return search_inference_request(self._engine.scheduler, request_id)
 
     def cancel_search(self, request_id: str) -> bool:
-        """Cancel a queued or running search request on the shared scheduler."""
+        """Cancel a queued or running search request on this manager's scheduler."""
         self._require_open()
         return self._engine.scheduler.cancel(request_id)
 
@@ -182,4 +184,4 @@ class PinnedRuntime:
             self._closed = True
             self._session_health = None
 
-        _release_shared_engine(self._engine)
+        self._engine_manager.release(self._engine)

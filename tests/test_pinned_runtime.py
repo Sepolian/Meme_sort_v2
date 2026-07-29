@@ -14,7 +14,11 @@ from memesort_worker.local_app_host import (
     LocalAppHostConfig,
     STATE_STOPPED,
 )
-from memesort_worker.pinned_runtime import PinnedRuntime, PinnedRuntimeClosedError
+from memesort_worker.pinned_runtime import (
+    InferenceEngineManager,
+    PinnedRuntime,
+    PinnedRuntimeClosedError,
+)
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_service import (
     RuntimeAuthorizationError,
@@ -157,8 +161,9 @@ class PinnedRuntimeTests(unittest.TestCase):
     def test_live_runtimes_share_one_backend_and_last_close_tears_it_down(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            first = PinnedRuntime(root / "library-a")
-            second = PinnedRuntime(root / "library-b")
+            engine_manager = InferenceEngineManager()
+            first = PinnedRuntime(root / "library-a", engine_manager)
+            second = PinnedRuntime(root / "library-b", engine_manager)
             backend = Mock()
             with patch(
                 "memesort_worker.embedding_backend.LlamaCppEmbeddingBackend",

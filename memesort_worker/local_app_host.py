@@ -8,7 +8,7 @@ from pathlib import Path
 from wsgiref.simple_server import make_server
 
 from .app_paths import AppPaths
-from .pinned_runtime import PinnedRuntime
+from .pinned_runtime import InferenceEngineManager, PinnedRuntime
 from .runtime_service import RuntimeAuthorizationError
 from .web_security import SessionGate
 from .webapp import (
@@ -81,6 +81,7 @@ class LocalAppHost:
         self._gate: SessionGate | None = None
         self._info: LocalAppHostInfo | None = None
         self._runtime: PinnedRuntime | None = None
+        self._engine_manager = InferenceEngineManager()
         self._authorization_error: str | None = None
 
     @property
@@ -115,7 +116,7 @@ class LocalAppHost:
         gate = SessionGate(origin_host=origin_host)
 
         static_root = self._config.static_root or AppPaths.discover().static_root
-        runtime = PinnedRuntime(library_root)
+        runtime = PinnedRuntime(library_root, self._engine_manager)
         self._runtime = runtime
         app = create_app(
             str(library_root),

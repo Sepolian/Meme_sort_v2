@@ -31,7 +31,7 @@ from .asset_catalog import (
 from .indexing_pipeline import run_pending_jobs
 from .library_store import LibraryStore
 from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
-from .pinned_runtime import PinnedRuntime
+from .pinned_runtime import InferenceEngineManager, PinnedRuntime
 from .retrieval_service import find_similar_assets, search_image_path, search_text
 from .web_security import (
     SECURITY_HEADERS,
@@ -215,12 +215,13 @@ def create_app(
     static_root: Path | None = None,
     max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
     runtime: PinnedRuntime | None = None,
+    engine_manager: InferenceEngineManager | None = None,
 ) -> "LocalWebApp":
     library_root_path = Path(library_root).expanduser().resolve()
     initialize_library(library_root_path)
     owns_runtime = runtime is None
     if runtime is None:
-        runtime = PinnedRuntime(library_root_path)
+        runtime = PinnedRuntime(library_root_path, engine_manager)
     elif runtime.library_root != library_root_path:
         raise ValueError(
             "The supplied Pinned Runtime is bound to "
