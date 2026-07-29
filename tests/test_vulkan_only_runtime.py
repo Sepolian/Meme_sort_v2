@@ -17,7 +17,8 @@ from PIL import Image
 from memesort_worker.retrieval_service import search_text
 from memesort_worker.app_state import build_app_state
 from memesort_worker.asset_preprocessing import preprocess_image_bytes
-from memesort_worker.embedding_backend import get_embedding_backend
+from memesort_worker.embedding_backend import LlamaCppEmbeddingBackend
+from memesort_worker.inference_service import InferenceScheduler
 from memesort_worker.library import (
     initialize_library,
     import_folder,
@@ -103,7 +104,7 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         for backend_name in ("debug", "qwen3-vl", "cpu", "cuda"):
             with self.subTest(backend_name=backend_name):
                 with self.assertRaisesRegex(TypeError, "positional argument"):
-                    get_embedding_backend(backend_name)
+                    LlamaCppEmbeddingBackend(InferenceScheduler(), backend_name)
 
     def test_recipe_change_atomically_resets_semantic_state_and_requeues(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -123,6 +123,10 @@ class LlamaCppServer:
         self._idle_timer: threading.Timer | None = None
         self._last_activity = 0.0
         self._logger = _runtime_logger(config)
+        # Crash fallback only: the owning PinnedRuntime closes the server
+        # explicitly; this guards against a llama-server child outliving an
+        # interpreter that never reached that close.
+        atexit.register(self.close)
 
     @property
     def base_url(self) -> str:
@@ -191,7 +195,6 @@ class LlamaCppServer:
             raise LlamaCppBackendError(
                 f"Pinned llama-server executable does not exist: {executable}. Run setup."
             )
-        _activate_managed_server(self)
         port = _find_available_local_port()
         self._base_url = f"http://127.0.0.1:{port}"
         command = [
@@ -323,7 +326,9 @@ class LlamaCppEmbeddingAdapter:
     def __init__(self, config: LlamaCppServerConfig) -> None:
         self.config = config
         self.server = LlamaCppServer(config)
-        _MANAGED_SERVERS.add(self.server)
+
+    def close(self) -> None:
+        self.server.close()
 
     def embed_text(self, text: str, instruction: str | None = None) -> np.ndarray:
         return self.server.request_embedding(_format_text_prompt(text, instruction))
@@ -463,29 +468,8 @@ def _find_available_local_port() -> int:
 
 _LOGGER_LOCK = threading.Lock()
 _RUNTIME_LOGGERS: dict[str, logging.Logger] = {}
-_MANAGED_SERVERS: set[LlamaCppServer] = set()
+# Serializes llama-server requests across every server in the process so at
+# most one inference runs at a time regardless of how many runtimes exist.
 _ACTIVE_SERVER_LOCK = threading.RLock()
 
-
-def _activate_managed_server(server: LlamaCppServer) -> None:
-    with _ACTIVE_SERVER_LOCK:
-        for other in list(_MANAGED_SERVERS):
-            if other is not server and other._process is not None:
-                other.close()
-
-
-@atexit.register
-def _close_managed_servers() -> None:
-    close_managed_servers()
-
-
-def close_managed_servers() -> None:
-    """Stop every managed llama-server process and release runtime loggers.
-
-    Invoked by the shared inference server lease when the last live
-    ``PinnedRuntime`` closes. The ``atexit`` registration above only remains
-    as a crash fallback.
-    """
-    for server in list(_MANAGED_SERVERS):
-        server.close()
-    _close_runtime_loggers()
+atexit.register(_close_runtime_loggers)

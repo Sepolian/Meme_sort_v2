@@ -131,11 +131,8 @@ class InferenceScheduler:
                 continue
 
 
-INFERENCE_SCHEDULER = InferenceScheduler()
-
-
 @contextlib.contextmanager
-def search_inference_request(request_id: str) -> Iterator[None]:
+def search_inference_request(scheduler: InferenceScheduler, request_id: str) -> Iterator[None]:
     request_id = validate_request_id(request_id)
     token = _CURRENT_CONTEXT.set(
         InferenceRequestContext(priority="search", request_id=request_id)
@@ -144,11 +141,7 @@ def search_inference_request(request_id: str) -> Iterator[None]:
         yield
     finally:
         _CURRENT_CONTEXT.reset(token)
-        INFERENCE_SCHEDULER.finish_request(request_id)
-
-
-def cancel_inference_request(request_id: str) -> bool:
-    return INFERENCE_SCHEDULER.cancel(request_id)
+        scheduler.finish_request(request_id)
 
 
 def validate_request_id(request_id: str) -> str:

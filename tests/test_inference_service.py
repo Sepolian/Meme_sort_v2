@@ -44,7 +44,7 @@ class InferenceServiceTests(unittest.TestCase):
 
         def submit_search() -> None:
             try:
-                with search_inference_request(request_id):
+                with search_inference_request(scheduler, request_id):
                     scheduler.submit(lambda: order.append("search"))
             except BaseException as exc:
                 errors.append(exc)
@@ -78,7 +78,7 @@ class InferenceServiceTests(unittest.TestCase):
 
         def submit_search(request_id: str) -> None:
             try:
-                with search_inference_request(request_id):
+                with search_inference_request(scheduler, request_id):
                     scheduler.submit(lambda: outcomes.__setitem__(request_id, "ran"))
             except InferenceCancelledError:
                 outcomes[request_id] = "cancelled"
@@ -105,7 +105,7 @@ class InferenceServiceTests(unittest.TestCase):
 
         def submit_search() -> None:
             try:
-                with search_inference_request(request_id):
+                with search_inference_request(scheduler, request_id):
                     scheduler.submit(
                         lambda: (running.set(), release.wait(2), outcome.append("finished"))
                     )

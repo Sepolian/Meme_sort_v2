@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from memesort_worker.library import RuntimeHealthResult, initialize_library
 from memesort_worker.local_app_host import (
@@ -136,16 +136,19 @@ class PinnedRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "library root"):
                 create_app(str(root / "library-b"), runtime=runtime)
 
-    def test_close_is_idempotent_and_stops_managed_servers(self) -> None:
+    def test_close_is_idempotent_and_closes_the_owned_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime = PinnedRuntime(Path(temp_dir) / "library")
+            backend = Mock()
             with patch(
-                "memesort_worker.llama_cpp_backend.close_managed_servers"
-            ) as close_servers:
-                runtime.close()
-                runtime.close()
+                "memesort_worker.embedding_backend.LlamaCppEmbeddingBackend",
+                return_value=backend,
+            ):
+                self.assertIs(backend, runtime.get_embedding_backend())
+            runtime.close()
+            runtime.close()
 
-        self.assertEqual(1, close_servers.call_count)
+        self.assertEqual(1, backend.close.call_count)
         self.assertTrue(runtime.closed)
         self.assertIsNone(runtime.current_health_check())
         ready, detail = runtime.is_ready_for_indexing()
@@ -154,18 +157,24 @@ class PinnedRuntimeTests(unittest.TestCase):
         with self.assertRaises(PinnedRuntimeClosedError):
             runtime.run_health_check()
 
-    def test_closing_one_runtime_keeps_the_shared_server_for_live_runtimes(self) -> None:
+    def test_closing_one_runtime_keeps_the_other_runtime_backend_alive(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             first = PinnedRuntime(root / "library-a")
             second = PinnedRuntime(root / "library-b")
+            backend_a = Mock()
+            backend_b = Mock()
             with patch(
-                "memesort_worker.llama_cpp_backend.close_managed_servers"
-            ) as close_servers:
-                first.close()
-                self.assertEqual(0, close_servers.call_count)
-                second.close()
-                self.assertEqual(1, close_servers.call_count)
+                "memesort_worker.embedding_backend.LlamaCppEmbeddingBackend",
+                side_effect=[backend_a, backend_b],
+            ):
+                self.assertIs(backend_a, first.get_embedding_backend())
+                self.assertIs(backend_b, second.get_embedding_backend())
+            first.close()
+            self.assertEqual(1, backend_a.close.call_count)
+            self.assertEqual(0, backend_b.close.call_count)
+            second.close()
+            self.assertEqual(1, backend_b.close.call_count)
 
         self.assertTrue(first.closed)
         self.assertTrue(second.closed)

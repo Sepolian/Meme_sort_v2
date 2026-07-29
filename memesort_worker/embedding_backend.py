@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
 
 import numpy as np
 
-from .inference_service import INFERENCE_SCHEDULER
+from .inference_service import InferenceScheduler
 
 
 class EmbeddingBackendError(RuntimeError):
@@ -33,12 +32,8 @@ class EmbeddingBackend:
         raise NotImplementedError
 
 
-def get_embedding_backend() -> EmbeddingBackend:
-    return _get_cached_llama_cpp_backend()
-
-
 class LlamaCppEmbeddingBackend(EmbeddingBackend):
-    def __init__(self) -> None:
+    def __init__(self, scheduler: InferenceScheduler) -> None:
         from .llama_cpp_backend import (
             LlamaCppBackendError,
             LlamaCppEmbeddingAdapter,
@@ -46,6 +41,7 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         )
         from .runtime_manifest import load_runtime_manifest
 
+        self._scheduler = scheduler
         self._adapter_error = LlamaCppBackendError
         manifest = load_runtime_manifest()
         self._adapter = LlamaCppEmbeddingAdapter(load_server_config(manifest.source_path))
@@ -60,7 +56,7 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         instruction: str | None = None,
     ) -> np.ndarray:
         try:
-            vector = INFERENCE_SCHEDULER.submit(
+            vector = self._scheduler.submit(
                 lambda: self._adapter.embed_text(text, instruction=instruction)
             )
         except self._adapter_error as exc:
@@ -74,7 +70,7 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         instruction: str | None = None,
     ) -> np.ndarray:
         try:
-            vector = INFERENCE_SCHEDULER.submit(
+            vector = self._scheduler.submit(
                 lambda: self._adapter.embed_image_bytes(
                     image_bytes,
                     instruction=instruction,
@@ -84,10 +80,8 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
             raise EmbeddingBackendError(str(exc)) from exc
         return _coerce_normalized_dimension(vector, output_dimension)
 
-
-@lru_cache(maxsize=1)
-def _get_cached_llama_cpp_backend() -> LlamaCppEmbeddingBackend:
-    return LlamaCppEmbeddingBackend()
+    def close(self) -> None:
+        self._adapter.close()
 
 
 def _coerce_normalized_dimension(

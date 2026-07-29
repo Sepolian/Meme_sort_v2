@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import threading
 from pathlib import Path
+from typing import Callable
 
 from . import library
-from .embedding_backend import get_embedding_backend
 from .library_store import LibraryStore
 from .runtime_admission import (
     crosscheck_llama_vulkan0,
@@ -123,6 +123,7 @@ def get_last_health_check(
 def run_runtime_health_check(
     library_root: Path | str | None = None,
     record_session_health: bool = True,
+    embedding_backend_factory: Callable[[], object] | None = None,
 ) -> library.RuntimeHealthResult:
     manifest = load_runtime_manifest()
     diagnostic_steps: list[dict[str, object]] = [
@@ -138,6 +139,7 @@ def run_runtime_health_check(
         library_root=library_root,
         diagnostic_steps=diagnostic_steps,
         record_session_health=record_session_health,
+        embedding_backend_factory=embedding_backend_factory,
     )
 
 
@@ -153,11 +155,19 @@ def authorize_runtime_for_session(
     return result
 
 
+def _create_owned_embedding_backend():
+    from .embedding_backend import LlamaCppEmbeddingBackend
+    from .inference_service import InferenceScheduler
+
+    return LlamaCppEmbeddingBackend(InferenceScheduler())
+
+
 def _run_llama_cpp_runtime_health_check(
     manifest,
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
     record_session_health: bool = True,
+    embedding_backend_factory: Callable[[], object] | None = None,
 ) -> library.RuntimeHealthResult:
     if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
         result = library.RuntimeHealthResult(
@@ -195,6 +205,7 @@ def _run_llama_cpp_runtime_health_check(
     gpu_name: str | None = None
     gpu_vendor: str | None = None
     gpu_vendor_id: str | None = None
+    owned_backend = None
     try:
         from .llama_cpp_backend import (
             discover_llama_server,
@@ -249,7 +260,11 @@ def _run_llama_cpp_runtime_health_check(
             }
         )
         failure_step = "text-embedding-smoke"
-        backend = get_embedding_backend()
+        if embedding_backend_factory is None:
+            owned_backend = _create_owned_embedding_backend()
+            backend = owned_backend
+        else:
+            backend = embedding_backend_factory()
         vector = backend.embed_text(
             "confused reaction image",
             output_dimension=manifest.model.output_dimension,
@@ -296,6 +311,9 @@ def _run_llama_cpp_runtime_health_check(
                 record_session_health=record_session_health,
             )
         return result
+    finally:
+        if owned_backend is not None:
+            owned_backend.close()
 
     diagnostic_steps.append(
         {

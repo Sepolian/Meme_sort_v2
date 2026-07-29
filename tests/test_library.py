@@ -41,7 +41,7 @@ from runtime_fakes import FakeIndexingRuntime
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_service import authorize_runtime_for_session
 from memesort_worker.runtime_manifest import load_runtime_manifest
-from memesort_worker.inference_service import INFERENCE_SCHEDULER
+from memesort_worker.inference_service import InferenceScheduler
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.webapp import (
     ThreadedWSGIServer,
@@ -101,8 +101,9 @@ class StubOcrBackend:
 
 
 class BlockingSearchBackend(StubEmbeddingBackend):
-    def __init__(self) -> None:
+    def __init__(self, scheduler: InferenceScheduler) -> None:
         super().__init__()
+        self.scheduler = scheduler
         self.started = threading.Event()
         self.release = threading.Event()
         self.text_calls: list[str] = []
@@ -123,7 +124,7 @@ class BlockingSearchBackend(StubEmbeddingBackend):
                 text, output_dimension, instruction
             )
 
-        return INFERENCE_SCHEDULER.submit(operation)
+        return self.scheduler.submit(operation)
 
 
 class LibraryTests(unittest.TestCase):
@@ -204,11 +205,11 @@ class LibraryTests(unittest.TestCase):
         except HTTPError as error:
             return int(error.code), json.loads(error.read().decode("utf-8"))
 
-    def _wait_for_search_queue(self, size: int) -> None:
+    def _wait_for_search_queue(self, scheduler: InferenceScheduler, size: int) -> None:
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:
-            with INFERENCE_SCHEDULER._condition:
-                if len(INFERENCE_SCHEDULER._search_queue) == size:
+            with scheduler._condition:
+                if len(scheduler._search_queue) == size:
                     return
             time.sleep(0.01)
         self.fail(f"search queue did not reach {size}")
@@ -581,8 +582,8 @@ class LibraryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
             self._run_all_jobs_with_stubs(library_root)
-            backend = BlockingSearchBackend()
             app = create_app(str(library_root))
+            backend = BlockingSearchBackend(app.runtime.scheduler)
             server = make_server(
                 "127.0.0.1",
                 0,
@@ -615,7 +616,7 @@ class LibraryTests(unittest.TestCase):
                     first.start()
                     self.assertTrue(backend.started.wait(timeout=2))
                     cancelled.start()
-                    self._wait_for_search_queue(1)
+                    self._wait_for_search_queue(app.runtime.scheduler, 1)
 
                     cancel_status, cancel_payload = self._http_json(
                         f"{base_url}/api/search/cancel",

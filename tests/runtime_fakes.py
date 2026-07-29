@@ -95,7 +95,7 @@ class FakeIndexingRuntime:
         return self.ocr_backend
 
     def search_request(self, request_id: str):
-        return search_inference_request(request_id)
+        return search_inference_request(self.scheduler, request_id)
 
     def cancel_search(self, request_id: str) -> bool:
         return self.scheduler.cancel(request_id)

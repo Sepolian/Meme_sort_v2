@@ -6,7 +6,7 @@ import unittest
 import subprocess
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -14,6 +14,7 @@ from memesort_worker.embedding_backend import (
     EmbeddingBackendError,
     LlamaCppEmbeddingBackend,
 )
+from memesort_worker.inference_service import InferenceScheduler
 from memesort_worker import library as library_module
 from memesort_worker.library import (
     RuntimeHealthResult,
@@ -100,7 +101,7 @@ class LlamaCppBackendTests(unittest.TestCase):
             "memesort_worker.llama_cpp_backend.LlamaCppEmbeddingAdapter.embed_text",
             return_value=np.array([3.0, 4.0, 12.0], dtype=np.float32),
         ):
-            backend = LlamaCppEmbeddingBackend()
+            backend = LlamaCppEmbeddingBackend(InferenceScheduler())
             with self.assertRaisesRegex(EmbeddingBackendError, "expected exactly 2"):
                 backend.embed_text("hello", output_dimension=2)
 
@@ -109,7 +110,7 @@ class LlamaCppBackendTests(unittest.TestCase):
             "memesort_worker.llama_cpp_backend.LlamaCppEmbeddingAdapter.embed_text",
             return_value=np.array([3.0, 4.0], dtype=np.float64),
         ):
-            vector = LlamaCppEmbeddingBackend().embed_text(
+            vector = LlamaCppEmbeddingBackend(InferenceScheduler()).embed_text(
                 "hello", output_dimension=2
             )
 
@@ -118,7 +119,7 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertAlmostEqual(1.0, float(np.linalg.norm(vector)), places=6)
 
     def test_embedding_backend_rejects_zero_and_non_finite_vectors(self) -> None:
-        backend = LlamaCppEmbeddingBackend()
+        backend = LlamaCppEmbeddingBackend(InferenceScheduler())
         for vector, message in (
             (np.zeros(2, dtype=np.float32), "zero vector"),
             (np.array([np.nan, 1.0], dtype=np.float32), "NaN or infinite"),
@@ -322,11 +323,12 @@ class LlamaCppBackendTests(unittest.TestCase):
                             with patch(
                                 "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
                             ):
-                                with patch("memesort_worker.runtime_service.get_embedding_backend") as factory:
-                                    backend = factory.return_value
-                                    backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
-                                    backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
-                                    result = run_runtime_health_check()
+                                backend = Mock()
+                                backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
+                                backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
+                                result = run_runtime_health_check(
+                                    embedding_backend_factory=lambda: backend
+                                )
 
         self.assertTrue(result.smoke_test_ok)
         self.assertEqual("Vulkan0: Test GPU", result.gpu_name)
