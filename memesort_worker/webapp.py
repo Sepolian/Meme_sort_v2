@@ -224,7 +224,7 @@ def create_app(
     owns_runtime = runtime is None
     if runtime is None:
         runtime = PinnedRuntime(library_root_path)
-    worker_loop = WorkerLoopController(library_root_path)
+    worker_loop = WorkerLoopController(library_root_path, runtime)
     import_controller = ImportController(library_root_path)
     static_dir = static_root or STATIC_DIR
     stopping = threading.Event()
@@ -368,6 +368,7 @@ def create_app(
                 payload = _read_json_body(environ, max_body_bytes)
                 result = run_pending_jobs(
                     library_root_path,
+                    runtime,
                     max_jobs=int(payload.get("max_jobs", 20)),
                 )
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())

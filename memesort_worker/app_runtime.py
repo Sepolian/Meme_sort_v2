@@ -27,8 +27,9 @@ class WorkerLoopSnapshot:
 
 
 class WorkerLoopController:
-    def __init__(self, library_root: Path, interval_seconds: float = 2.0) -> None:
+    def __init__(self, library_root: Path, runtime, interval_seconds: float = 2.0) -> None:
         self._library_root = library_root
+        self._runtime = runtime
         self._interval_seconds = interval_seconds
         self._paused = True
         self._stop_event = threading.Event()
@@ -142,6 +143,7 @@ class WorkerLoopController:
         try:
             result = run_pending_jobs(
                 self._library_root,
+                self._runtime,
                 max_jobs=20,
             ).to_dict()
             self._append_event("tick-finished", {"processed_jobs": result["processed_jobs"]})

@@ -9,7 +9,8 @@ from .launcher import launch_local_mvp_app
 from .asset_catalog import import_folder, initialize_library
 from .indexing_pipeline import run_pending_jobs as run_jobs
 from .library_store import LibraryStore
-from .runtime_service import RuntimeAuthorizationError, authorize_runtime_for_session
+from .pinned_runtime import PinnedRuntime
+from .runtime_service import RuntimeAuthorizationError
 from .retrieval_service import find_similar_assets, search_image_path, search_text
 from .webapp import run_web_app
 
@@ -118,14 +119,19 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-jobs":
+        runtime = PinnedRuntime(args.library_root)
         try:
-            authorize_runtime_for_session(args.library_root)
-        except RuntimeAuthorizationError as exc:
-            parser.error(str(exc))
-        result = run_jobs(
-            args.library_root,
-            max_jobs=args.max_jobs,
-        )
+            try:
+                runtime.authorize()
+            except RuntimeAuthorizationError as exc:
+                parser.error(str(exc))
+            result = run_jobs(
+                args.library_root,
+                runtime,
+                max_jobs=args.max_jobs,
+            )
+        finally:
+            runtime.close()
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
 

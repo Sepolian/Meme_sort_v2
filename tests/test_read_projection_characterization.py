@@ -20,17 +20,18 @@ from PIL import Image
 from memesort_worker import asset_catalog
 from memesort_worker import runtime_service
 from memesort_worker.app_commands import import_and_start_indexing
+from memesort_worker.indexing_pipeline import run_pending_jobs
 from memesort_worker.library import (
     get_asset_detail,
     get_library_status,
     import_folder,
     initialize_library,
     list_assets,
-    run_pending_jobs,
     scan_duplicate_assets,
 )
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from runtime_fakes import FakeIndexingRuntime
 
 
 ASSET_STATES = (
@@ -205,17 +206,11 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
         return library_root
 
     def _run_all_jobs_with_stubs(self, library_root: Path, expected_completed: int = 3) -> None:
-        with patch(
-            "memesort_worker.indexing_pipeline.get_embedding_backend",
-            return_value=StubEmbeddingBackend(),
-        ), patch(
-            "memesort_worker.indexing_pipeline.is_runtime_ready_for_indexing",
-            return_value=(True, "test health passed"),
-        ), patch(
-            "memesort_worker.indexing_pipeline.get_ocr_backend",
-            return_value=StubOcrBackend(),
-        ):
-            result = run_pending_jobs(library_root)
+        runtime = FakeIndexingRuntime(
+            embedding_backend=StubEmbeddingBackend(),
+            ocr_backend=StubOcrBackend(),
+        )
+        result = run_pending_jobs(library_root, runtime)
         assert result.failed_jobs == 0, result
         assert result.completed_jobs == expected_completed, result
 

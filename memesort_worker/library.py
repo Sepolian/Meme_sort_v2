@@ -317,18 +317,6 @@ def get_library_status(library_root: Path | str) -> LibraryStatusResult:
         return store.get_library_status()
 
 
-def run_pending_jobs(
-    library_root: Path | str,
-    max_jobs: int | None = None,
-) -> RunJobsResult:
-    from .indexing_pipeline import run_pending_jobs as _run_pending_jobs
-
-    return _run_pending_jobs(
-        library_root,
-        max_jobs=max_jobs,
-    )
-
-
 def search_text(
     library_root: Path | str,
     query: str,

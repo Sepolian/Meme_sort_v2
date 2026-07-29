@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 from PIL import Image
@@ -9,21 +10,32 @@ from . import asset_catalog
 from . import asset_preprocessing
 from . import library
 from . import job_queue
-from .embedding_backend import EmbeddingBackend, get_embedding_backend
+from .embedding_backend import EmbeddingBackend
 from .indexing_store import IndexingStore, RecipeRow
-from .ocr_backend import OcrBackend, get_ocr_backend
+from .ocr_backend import OcrBackend
 from .recipe_provider import RuntimeRecipeProvider, default_provider, resolve_gif_frame_count
-from .runtime_service import is_runtime_ready_for_indexing
+
+
+class IndexingRuntime(Protocol):
+    """The smallest runtime surface the indexing pipeline depends on."""
+
+    def is_ready_for_indexing(self) -> tuple[bool, str]:
+        ...
+
+    def get_embedding_backend(self) -> EmbeddingBackend:
+        ...
+
+    def get_ocr_backend(self) -> OcrBackend:
+        ...
 
 
 def run_pending_jobs(
     library_root: Path | str,
+    runtime: IndexingRuntime,
     max_jobs: int | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> library.RunJobsResult:
-    runtime_ready, runtime_message = is_runtime_ready_for_indexing(
-        library_root
-    )
+    runtime_ready, runtime_message = runtime.is_ready_for_indexing()
     if not runtime_ready:
         raise RuntimeError(
             "Vulkan runtime is not authorized for indexing in this app session: "
@@ -58,11 +70,11 @@ def run_pending_jobs(
                     _run_generate_thumbnail_job(store, library_root_path, job.payload)
                 elif job.job_type is job_queue.JobType.EMBED_ASSET:
                     if backend is None:
-                        backend = get_embedding_backend()
+                        backend = runtime.get_embedding_backend()
                     _run_embed_asset_job(store, library_root_path, job.payload, backend, provider)
                 elif job.job_type is job_queue.JobType.OCR_ASSET:
                     if ocr_backend is None:
-                        ocr_backend = get_ocr_backend(library_root_path, "llama.cpp")
+                        ocr_backend = runtime.get_ocr_backend()
                     store.run_ocr_job(job.payload, ocr_backend)
                 else:
                     skipped_jobs += 1

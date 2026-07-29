@@ -9,15 +9,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from memesort_worker.indexing_pipeline import run_pending_jobs
 from memesort_worker.library import (
     import_folder,
     initialize_library,
     list_assets,
-    run_pending_jobs,
     search_text,
 )
+from memesort_worker.pinned_runtime import PinnedRuntime
 from memesort_worker.runtime_manifest import load_runtime_manifest
-from memesort_worker.runtime_service import run_runtime_health_check
 
 
 DEFAULT_QUERY_FIELDS = (
@@ -90,18 +90,14 @@ def main() -> None:
 
     try:
         initialize_library(library_root)
-        health_check = run_runtime_health_check(library_root)
-        if not health_check.smoke_test_ok:
-            raise RuntimeError(
-                health_check.error
-                or "Vulkan runtime health check failed; evaluation indexing was not started."
-            )
+        runtime = PinnedRuntime(library_root)
+        runtime.authorize()
         import_started_at = time.perf_counter()
         import_folder(library_root, dataset_dir)
         import_seconds = time.perf_counter() - import_started_at
 
         indexing_started_at = time.perf_counter()
-        run_pending_jobs(library_root)
+        run_pending_jobs(library_root, runtime)
         indexing_seconds = time.perf_counter() - indexing_started_at
 
         asset_listing = list_assets(library_root)

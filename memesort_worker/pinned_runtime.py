@@ -103,6 +103,13 @@ class PinnedRuntime:
 
         return get_embedding_backend()
 
+    def get_ocr_backend(self):
+        """Return a CPU-only OCR backend; the caller owns closing it."""
+        self._require_open()
+        from .ocr_backend import get_ocr_backend
+
+        return get_ocr_backend(self.library_root, "llama.cpp")
+
     def close(self) -> None:
         with self._lock:
             if self._closed:

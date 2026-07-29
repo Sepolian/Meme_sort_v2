@@ -90,6 +90,7 @@ _Avoid_: Semantic backend, Vulkan OCR
 - Search priority is non-preemptive; batching is not implemented.
 - OCR is CPU-only and isolated from the semantic runtime.
 - Persisted health is informational. A health check in the current application session authorizes indexing.
+- The Pinned Runtime lifecycle is instance-owned: the application host (or CLI command) creates a `PinnedRuntime`, authorizes through it, passes it to the indexing pipeline, and closes that same instance on shutdown.
 
 ## Example dialogue
 
