@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from memesort_worker.library import RuntimeHealthResult
+from memesort_worker.library import RuntimeHealthResult, initialize_library
 from memesort_worker.local_app_host import (
     LocalAppHost,
     LocalAppHostConfig,
@@ -15,7 +16,11 @@ from memesort_worker.local_app_host import (
 )
 from memesort_worker.pinned_runtime import PinnedRuntime, PinnedRuntimeClosedError
 from memesort_worker.runtime_manifest import load_runtime_manifest
-from memesort_worker.runtime_service import RuntimeAuthorizationError
+from memesort_worker.runtime_service import (
+    RuntimeAuthorizationError,
+    get_current_health_check,
+    get_last_health_check,
+)
 
 
 def _health_result(smoke_test_ok: bool, fingerprint: str | None = None) -> RuntimeHealthResult:
@@ -99,6 +104,29 @@ class PinnedRuntimeTests(unittest.TestCase):
         self.assertFalse(ready)
         if manifest.llama_server_path.is_file() and manifest.main_model_path.is_file():
             self.assertIn("stale", detail)
+
+    def test_instance_health_check_does_not_write_global_session_health(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            initialize_library(library_root)
+            missing_manifest = replace(
+                load_runtime_manifest(),
+                source_path=Path(temp_dir) / "runtime-manifest.json",
+            )
+            runtime = self._runtime(library_root)
+            with patch(
+                "memesort_worker.runtime_service.load_runtime_manifest",
+                return_value=missing_manifest,
+            ):
+                result = runtime.run_health_check()
+
+            session_health = get_current_health_check(library_root)
+            persisted = get_last_health_check(library_root)
+
+        self.assertFalse(result.smoke_test_ok)
+        self.assertIs(result, runtime.current_health_check())
+        self.assertIsNone(session_health)
+        self.assertIsNotNone(persisted)
 
     def test_close_is_idempotent_and_stops_managed_servers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

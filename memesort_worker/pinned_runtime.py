@@ -87,7 +87,10 @@ class PinnedRuntime:
 
     def run_health_check(self) -> library.RuntimeHealthResult:
         self._require_open()
-        result = run_runtime_health_check(library_root=self.library_root)
+        result = run_runtime_health_check(
+            library_root=self.library_root,
+            record_session_health=False,
+        )
         with self._lock:
             self._session_health = result
         return result

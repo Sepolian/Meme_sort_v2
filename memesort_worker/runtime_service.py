@@ -35,11 +35,13 @@ def _library_key(library_root: Path | str) -> str:
 def _save_last_health_check(
     library_root: Path | str,
     result: library.RuntimeHealthResult,
+    record_session_health: bool = True,
 ) -> None:
     with LibraryStore(library_root) as store:
         store.set_worker_state_json("last_runtime_health_check", result.to_dict())
-    with _SESSION_HEALTH_LOCK:
-        _SESSION_HEALTH[_library_key(library_root)] = result
+    if record_session_health:
+        with _SESSION_HEALTH_LOCK:
+            _SESSION_HEALTH[_library_key(library_root)] = result
 
 
 def get_current_health_check(
@@ -120,6 +122,7 @@ def get_last_health_check(
 
 def run_runtime_health_check(
     library_root: Path | str | None = None,
+    record_session_health: bool = True,
 ) -> library.RuntimeHealthResult:
     manifest = load_runtime_manifest()
     diagnostic_steps: list[dict[str, object]] = [
@@ -134,6 +137,7 @@ def run_runtime_health_check(
         manifest=manifest,
         library_root=library_root,
         diagnostic_steps=diagnostic_steps,
+        record_session_health=record_session_health,
     )
 
 
@@ -153,6 +157,7 @@ def _run_llama_cpp_runtime_health_check(
     manifest,
     library_root: Path | str | None,
     diagnostic_steps: list[dict[str, object]],
+    record_session_health: bool = True,
 ) -> library.RuntimeHealthResult:
     if not manifest.main_model_path.is_file() or not manifest.projector_path.is_file():
         result = library.RuntimeHealthResult(
@@ -179,7 +184,11 @@ def _run_llama_cpp_runtime_health_check(
             error="Pinned GGUF model bundle is missing.",
         )
         if library_root is not None:
-            _save_last_health_check(library_root, result=result)
+            _save_last_health_check(
+                library_root,
+                result=result,
+                record_session_health=record_session_health,
+            )
         return result
 
     failure_step = "resolve-gguf-bundle"
@@ -281,7 +290,11 @@ def _run_llama_cpp_runtime_health_check(
             error=str(exc),
         )
         if library_root is not None:
-            _save_last_health_check(library_root, result=result)
+            _save_last_health_check(
+                library_root,
+                result=result,
+                record_session_health=record_session_health,
+            )
         return result
 
     diagnostic_steps.append(
@@ -305,7 +318,11 @@ def _run_llama_cpp_runtime_health_check(
         error=None,
     )
     if library_root is not None:
-        _save_last_health_check(library_root, result=result)
+        _save_last_health_check(
+            library_root,
+            result=result,
+            record_session_health=record_session_health,
+        )
     return result
 
 
