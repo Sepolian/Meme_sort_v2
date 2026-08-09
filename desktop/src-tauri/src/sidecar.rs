@@ -554,6 +554,30 @@ impl SidecarSession {
         Ok(resolved_path)
     }
 
+    fn resolve_log_directory_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<PathBuf, SidecarError> {
+        let payload = authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ResolveLogDirectory,
+            &EmptyPayload {},
+        )?;
+        let resolved_path = payload
+            .get("resolved_path")
+            .and_then(serde_json::Value::as_str)
+            .filter(|path| !path.is_empty() && !path.contains('\0'))
+            .ok_or_else(|| SidecarError::new("Sidecar did not return a valid log directory."))?;
+        let resolved_path = PathBuf::from(resolved_path);
+        if !resolved_path.is_absolute() {
+            return Err(SidecarError::new(
+                "Sidecar returned a non-absolute log directory.",
+            ));
+        }
+        Ok(resolved_path)
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -612,6 +636,7 @@ enum MutationRoute {
     RetryFailedJobs,
     DeletePendingJobs,
     ResolveAssetRevealTarget,
+    ResolveLogDirectory,
 }
 
 impl MutationRoute {
@@ -632,6 +657,7 @@ impl MutationRoute {
             Self::RetryFailedJobs => "/api/retry-failed-jobs",
             Self::DeletePendingJobs => "/api/pending-jobs/delete",
             Self::ResolveAssetRevealTarget => "/api/resolve-asset-reveal-target",
+            Self::ResolveLogDirectory => "/api/resolve-log-directory",
         }
     }
 }
@@ -1094,6 +1120,14 @@ pub fn reveal_asset(
     reveal_path_in_file_explorer(&resolved_path)
 }
 
+#[tauri::command]
+pub fn open_log_directory(app: AppHandle) -> Result<(), SidecarError> {
+    let logs_directory = with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::resolve_log_directory_for_connection(origin, session_cookie)
+    })?;
+    open_directory_in_file_explorer(&logs_directory)
+}
+
 fn start_selected_import(
     app: &AppHandle,
     start_indexing: bool,
@@ -1118,6 +1152,22 @@ fn reveal_path_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
     }
     Command::new("explorer.exe")
         .arg(format!("/select,{}", path.display()))
+        .spawn()
+        .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
+    Ok(())
+}
+
+fn open_directory_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
+    let metadata = fs::metadata(path).map_err(|error| {
+        SidecarError::new(format!("Could not access the log directory: {error}"))
+    })?;
+    if !metadata.is_dir() {
+        return Err(SidecarError::new(
+            "The resolved log path is not a directory.",
+        ));
+    }
+    Command::new("explorer.exe")
+        .arg(path)
         .spawn()
         .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
     Ok(())
@@ -1746,6 +1796,7 @@ mod tests {
                     "/api/assets/batch-action",
                     "\"action\":\"rebuild-active-index\"",
                 ),
+                ("/api/resolve-log-directory", "{}"),
             ] {
                 let (mut stream, _) = listener.accept().expect("mutation request should connect");
                 let mut request = Vec::new();
@@ -1813,6 +1864,13 @@ mod tests {
             },
         )
         .expect("batch request should succeed");
+        authenticated_post_json(
+            &origin,
+            "memesort_session=test-token",
+            MutationRoute::ResolveLogDirectory,
+            &EmptyPayload {},
+        )
+        .expect("log directory request should succeed");
         server.join().expect("test server should finish");
     }
 

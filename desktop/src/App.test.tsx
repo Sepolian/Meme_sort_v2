@@ -121,6 +121,7 @@ const client = {
     asset: assetDetail,
   }),
   revealAsset: vi.fn(async () => undefined),
+  openLogDirectory: vi.fn(async () => undefined),
   deleteAsset: async (assetId: string) => ({
     library_root: "C:/Library",
     asset_id: assetId,
@@ -412,6 +413,14 @@ describe("App", () => {
 
     expect(client.retryFailedJobs).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Retried 2 failed Job record(s); 0 remain failed.")).toBeInTheDocument();
+  });
+
+  it("opens the Library log directory through the native desktop command", async () => {
+    renderApp("/status");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open log folder" }));
+
+    expect(client.openLogDirectory).toHaveBeenCalledTimes(1);
   });
 
   it("shows Recent Jobs and worker events from the read-only app-state projection", async () => {

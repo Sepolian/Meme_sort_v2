@@ -17,6 +17,7 @@ from .app_commands import (
     import_and_start_indexing,
     rebuild_assets_and_resume,
     resolve_asset_reveal_path,
+    resolve_log_directory,
     start_background_import,
 )
 from .asset_catalog import (
@@ -443,6 +444,13 @@ def create_app(
                         "resolved_path": str(target_path),
                         "target": target,
                     },
+                )
+            elif path == "/api/resolve-log-directory" and method == "POST":
+                _read_json_body(environ, max_body_bytes)
+                logs_directory = resolve_log_directory(library_root_path)
+                status_line, headers, body = _json_response(
+                    HTTPStatus.OK,
+                    {"resolved_path": str(logs_directory)},
                 )
             elif path == "/api/reveal-asset-file" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)

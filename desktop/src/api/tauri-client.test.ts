@@ -140,4 +140,13 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(1, "reveal_asset", { assetId, target: "managed" });
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "reveal_asset", { assetId, target: "source", sourcePath: "C:/Source/asset.gif" });
   });
+
+  it("opens the Library log directory without accepting a WebView path", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue(undefined);
+    const client = createMemeSortClient(invokeCommand);
+
+    await client.openLogDirectory();
+
+    expect(invokeCommand).toHaveBeenCalledWith("open_log_directory");
+  });
 });

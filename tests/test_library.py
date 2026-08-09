@@ -621,6 +621,18 @@ class LibraryTests(unittest.TestCase):
             )
             reveal.assert_not_called()
 
+    def test_web_resolve_log_directory_returns_only_the_library_logs_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            app = create_app(str(library_root))
+            try:
+                status, payload = self._request(app, "POST", "/api/resolve-log-directory")
+            finally:
+                app.shutdown()
+
+            self.assertEqual("200 OK", status)
+            self.assertEqual(str((library_root / "logs").resolve()), payload["resolved_path"])
+
     def test_http_search_cancellation_only_cancels_its_own_queued_request(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))

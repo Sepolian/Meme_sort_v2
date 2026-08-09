@@ -624,6 +624,7 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
       <section className="surface import-card" aria-labelledby="persisted-worker-log-title">
         <h2 id="persisted-worker-log-title">Persisted worker log</h2>
         <p>Recent Worker Loop events written to the Library log.</p>
+        <button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void runWorkerAction(client.openLogDirectory, "Opened Library log folder.")}>Open log folder</button>
         {state.worker_loop.event_log_path ? <p className="mono">{state.worker_loop.event_log_path}</p> : null}
         {(state.worker_loop.persisted_events?.length ?? 0) ? <ul className="detail-list">{state.worker_loop.persisted_events!.map((event, index) => <li key={`${event.event}-${event.timestamp}-${index}`}><strong>{event.event}</strong><span>timestamp {event.timestamp}</span><code>{JSON.stringify(event.payload)}</code></li>)}</ul> : <p>No persisted Worker events yet.</p>}
       </section>

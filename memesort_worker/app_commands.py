@@ -105,3 +105,14 @@ def resolve_asset_reveal_path(
         return Path(requested).expanduser().resolve()
 
     raise ValueError(f"Unknown reveal target: {target}")
+
+
+def resolve_log_directory(library_root: Path) -> Path:
+    """Resolve the Library-owned logs directory for a native shell command."""
+    resolved_root = library_root.resolve()
+    logs_directory = (resolved_root / "logs").resolve()
+    if resolved_root not in logs_directory.parents:
+        raise ValueError("Log directory is outside the library root")
+    if not logs_directory.is_dir():
+        raise ValueError("Library log directory is unavailable")
+    return logs_directory
