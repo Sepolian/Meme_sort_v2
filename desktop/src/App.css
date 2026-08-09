@@ -1,0 +1,85 @@
+:root {
+  color: #edf3ff;
+  background: #111827;
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.migration-status {
+  display: grid;
+  min-height: 100vh;
+  padding: 32px;
+  place-items: center;
+}
+
+.status-card {
+  width: min(640px, 100%);
+  padding: 40px;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  background: #182235;
+  box-shadow: 0 20px 48px rgb(0 0 0 / 24%);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #7dd3fc;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 1.08;
+}
+
+.status-card > p:not(.eyebrow) {
+  max-width: 58ch;
+  margin: 20px 0 32px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+dl div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #0f172a;
+}
+
+dt {
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+dd {
+  margin: 0;
+  color: #f8fafc;
+  font-weight: 600;
+}
