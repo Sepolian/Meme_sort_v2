@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 
 const client = {
@@ -15,18 +16,55 @@ const client = {
 };
 
 describe("App", () => {
-  it("shows state returned through the typed Tauri client", async () => {
+  function renderApp(route = "/") {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    render(
+    return render(
       <QueryClientProvider client={queryClient}>
-        <App client={client} />
+        <MemoryRouter initialEntries={[route]}>
+          <App client={client} />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
+  }
 
-    expect(await screen.findByRole("heading", { name: "MemeSort is connected" })).toBeInTheDocument();
+  it("shows state returned through the typed Tauri client", async () => {
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
     expect(screen.getByText("llama.cpp / Vulkan0")).toBeInTheDocument();
-    expect(screen.getByText("2 pending job(s)")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/", "Your library"],
+    ["/setup", "Setup & runtime"],
+    ["/search", "Search MemeSort"],
+    ["/search/text", "Text search"],
+    ["/search/image", "Image search"],
+    ["/search/similar", "Find similar Assets"],
+    ["/duplicates", "Duplicate assets"],
+    ["/status", "Application status"],
+  ])("renders the %s route when it is opened directly", async (route, heading) => {
+    renderApp(route);
+
+    expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+  });
+
+  it("shows a runtime-not-ready state on setup", async () => {
+    renderApp("/setup");
+
+    expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+  });
+
+  it("closes the keyboard help dialog with Escape", async () => {
+    renderApp("/status");
+    await screen.findByRole("heading", { name: "Application status" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Keyboard help" }));
+    expect(screen.getByRole("dialog", { name: "MemeSort navigation" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "MemeSort navigation" })).not.toBeInTheDocument();
   });
 });

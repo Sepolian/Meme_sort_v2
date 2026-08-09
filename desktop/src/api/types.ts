@@ -6,6 +6,10 @@ export interface AppState {
   };
   setup_state: {
     health_check_ok: boolean;
+    runtime_readiness?: {
+      ready: boolean;
+      ready_detail?: string;
+    };
   };
   library_status: {
     total_assets: number;
