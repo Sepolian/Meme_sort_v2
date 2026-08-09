@@ -411,6 +411,20 @@ impl SidecarSession {
         )
     }
 
+    fn duplicates_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        threshold: f64,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(
+            origin,
+            session_cookie,
+            ApiRoute::Duplicates {
+                threshold: validate_duplicate_threshold(threshold)?,
+            },
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -425,6 +439,7 @@ enum ApiRoute {
     AssetDetail(String),
     TextSearch { query: String, request_id: String },
     SimilarAssets { asset_id: String },
+    Duplicates { threshold: f64 },
 }
 
 #[derive(Clone, Copy)]
@@ -533,6 +548,7 @@ impl ApiRoute {
             Self::SimilarAssets { asset_id } => {
                 format!("/api/find-similar?asset_id={asset_id}&top_k=18")
             }
+            Self::Duplicates { threshold } => format!("/api/duplicates?threshold={threshold}"),
         }
     }
 }
@@ -815,6 +831,13 @@ pub async fn search_image(
 pub fn find_similar(app: AppHandle, asset_id: String) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::find_similar_for_connection(origin, session_cookie, &asset_id)
+    })
+}
+
+#[tauri::command]
+pub fn get_duplicates(app: AppHandle, threshold: f64) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::duplicates_for_connection(origin, session_cookie, threshold)
     })
 }
 
@@ -1226,6 +1249,15 @@ fn validate_search_query(query: &str) -> Result<String, SidecarError> {
     Ok(query.to_owned())
 }
 
+fn validate_duplicate_threshold(threshold: f64) -> Result<f64, SidecarError> {
+    if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
+        return Err(SidecarError::new(
+            "Duplicate review threshold must be between 0 and 1.",
+        ));
+    }
+    Ok(threshold)
+}
+
 fn percent_encode_query_value(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
@@ -1273,9 +1305,10 @@ mod tests {
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
-        validate_asset_ids, validate_search_query, validate_source_path, ApiRoute, AssetIdPayload,
-        BatchAssetAction, BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
-        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
+        validate_asset_ids, validate_duplicate_threshold, validate_search_query,
+        validate_source_path, ApiRoute, AssetIdPayload, BatchAssetAction, BatchAssetActionPayload,
+        EmptyPayload, ImportSelection, MutationRoute, RemoveSourceRecordPayload,
+        SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1673,6 +1706,34 @@ mod tests {
         )
         .expect("similar retrieval should succeed");
         server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_duplicate_review_only_with_a_bounded_threshold() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("duplicate request should connect");
+            let mut request = [0_u8; 1024];
+            let size = stream
+                .read(&mut request)
+                .expect("duplicate request should read");
+            let request = std::str::from_utf8(&request[..size]).expect("request must be UTF-8");
+            assert!(request.starts_with("GET /api/duplicates?threshold=0.92 HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"pairs\":[]}",
+                )
+                .expect("duplicate response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        SidecarSession::duplicates_for_connection(&origin, "memesort_session=test-token", 0.92)
+            .expect("duplicate review should succeed");
+        server.join().expect("test server should finish");
+        assert!(validate_duplicate_threshold(-0.01).is_err());
+        assert!(validate_duplicate_threshold(1.01).is_err());
     }
 
     #[test]

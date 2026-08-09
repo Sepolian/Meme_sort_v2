@@ -90,4 +90,13 @@ describe("createMemeSortClient", () => {
 
     expect(invokeCommand).toHaveBeenCalledWith("find_similar", { assetId });
   });
+
+  it("uses a bounded threshold command for duplicate review", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ pairs: [] });
+    const client = createMemeSortClient(invokeCommand);
+
+    await client.getDuplicates(0.92);
+
+    expect(invokeCommand).toHaveBeenCalledWith("get_duplicates", { threshold: 0.92 });
+  });
 });

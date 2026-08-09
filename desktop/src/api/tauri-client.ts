@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, FolderSelection, ImageSearchResult, ImportTask, SearchResult, SimilarityResult } from "./types";
+import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, SearchResult, SimilarityResult } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -19,6 +19,7 @@ export interface MemeSortClient {
   searchText(query: string, requestId: string): Promise<SearchResult>;
   searchImage(requestId: string): Promise<ImageSearchResult>;
   findSimilar(assetId: string): Promise<SimilarityResult>;
+  getDuplicates(threshold: number): Promise<DuplicateScanResult>;
   cancelSearch(requestId: string): Promise<{ request_id: string; cancelled: boolean; was_active: boolean }>;
 }
 
@@ -39,6 +40,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     searchText: (query, requestId) => invokeCommand<SearchResult>("search_text", { query, requestId }),
     searchImage: (requestId) => invokeCommand<ImageSearchResult>("search_image", { requestId }),
     findSimilar: (assetId) => invokeCommand<SimilarityResult>("find_similar", { assetId }),
+    getDuplicates: (threshold) => invokeCommand<DuplicateScanResult>("get_duplicates", { threshold }),
     cancelSearch: (requestId) => invokeCommand("cancel_search", { requestId }),
   };
 }

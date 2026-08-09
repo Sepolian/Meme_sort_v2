@@ -159,6 +159,23 @@ const client = {
     top_k: 18,
     results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
   })),
+  getDuplicates: vi.fn(async (threshold: number) => ({
+    library_root: "C:/Library",
+    active_recipe_id: "recipe-1",
+    active_recipe_label: "Vulkan0 recipe",
+    threshold,
+    pairs: [{
+      score: 0.97,
+      asset_a_id: "123e4567-e89b-12d3-a456-426614174000",
+      asset_b_id: "123e4567-e89b-12d3-a456-426614174002",
+      asset_a_path: "originals/first.gif",
+      asset_b_path: "originals/indexed.png",
+      asset_a_thumbnail_url: "/media/thumbnails/first.jpg",
+      asset_b_thumbnail_url: "/media/thumbnails/indexed.jpg",
+      asset_a_matched_source_ref: "frame:2",
+      asset_b_matched_source_ref: null,
+    }],
+  })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
 };
 
@@ -273,6 +290,19 @@ describe("App", () => {
     expect(await screen.findByRole("region", { name: "Similar Asset results" })).toBeInTheDocument();
     expect(client.findSimilar).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174002");
     expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
+  });
+
+  it("reviews duplicate Asset pairs at the chosen threshold", async () => {
+    renderApp("/duplicates");
+
+    fireEvent.change(await screen.findByLabelText("Duplicate threshold"), { target: { value: "0.95" } });
+    fireEvent.click(screen.getByRole("button", { name: "Scan duplicates" }));
+
+    expect(await screen.findByRole("region", { name: "Duplicate pairs" })).toBeInTheDocument();
+    expect(client.getDuplicates).toHaveBeenCalledWith(0.95);
+    expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
+    expect(screen.getByText("originals/indexed.png")).toBeInTheDocument();
+    expect(screen.getByText(/GIF matches use the strongest frame-to-frame score/i)).toBeInTheDocument();
   });
 
   it("imports only a folder selected through the native dialog", async () => {

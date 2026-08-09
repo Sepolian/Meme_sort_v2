@@ -38,6 +38,7 @@ pub fn run() {
             sidecar::search_text,
             sidecar::search_image,
             sidecar::find_similar,
+            sidecar::get_duplicates,
             sidecar::cancel_search
         ])
         .build(tauri::generate_context!())

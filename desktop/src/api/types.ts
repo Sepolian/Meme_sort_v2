@@ -72,6 +72,26 @@ export interface SimilarityResult {
   results: SearchAsset[];
 }
 
+export interface DuplicateScanResult {
+  library_root: string;
+  active_recipe_id: string;
+  active_recipe_label: string;
+  threshold: number;
+  pairs: DuplicatePair[];
+}
+
+export interface DuplicatePair {
+  score: number;
+  asset_a_id: string;
+  asset_b_id: string;
+  asset_a_path: string;
+  asset_b_path: string;
+  asset_a_thumbnail_url: string | null;
+  asset_b_thumbnail_url: string | null;
+  asset_a_matched_source_ref: string | null;
+  asset_b_matched_source_ref: string | null;
+}
+
 export interface SearchAsset {
   asset_id: string;
   library_url: string;

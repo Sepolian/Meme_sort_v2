@@ -39,6 +39,7 @@ const client: MemeSortClient = {
   searchText: unsupported,
   searchImage: unsupported,
   findSimilar: unsupported,
+  getDuplicates: unsupported,
   cancelSearch: unsupported,
 };
 
