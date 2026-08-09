@@ -466,8 +466,25 @@ function DuplicatesPage({ client }: { client: MemeSortClient }) {
   );
 }
 
-function StatusPage({ state }: { state: AppState }) {
+function StatusPage({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
+  const [isWorking, setIsWorking] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string) => {
+    setIsWorking(true);
+    setFeedback(null);
+    try {
+      await action();
+      setFeedback(successMessage);
+      onStateChanged();
+    } catch (error) {
+      setFeedback(tauriErrorDetail(error, "MemeSort could not update the Worker Loop."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   return (
     <Page title="Application status" eyebrow="Diagnostics">
       <section className="surface status-list">
@@ -477,6 +494,16 @@ function StatusPage({ state }: { state: AppState }) {
           <Metric label="Pending jobs" value={pendingJobs} />
           <Metric label="Worker loop" value={state.worker_loop.running ? (state.worker_loop.paused ? "Paused" : "Running") : "Stopped"} />
         </dl>
+      </section>
+      <section className="surface import-card" aria-labelledby="worker-loop-title">
+        <h2 id="worker-loop-title">Worker Loop</h2>
+        <p>Controls apply only to the background indexing loop. They do not cancel a running semantic inference call.</p>
+        <div className="import-actions">
+          <button className="button" type="button" disabled={isWorking || !state.worker_loop.paused} onClick={() => void runWorkerAction(client.resumeWorkerLoop, "Worker Loop resumed.")}>Resume worker</button>
+          <button className="button button-secondary" type="button" disabled={isWorking || state.worker_loop.paused} onClick={() => void runWorkerAction(client.pauseWorkerLoop, "Worker Loop paused.")}>Pause worker</button>
+          <button className="button button-secondary" type="button" disabled={isWorking || !state.worker_loop.running} onClick={() => void runWorkerAction(client.triggerWorkerLoop, "Worker Loop tick requested.")}>Run one tick</button>
+        </div>
+        <p role="status">{feedback ?? (state.worker_loop.paused ? "Worker Loop is paused." : "Worker Loop is running.")}</p>
       </section>
     </Page>
   );
@@ -530,7 +557,7 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
       <Route path="/search/image" element={<ImageSearchPage client={client} />} />
       <Route path="/search/similar" element={<SimilarSearchPage client={client} />} />
       <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
-      <Route path="/status" element={<StatusPage state={state} />} />
+      <Route path="/status" element={<StatusPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

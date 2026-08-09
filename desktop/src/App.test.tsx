@@ -176,6 +176,9 @@ const client = {
       asset_b_matched_source_ref: null,
     }],
   })),
+  pauseWorkerLoop: vi.fn(async () => ({ running: true, paused: true })),
+  resumeWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
+  triggerWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
 };
 
@@ -303,6 +306,15 @@ describe("App", () => {
     expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
     expect(screen.getByText("originals/indexed.png")).toBeInTheDocument();
     expect(screen.getByText(/GIF matches use the strongest frame-to-frame score/i)).toBeInTheDocument();
+  });
+
+  it("resumes the paused Worker Loop through the typed desktop command", async () => {
+    renderApp("/status");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume worker" }));
+
+    expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
   });
 
   it("imports only a folder selected through the native dialog", async () => {

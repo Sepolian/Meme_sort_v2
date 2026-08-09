@@ -15,12 +15,17 @@ export interface AppState {
     total_assets: number;
     job_counts: Record<string, number>;
   };
-  worker_loop: {
-    paused: boolean;
-    running: boolean;
-  };
+  worker_loop: WorkerLoopState;
   import_task: ImportTask;
   pending_jobs: Array<{ job_id: string }>;
+}
+
+export interface WorkerLoopState {
+  paused: boolean;
+  running: boolean;
+  interval_seconds?: number;
+  last_tick_started_at?: number | null;
+  last_tick_finished_at?: number | null;
 }
 
 export interface ImportTask {

@@ -425,6 +425,42 @@ impl SidecarSession {
         )
     }
 
+    fn pause_worker_loop_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::PauseWorkerLoop,
+            &EmptyPayload {},
+        )
+    }
+
+    fn resume_worker_loop_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ResumeWorkerLoop,
+            &EmptyPayload {},
+        )
+    }
+
+    fn trigger_worker_loop_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::TriggerWorkerLoop,
+            &EmptyPayload {},
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -475,6 +511,9 @@ enum MutationRoute {
     ResumeImport,
     CancelSearch,
     SearchImage,
+    PauseWorkerLoop,
+    ResumeWorkerLoop,
+    TriggerWorkerLoop,
 }
 
 impl MutationRoute {
@@ -488,6 +527,9 @@ impl MutationRoute {
             Self::ResumeImport => "/api/import/resume",
             Self::CancelSearch => "/api/search/cancel",
             Self::SearchImage => "/api/search-image",
+            Self::PauseWorkerLoop => "/api/worker-loop/pause",
+            Self::ResumeWorkerLoop => "/api/worker-loop/resume",
+            Self::TriggerWorkerLoop => "/api/worker-loop/trigger",
         }
     }
 }
@@ -838,6 +880,27 @@ pub fn find_similar(app: AppHandle, asset_id: String) -> Result<serde_json::Valu
 pub fn get_duplicates(app: AppHandle, threshold: f64) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::duplicates_for_connection(origin, session_cookie, threshold)
+    })
+}
+
+#[tauri::command]
+pub fn pause_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::pause_worker_loop_for_connection(origin, session_cookie)
+    })
+}
+
+#[tauri::command]
+pub fn resume_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::resume_worker_loop_for_connection(origin, session_cookie)
+    })
+}
+
+#[tauri::command]
+pub fn trigger_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::trigger_worker_loop_for_connection(origin, session_cookie)
     })
 }
 
@@ -1734,6 +1797,57 @@ mod tests {
         server.join().expect("test server should finish");
         assert!(validate_duplicate_threshold(-0.01).is_err());
         assert!(validate_duplicate_threshold(1.01).is_err());
+    }
+
+    #[test]
+    fn forwards_worker_loop_controls_only_to_fixed_routes() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            for path in [
+                "/api/worker-loop/pause",
+                "/api/worker-loop/resume",
+                "/api/worker-loop/trigger",
+            ] {
+                let (mut stream, _) = listener.accept().expect("worker control should connect");
+                let mut request = Vec::new();
+                loop {
+                    let mut chunk = [0_u8; 1024];
+                    let size = stream.read(&mut chunk).expect("worker control should read");
+                    request.extend_from_slice(&chunk[..size]);
+                    let Some(header_end) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    else {
+                        continue;
+                    };
+                    let headers =
+                        std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .expect("worker control should include a body length");
+                    if request.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+                assert!(request.starts_with(&format!("POST {path} HTTP/1.1")));
+                assert!(request.contains("Cookie: memesort_session=test-token"));
+                stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"running\":true}")
+                    .expect("worker control response should write");
+            }
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        SidecarSession::pause_worker_loop_for_connection(&origin, "memesort_session=test-token")
+            .expect("pause should succeed");
+        SidecarSession::resume_worker_loop_for_connection(&origin, "memesort_session=test-token")
+            .expect("resume should succeed");
+        SidecarSession::trigger_worker_loop_for_connection(&origin, "memesort_session=test-token")
+            .expect("trigger should succeed");
+        server.join().expect("test server should finish");
     }
 
     #[test]
