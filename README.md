@@ -60,12 +60,11 @@ The package does not include the managed Library, GGUF main model, multimodal pr
 
 After extracting the ZIP, install the separately downloaded runtime, semantic models, and CPU OCR environment in that same folder:
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\setup_portable_runtime.ps1
+```text
+Double-click setup_portable_runtime.bat
 ```
 
-The script reads the packaged manifest, verifies every downloaded Vulkan/GGUF artifact by size and SHA256, and writes only below `MemeSortData`. It creates `MemeSortData\runtime\ocr-venv` and provisions the fixed PP-OCRv5 mobile cache at `MemeSortData\models\paddleocr`; neither is present in the ZIP. Use `-Offline` only when the required verified downloads are already present in `MemeSortData\runtime\downloads`.
+The batch wrapper runs the packaged PowerShell script with a process-local execution-policy bypass. It reads the packaged manifest, verifies every downloaded Vulkan/GGUF artifact by size and SHA256, and writes only below `MemeSortData`. It creates `MemeSortData\runtime\ocr-venv` and provisions the fixed PP-OCRv5 mobile cache at `MemeSortData\models\paddleocr`; neither is present in the ZIP. Use `setup_portable_runtime.bat -Offline` only when the required verified downloads are already present in `MemeSortData\runtime\downloads`.
 
 ## Desktop development and verification
 

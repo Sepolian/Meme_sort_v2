@@ -62,6 +62,7 @@ class SetupScriptTests(unittest.TestCase):
         script = (root / "scripts" / "build_portable.ps1").read_text(encoding="utf-8")
 
         self.assertIn("setup_portable_runtime.ps1", script)
+        self.assertIn("setup_portable_runtime.bat", script)
         self.assertIn("requirements-ocr.txt", script)
         self.assertIn("paddle_ocr_worker.py", script)
         self.assertNotIn("Copy-Item -Recurse -LiteralPath (Join-Path $repoRoot \".models\")", script)
@@ -78,6 +79,17 @@ class SetupScriptTests(unittest.TestCase):
         self.assertIn('"command":"shutdown"', script)
         self.assertIn("ConvertFrom-Json", script)
         self.assertIn("MemeSortData", script)
+
+    def test_portable_setup_batch_wrapper_bypasses_policy_and_preserves_exit_code(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        wrapper = (root / "scripts" / "setup_portable_runtime.bat").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("-ExecutionPolicy Bypass", wrapper)
+        self.assertIn("setup_portable_runtime.ps1", wrapper)
+        self.assertIn("%*", wrapper)
+        self.assertIn("exit /b %EXIT_CODE%", wrapper)
 
 
 if __name__ == "__main__":

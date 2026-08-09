@@ -98,6 +98,7 @@ Copy-Item -Recurse -LiteralPath $sidecarSource -Destination (Join-Path $stageRoo
 Copy-Item -LiteralPath (Join-Path $repoRoot "runtime-manifest.json") -Destination $stageRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot "requirements-ocr.txt") -Destination $stageRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\setup_portable_runtime.ps1") -Destination $stageRoot
+Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\setup_portable_runtime.bat") -Destination $stageRoot
 New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot "scripts") | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\paddle_ocr_worker.py") -Destination (Join-Path $stageRoot "scripts")
 
@@ -122,7 +123,7 @@ MemeSortData\models\
 MemeSortData\runtime\
 
 Do not move MemeSort.exe independently from sidecar or MemeSortData. This package contains no OS installer and does not include model or Vulkan runtime artifacts.
-Run setup_portable_runtime.ps1 after extraction to download and verify the pinned runtime, GGUF models, and OCR environment into MemeSortData.
+Run setup_portable_runtime.bat after extraction to download and verify the pinned runtime, GGUF models, and OCR environment into MemeSortData.
 "@
 
 Compress-Archive -LiteralPath $stageRoot -DestinationPath $archivePath
