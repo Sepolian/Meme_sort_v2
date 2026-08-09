@@ -200,6 +200,19 @@ const client = {
   pauseWorkerLoop: vi.fn(async () => ({ running: true, paused: true })),
   resumeWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
   triggerWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
+  runRuntimeHealthCheck: vi.fn(async () => ({
+    runtime_fingerprint: "runtime-1",
+    backend_name: "llama.cpp",
+    device: "Vulkan0",
+    gpu_name: "Test GPU",
+    gpu_vendor: "amd",
+    gpu_vendor_id: "0x1002",
+    text_smoke_vector_dim: 2048,
+    image_smoke_vector_dim: 2048,
+    diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "Image embedding passed." }],
+    smoke_test_ok: true,
+    error: null,
+  })),
   retryFailedJobs: vi.fn(async () => ({
     library_root: "C:/Library",
     retried_jobs: 2,
@@ -293,6 +306,16 @@ describe("App", () => {
     renderApp("/setup");
 
     expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+  });
+
+  it("runs the pinned Vulkan health check and displays its diagnostic step", async () => {
+    renderApp("/setup");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Run Vulkan health check" }));
+
+    expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Runtime health check passed on Vulkan0.")).toBeInTheDocument();
+    expect(screen.getByText("image-embedding-smoke · ok · Image embedding passed.")).toBeInTheDocument();
   });
 
   it("submits a UUID-scoped text Search Request and shows its Asset matches", async () => {

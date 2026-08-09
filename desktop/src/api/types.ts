@@ -51,6 +51,26 @@ export interface WorkerLoopEvent {
   timestamp: number;
 }
 
+export interface RuntimeHealthDiagnosticStep {
+  step: string;
+  status: string;
+  detail: string;
+}
+
+export interface RuntimeHealthResult {
+  runtime_fingerprint: string;
+  backend_name: string;
+  device: string;
+  gpu_name: string | null;
+  gpu_vendor: string | null;
+  gpu_vendor_id: string | null;
+  text_smoke_vector_dim: number | null;
+  image_smoke_vector_dim: number | null;
+  diagnostic_steps: RuntimeHealthDiagnosticStep[];
+  smoke_test_ok: boolean;
+  error: string | null;
+}
+
 export interface PendingJob {
   job_id: string;
   type: string;

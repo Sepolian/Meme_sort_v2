@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import { tauriErrorDetail } from "./api/tauri-error";
-import type { AppState, DuplicatePair, SearchAsset } from "./api/types";
+import type { AppState, DuplicatePair, RuntimeHealthResult, SearchAsset } from "./api/types";
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
@@ -76,6 +76,7 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
   const detail = state.setup_state.runtime_readiness?.ready_detail;
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [healthResult, setHealthResult] = useState<RuntimeHealthResult | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const importTask = state.import_task;
   const importRunning = importTask?.running ?? false;
@@ -110,6 +111,21 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
     return "Choose a folder with the native dialog to begin an import.";
   })();
 
+  const runHealthCheck = async () => {
+    setIsWorking(true);
+    setFeedback(null);
+    try {
+      const result = await client.runRuntimeHealthCheck();
+      setHealthResult(result);
+      setFeedback(result.smoke_test_ok ? `Runtime health check passed on ${result.device}.` : result.error ?? "Runtime health check failed.");
+      onStateChanged();
+    } catch (error) {
+      setFeedback(tauriErrorDetail(error, "MemeSort could not run the Vulkan health check."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   return (
     <Page title="Setup & runtime" eyebrow="Pinned Runtime">
       <section className="surface setup-card">
@@ -127,6 +143,12 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
       ) : (
         <RuntimeNotReady detail={detail} />
       )}
+      <section className="surface import-card" aria-labelledby="health-check-title">
+        <h2 id="health-check-title">Vulkan health check</h2>
+        <p>Checks the manifest-pinned llama.cpp Vulkan0 runtime in this application session.</p>
+        <div className="import-actions"><button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void runHealthCheck()}>Run Vulkan health check</button></div>
+        {healthResult ? <ul className="detail-list">{healthResult.diagnostic_steps.map((step) => <li key={`${step.step}-${step.status}`}><strong>{step.step} · {step.status} · {step.detail}</strong></li>)}</ul> : null}
+      </section>
       <section className="surface import-card" aria-labelledby="import-title">
         <h2 id="import-title">Import Assets</h2>
         <p>Choose a source folder with the native dialog. MemeSort creates durable Library Copies; source paths remain import metadata.</p>

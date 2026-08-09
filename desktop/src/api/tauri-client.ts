@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, PendingJobsResult, RetryJobsResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
+import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -23,6 +23,7 @@ export interface MemeSortClient {
   pauseWorkerLoop(): Promise<WorkerLoopState>;
   resumeWorkerLoop(): Promise<WorkerLoopState>;
   triggerWorkerLoop(): Promise<WorkerLoopState>;
+  runRuntimeHealthCheck(): Promise<RuntimeHealthResult>;
   retryFailedJobs(): Promise<RetryJobsResult>;
   getPendingJobs(): Promise<PendingJobsResult>;
   deletePendingJobs(jobIds: string[]): Promise<DeletePendingJobsResult>;
@@ -50,6 +51,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     pauseWorkerLoop: () => invokeCommand<WorkerLoopState>("pause_worker_loop"),
     resumeWorkerLoop: () => invokeCommand<WorkerLoopState>("resume_worker_loop"),
     triggerWorkerLoop: () => invokeCommand<WorkerLoopState>("trigger_worker_loop"),
+    runRuntimeHealthCheck: () => invokeCommand<RuntimeHealthResult>("run_runtime_health_check"),
     retryFailedJobs: () => invokeCommand<RetryJobsResult>("retry_failed_jobs"),
     getPendingJobs: () => invokeCommand<PendingJobsResult>("get_pending_jobs"),
     deletePendingJobs: (jobIds) => invokeCommand<DeletePendingJobsResult>("delete_pending_jobs", { jobIds }),

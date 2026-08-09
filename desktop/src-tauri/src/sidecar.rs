@@ -461,6 +461,18 @@ impl SidecarSession {
         )
     }
 
+    fn run_runtime_health_check_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::RunRuntimeHealthCheck,
+            &EmptyPayload {},
+        )
+    }
+
     fn retry_failed_jobs_for_connection(
         origin: &str,
         session_cookie: &str,
@@ -549,6 +561,7 @@ enum MutationRoute {
     PauseWorkerLoop,
     ResumeWorkerLoop,
     TriggerWorkerLoop,
+    RunRuntimeHealthCheck,
     RetryFailedJobs,
     DeletePendingJobs,
 }
@@ -567,6 +580,7 @@ impl MutationRoute {
             Self::PauseWorkerLoop => "/api/worker-loop/pause",
             Self::ResumeWorkerLoop => "/api/worker-loop/resume",
             Self::TriggerWorkerLoop => "/api/worker-loop/trigger",
+            Self::RunRuntimeHealthCheck => "/api/health",
             Self::RetryFailedJobs => "/api/retry-failed-jobs",
             Self::DeletePendingJobs => "/api/pending-jobs/delete",
         }
@@ -946,6 +960,13 @@ pub fn resume_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarEr
 pub fn trigger_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::trigger_worker_loop_for_connection(origin, session_cookie)
+    })
+}
+
+#[tauri::command]
+pub fn run_runtime_health_check(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::run_runtime_health_check_for_connection(origin, session_cookie)
     })
 }
 
@@ -1891,6 +1912,7 @@ mod tests {
                 "/api/worker-loop/pause",
                 "/api/worker-loop/resume",
                 "/api/worker-loop/trigger",
+                "/api/health",
                 "/api/retry-failed-jobs",
             ] {
                 let (mut stream, _) = listener.accept().expect("worker control should connect");
@@ -1931,6 +1953,11 @@ mod tests {
             .expect("resume should succeed");
         SidecarSession::trigger_worker_loop_for_connection(&origin, "memesort_session=test-token")
             .expect("trigger should succeed");
+        SidecarSession::run_runtime_health_check_for_connection(
+            &origin,
+            "memesort_session=test-token",
+        )
+        .expect("health check should succeed");
         SidecarSession::retry_failed_jobs_for_connection(&origin, "memesort_session=test-token")
             .expect("retry failed Jobs should succeed");
         server.join().expect("test server should finish");
