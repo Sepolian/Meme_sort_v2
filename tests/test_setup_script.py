@@ -66,6 +66,19 @@ class SetupScriptTests(unittest.TestCase):
         self.assertIn("paddle_ocr_worker.py", script)
         self.assertNotIn("Copy-Item -Recurse -LiteralPath (Join-Path $repoRoot \".models\")", script)
 
+    def test_portable_smoke_harness_starts_and_stops_the_packaged_sidecar(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "scripts" / "test_portable_smoke.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("[string]$PortableRoot", script)
+        self.assertIn("memesort-sidecar-x86_64-pc-windows-msvc.exe", script)
+        self.assertIn("--portable-root", script)
+        self.assertIn('"command":"shutdown"', script)
+        self.assertIn("ConvertFrom-Json", script)
+        self.assertIn("MemeSortData", script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -90,6 +90,8 @@ _Avoid_: Semantic backend, Vulkan OCR
 - Search priority is non-preemptive; batching is not implemented.
 - OCR is CPU-only and isolated from the semantic runtime.
 - Persisted health is informational. A health check in the current application session authorizes indexing.
+- The portable desktop is a Tauri host and a headless Python sidecar. Rust owns the desktop window, single-instance behavior, native capabilities, sidecar lifecycle, and a fixed authenticated API allowlist; Python remains the sole authority for SQLite, Library Copies, Derived Artifacts, queueing, OCR, and inference.
+- The Tauri WebView never receives the loopback bootstrap URL or session cookie. Rust consumes the one-time bootstrap handshake and proxies only fixed backend commands and managed media.
 - The Pinned Runtime lifecycle is instance-owned: the application host (or CLI command) creates an `InferenceEngineManager`, creates `PinnedRuntime` instances through it, authorizes through them, passes them to the indexing pipeline, and closes those same instances on shutdown. A manager shares one refcounted inference engine — one serialized scheduler, one embedding backend, one llama-server process — and closing its last runtime tears the engine down.
 
 ## Example dialogue

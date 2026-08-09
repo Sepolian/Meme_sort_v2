@@ -67,6 +67,28 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 The script reads the packaged manifest, verifies every downloaded Vulkan/GGUF artifact by size and SHA256, and writes only below `MemeSortData`. It creates `MemeSortData\runtime\ocr-venv` and provisions the fixed PP-OCRv5 mobile cache at `MemeSortData\models\paddleocr`; neither is present in the ZIP. Use `-Offline` only when the required verified downloads are already present in `MemeSortData\runtime\downloads`.
 
+## Desktop development and verification
+
+The portable build requires Windows x64, Python 3.13 with uv, Node.js 20 with npm, and the Rust stable/MSVC toolchain. From the repository root:
+
+```powershell
+uv sync --locked --group build
+Set-Location desktop
+npm ci
+npm run lint
+npm run typecheck
+npm test
+Set-Location src-tauri
+cargo fmt --check
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+Set-Location ..\..
+.\scripts\build_portable.ps1
+.\scripts\test_portable_smoke.ps1
+```
+
+The smoke harness starts the packaged headless sidecar with no models installed, checks its one-time handshake and portable Library root, sends the explicit shutdown command, and confirms that the package did not include model or Vulkan runtime files.
+
 ## Launch and use
 
 Run `MemeSort.exe` from the extracted portable folder, after its portable setup has completed. In the application:
