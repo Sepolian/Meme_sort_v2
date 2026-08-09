@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { mediaUrl } from "../../api/media-url";
+import { tauriErrorDetail } from "../../api/tauri-error";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 import { EmptyState } from "../../components/States";
 
@@ -110,7 +111,7 @@ function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRemoveSo
       <section className="dialog detail-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-detail-title" onMouseDown={(event) => event.stopPropagation()}>
         <div className="dialog-title-row"><div><p className="eyebrow">Asset detail</p><h2 id="asset-detail-title">Asset details</h2></div><button className="button button-secondary" type="button" autoFocus onClick={onClose}>Close</button></div>
         {detailQuery.isPending ? <p aria-live="polite">Loading Asset detail…</p> : null}
-        {detailQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Asset details are unavailable</strong><span>This Asset may no longer exist in the Library. Refresh the Asset wall and try again.</span></section> : null}
+        {detailQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Asset details are unavailable</strong><span>{tauriErrorDetail(detailQuery.error, "This Asset may no longer exist in the Library. Refresh the Asset wall and try again.")}</span></section> : null}
         {detailQuery.data ? <AssetDetailContent asset={detailQuery.data.asset} onDeleteAsset={onDeleteAsset} onRemoveSourceRecord={onRemoveSourceRecord} mutating={mutating} /> : null}
       </section>
     </div>

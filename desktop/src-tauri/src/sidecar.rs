@@ -27,18 +27,52 @@ pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
 
-#[derive(Debug)]
-pub struct SidecarError(String);
+#[derive(Debug, Serialize)]
+pub struct SidecarError {
+    status: Option<u16>,
+    error: String,
+    detail: String,
+    retryable: bool,
+}
 
 impl SidecarError {
     fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            status: None,
+            error: "SidecarError".to_owned(),
+            detail: message.into(),
+            retryable: true,
+        }
+    }
+
+    fn backend_response(status: u16, body: &[u8]) -> Self {
+        let payload = serde_json::from_slice::<serde_json::Value>(body).ok();
+        let error = payload
+            .as_ref()
+            .and_then(|value| value.get("error"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("BackendRequestFailed")
+            .to_owned();
+        let detail = payload
+            .as_ref()
+            .and_then(|value| value.get("detail"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("The MemeSort sidecar rejected the request.")
+            .chars()
+            .take(4_096)
+            .collect();
+        Self {
+            status: Some(status),
+            error,
+            detail,
+            retryable: status == 408 || status == 429 || status >= 500,
+        }
     }
 }
 
 impl fmt::Display for SidecarError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str(&self.detail)
     }
 }
 
@@ -67,6 +101,10 @@ pub struct SidecarState(Mutex<Option<SidecarSession>>);
 /// The WebView never supplies this path to an import command.
 pub struct ImportSelection(Mutex<Option<PathBuf>>);
 
+/// An image file selected through the native dialog for one later Search Request.
+/// The WebView never supplies this path to an image-search command.
+pub struct SearchImageSelection(Mutex<Option<PathBuf>>);
+
 impl ImportSelection {
     pub fn new() -> Self {
         Self(Mutex::new(None))
@@ -89,6 +127,22 @@ impl ImportSelection {
             .as_ref()
             .map(|path| path.display().to_string())
             .ok_or_else(|| SidecarError::new("Choose a source folder before importing."))
+    }
+}
+
+impl SearchImageSelection {
+    pub fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    fn replace(&self, path: Option<PathBuf>) -> Result<Option<String>, SidecarError> {
+        let selected_path = path.as_ref().map(|path| path.display().to_string());
+        let mut selection = self
+            .0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort image selection is unavailable."))?;
+        *selection = path;
+        Ok(selected_path)
     }
 }
 
@@ -505,32 +559,25 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, String> {
-    let state = app
-        .try_state::<SidecarState>()
-        .ok_or_else(|| "MemeSort sidecar is not available.".to_owned())?;
-    let session = state
-        .0
-        .lock()
-        .map_err(|_| "MemeSort sidecar state is unavailable.".to_owned())?;
-    let session = session
-        .as_ref()
-        .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
-    session.app_state().map_err(|error| error.to_string())
+pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_session(&app, |session| session.app_state())
 }
 
 #[tauri::command]
-pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.assets())
 }
 
 #[tauri::command]
-pub fn get_asset_detail(app: AppHandle, asset_id: String) -> Result<serde_json::Value, String> {
+pub fn get_asset_detail(
+    app: AppHandle,
+    asset_id: String,
+) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.asset_detail(&asset_id))
 }
 
 #[tauri::command]
-pub fn delete_asset(app: AppHandle, asset_id: String) -> Result<serde_json::Value, String> {
+pub fn delete_asset(app: AppHandle, asset_id: String) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.delete_asset(&asset_id))
 }
 
@@ -539,7 +586,7 @@ pub fn remove_source_record(
     app: AppHandle,
     asset_id: String,
     source_path: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| {
         session.remove_source_record(&asset_id, &source_path)
     })
@@ -550,15 +597,15 @@ pub fn batch_asset_action(
     app: AppHandle,
     action: String,
     asset_ids: Vec<String>,
-) -> Result<serde_json::Value, String> {
-    let action = BatchAssetAction::parse(&action).map_err(|error| error.to_string())?;
+) -> Result<serde_json::Value, SidecarError> {
+    let action = BatchAssetAction::parse(&action)?;
     with_sidecar_session(&app, |session| {
         session.batch_asset_action(action, &asset_ids)
     })
 }
 
 #[tauri::command]
-pub fn choose_import_folder(app: AppHandle) -> Result<FolderSelection, String> {
+pub fn choose_import_folder(app: AppHandle) -> Result<FolderSelection, SidecarError> {
     let path = app
         .dialog()
         .file()
@@ -569,45 +616,63 @@ pub fn choose_import_folder(app: AppHandle) -> Result<FolderSelection, String> {
             path.into_path()
                 .map_err(|error| SidecarError::new(error.to_string()))
         })
-        .transpose()
-        .map_err(|error| error.to_string())?;
+        .transpose()?;
     let selection = app
         .try_state::<ImportSelection>()
-        .ok_or_else(|| "MemeSort import selection is unavailable.".to_owned())?;
-    let selected_path = selection.replace(path).map_err(|error| error.to_string())?;
+        .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
+    let selected_path = selection.replace(path)?;
     Ok(FolderSelection { selected_path })
 }
 
 #[tauri::command]
-pub fn start_import(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn choose_search_image(app: AppHandle) -> Result<FolderSelection, SidecarError> {
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Choose an image to search with MemeSort")
+        .add_filter("Image files", &["jpg", "jpeg", "png", "webp", "gif", "bmp"])
+        .blocking_pick_file();
+    let path = path
+        .map(|path| {
+            path.into_path()
+                .map_err(|error| SidecarError::new(error.to_string()))
+        })
+        .transpose()?;
+    let selection = app
+        .try_state::<SearchImageSelection>()
+        .ok_or_else(|| SidecarError::new("MemeSort image selection is unavailable."))?;
+    let selected_path = selection.replace(path)?;
+    Ok(FolderSelection { selected_path })
+}
+
+#[tauri::command]
+pub fn start_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     start_selected_import(&app, false)
 }
 
 #[tauri::command]
-pub fn start_import_and_index(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn start_import_and_index(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     start_selected_import(&app, true)
 }
 
 #[tauri::command]
-pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.pause_import())
 }
 
 #[tauri::command]
-pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.resume_import())
 }
 
 fn start_selected_import(
     app: &AppHandle,
     start_indexing: bool,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, SidecarError> {
     let selection = app
         .try_state::<ImportSelection>()
-        .ok_or_else(|| "MemeSort import selection is unavailable.".to_owned())?;
-    let source_folder = selection
-        .selected_path()
-        .map_err(|error| error.to_string())?;
+        .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
+    let source_folder = selection.selected_path()?;
     with_sidecar_session(app, |session| {
         session.start_import(source_folder, start_indexing)
     })
@@ -616,18 +681,18 @@ fn start_selected_import(
 fn with_sidecar_session<T>(
     app: &AppHandle,
     operation: impl FnOnce(&SidecarSession) -> Result<T, SidecarError>,
-) -> Result<T, String> {
+) -> Result<T, SidecarError> {
     let state = app
         .try_state::<SidecarState>()
-        .ok_or_else(|| "MemeSort sidecar is not available.".to_owned())?;
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar is not available."))?;
     let session = state
         .0
         .lock()
-        .map_err(|_| "MemeSort sidecar state is unavailable.".to_owned())?;
+        .map_err(|_| SidecarError::new("MemeSort sidecar state is unavailable."))?;
     let session = session
         .as_ref()
-        .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
-    operation(session).map_err(|error| error.to_string())
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
+    operation(session)
 }
 
 pub fn media_protocol_response(
@@ -832,11 +897,11 @@ fn loopback_port(origin: &str) -> Result<u16, SidecarError> {
 
 fn parse_json_response(response: &[u8]) -> Result<serde_json::Value, SidecarError> {
     let response = parse_http_response(response)?;
-    if response.status != 200 {
-        return Err(SidecarError::new(format!(
-            "Sidecar request failed with status {}.",
-            response.status
-        )));
+    if !(200..300).contains(&response.status) {
+        return Err(SidecarError::backend_response(
+            response.status,
+            &response.body,
+        ));
     }
     serde_json::from_slice(&response.body)
         .map_err(|error| SidecarError::new(format!("Invalid sidecar JSON response: {error}")))
@@ -977,10 +1042,10 @@ fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
 }
 
 fn media_error_response(error: SidecarError) -> http::Response<Vec<u8>> {
-    let status = if error.0.starts_with("Unknown MemeSort media route")
-        || error.0.starts_with("Invalid MemeSort media path")
-        || error.0.starts_with("MemeSort media only supports")
-        || error.0.starts_with("MemeSort media URLs cannot")
+    let status = if error.detail.starts_with("Unknown MemeSort media route")
+        || error.detail.starts_with("Invalid MemeSort media path")
+        || error.detail.starts_with("MemeSort media only supports")
+        || error.detail.starts_with("MemeSort media URLs cannot")
     {
         http::StatusCode::BAD_REQUEST
     } else {
@@ -1046,9 +1111,19 @@ mod tests {
 
     #[test]
     fn rejects_non_successful_or_malformed_responses() {
-        let error = parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}")
-            .expect_err("unauthenticated response must not reach the WebView");
-        assert!(error.to_string().contains("401"));
+        let unknown_asset = parse_json_response(
+            b"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{\"error\":\"NotFound\",\"detail\":\"Asset was not found.\"}",
+        )
+        .expect_err("unknown Asset response must reach the WebView as a structured error");
+        assert_eq!(unknown_asset.status, Some(404));
+        assert_eq!(unknown_asset.error, "NotFound");
+        assert_eq!(unknown_asset.detail, "Asset was not found.");
+        assert!(!unknown_asset.retryable);
+
+        let unavailable = parse_json_response(b"HTTP/1.1 503 Service Unavailable\r\n\r\n{}")
+            .expect_err("unavailable sidecar response must be retryable");
+        assert_eq!(unavailable.status, Some(503));
+        assert!(unavailable.retryable);
         assert!(parse_json_response(b"not HTTP").is_err());
     }
 
@@ -1288,8 +1363,13 @@ mod tests {
                 assert!(request.starts_with(&format!("POST {path} HTTP/1.1")));
                 assert!(request.contains("Cookie: memesort_session=test-token"));
                 assert!(request.contains(expected_payload));
+                let response: &[u8] = if path == "/api/import/start" {
+                    b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}"
+                } else {
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}"
+                };
                 stream
-                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}")
+                    .write_all(response)
                     .expect("import response should write");
             }
         });

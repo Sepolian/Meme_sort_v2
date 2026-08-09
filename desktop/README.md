@@ -1,9 +1,9 @@
 # MemeSort desktop
 
-This directory contains the Windows-first Tauri 2 desktop host. It currently
-provides the React application shell only; the Python `LocalAppHost` sidecar is
-added in the next migration slice. The WebView must never call the Python
-loopback API directly.
+This directory contains the Windows-first Tauri 2 desktop host. Tauri owns the
+managed Python `LocalAppHost` sidecar lifecycle, consumes its private bootstrap
+session, and proxies only fixed backend commands and managed media to the
+WebView. The WebView must never call the Python loopback API directly.
 
 ## Development
 

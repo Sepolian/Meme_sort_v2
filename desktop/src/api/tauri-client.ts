@@ -11,6 +11,7 @@ export interface MemeSortClient {
   removeSourceRecord(assetId: string, sourcePath: string): Promise<AssetMutationResult>;
   batchAssetAction(action: "delete" | "rebuild-active-index", assetIds: string[]): Promise<BatchAssetActionResult>;
   chooseImportFolder(): Promise<FolderSelection>;
+  chooseSearchImage(): Promise<FolderSelection>;
   startImport(): Promise<ImportTask>;
   startImportAndIndex(): Promise<ImportTask>;
   pauseImport(): Promise<ImportTask>;
@@ -26,6 +27,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     removeSourceRecord: (assetId, sourcePath) => invokeCommand<AssetMutationResult>("remove_source_record", { assetId, sourcePath }),
     batchAssetAction: (action, assetIds) => invokeCommand<BatchAssetActionResult>("batch_asset_action", { action, assetIds }),
     chooseImportFolder: () => invokeCommand<FolderSelection>("choose_import_folder"),
+    chooseSearchImage: () => invokeCommand<FolderSelection>("choose_search_image"),
     startImport: () => invokeCommand<ImportTask>("start_import"),
     startImportAndIndex: () => invokeCommand<ImportTask>("start_import_and_index"),
     pauseImport: () => invokeCommand<ImportTask>("pause_import"),

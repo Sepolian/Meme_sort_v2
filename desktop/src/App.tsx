@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
+import { tauriErrorDetail } from "./api/tauri-error";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
@@ -87,7 +88,7 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
       setFeedback(successMessage);
       onStateChanged();
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "MemeSort could not complete the import action.");
+      setFeedback(tauriErrorDetail(error, "MemeSort could not complete the import action."));
     } finally {
       setIsWorking(false);
     }

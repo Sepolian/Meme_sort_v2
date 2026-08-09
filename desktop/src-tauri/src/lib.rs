@@ -19,6 +19,7 @@ pub fn run() {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
             app.manage(sidecar::ImportSelection::new());
+            app.manage(sidecar::SearchImageSelection::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -29,6 +30,7 @@ pub fn run() {
             sidecar::remove_source_record,
             sidecar::batch_asset_action,
             sidecar::choose_import_folder,
+            sidecar::choose_search_image,
             sidecar::start_import,
             sidecar::start_import_and_index,
             sidecar::pause_import,

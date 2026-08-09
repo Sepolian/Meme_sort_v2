@@ -114,6 +114,7 @@ const client = {
     reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
   })),
   chooseImportFolder: vi.fn(async () => ({ selected_path: "C:/Source/Memes" })),
+  chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
   startImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   startImportAndIndex: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   pauseImport: vi.fn(async () => ({ status: "pausing", running: true, paused: false, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
