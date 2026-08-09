@@ -157,6 +157,53 @@ impl SidecarSession {
             "Sidecar did not stop before the shutdown deadline.",
         ))
     }
+
+    fn app_state(&self) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::State)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ApiRoute {
+    State,
+}
+
+impl ApiRoute {
+    fn path(self) -> &'static str {
+        match self {
+            Self::State => "/api/state",
+        }
+    }
+}
+
+fn authenticated_get_json(
+    origin: &str,
+    session_cookie: &str,
+    route: ApiRoute,
+) -> Result<serde_json::Value, SidecarError> {
+    let port = loopback_port(origin)?;
+    let mut stream = TcpStream::connect(("127.0.0.1", port))
+        .map_err(|error| SidecarError::new(format!("Could not connect to sidecar: {error}")))?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .map_err(|error| {
+            SidecarError::new(format!("Could not configure sidecar request: {error}"))
+        })?;
+    stream
+        .write_all(
+            format!(
+                "GET {} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
+                route.path(),
+            )
+            .as_bytes(),
+        )
+        .map_err(|error| SidecarError::new(format!("Could not request sidecar state: {error}")))?;
+
+    let mut response = Vec::new();
+    stream
+        .read_to_end(&mut response)
+        .map_err(|error| SidecarError::new(format!("Could not read sidecar state: {error}")))?;
+    parse_json_response(&response)
 }
 
 pub fn shutdown_managed_sidecar(app: &AppHandle) {
@@ -172,6 +219,21 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
     if let Err(error) = session.shutdown() {
         eprintln!("MemeSort sidecar shutdown failed: {error}");
     }
+}
+
+#[tauri::command]
+pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state = app
+        .try_state::<SidecarState>()
+        .ok_or_else(|| "MemeSort sidecar is not available.".to_owned())?;
+    let session = state
+        .0
+        .lock()
+        .map_err(|_| "MemeSort sidecar state is unavailable.".to_owned())?;
+    let session = session
+        .as_ref()
+        .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
+    session.app_state().map_err(|error| error.to_string())
 }
 
 struct SidecarLaunch {
@@ -301,11 +363,7 @@ fn parse_handshake(line: &str) -> Result<Handshake, SidecarError> {
 }
 
 fn consume_bootstrap(handshake: &Handshake) -> Result<String, SidecarError> {
-    let port = handshake
-        .origin
-        .strip_prefix("http://127.0.0.1:")
-        .and_then(|port| port.parse::<u16>().ok())
-        .ok_or_else(|| SidecarError::new("Invalid sidecar origin."))?;
+    let port = loopback_port(&handshake.origin)?;
     let path = handshake
         .bootstrap_url
         .strip_prefix(&handshake.origin)
@@ -347,6 +405,33 @@ fn consume_bootstrap(handshake: &Handshake) -> Result<String, SidecarError> {
         .ok_or_else(|| SidecarError::new("Sidecar bootstrap did not return a session cookie."))
 }
 
+fn loopback_port(origin: &str) -> Result<u16, SidecarError> {
+    origin
+        .strip_prefix("http://127.0.0.1:")
+        .and_then(|port| port.parse::<u16>().ok())
+        .ok_or_else(|| SidecarError::new("Invalid sidecar origin."))
+}
+
+fn parse_json_response(response: &[u8]) -> Result<serde_json::Value, SidecarError> {
+    let header_end = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or_else(|| SidecarError::new("Malformed sidecar response."))?;
+    let headers = std::str::from_utf8(&response[..header_end])
+        .map_err(|_| SidecarError::new("Sidecar response headers were not UTF-8."))?;
+    let status = headers
+        .lines()
+        .next()
+        .ok_or_else(|| SidecarError::new("Missing sidecar response status."))?;
+    if !status.contains(" 200 ") {
+        return Err(SidecarError::new(format!(
+            "Sidecar request failed with {status}."
+        )));
+    }
+    serde_json::from_slice(&response[header_end + 4..])
+        .map_err(|error| SidecarError::new(format!("Invalid sidecar JSON response: {error}")))
+}
+
 fn terminate_child(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
@@ -354,7 +439,13 @@ fn terminate_child(child: &mut Child) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_handshake;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    use super::{authenticated_get_json, parse_handshake, parse_json_response, ApiRoute};
 
     #[test]
     fn accepts_the_versioned_loopback_handshake() {
@@ -374,5 +465,52 @@ mod tests {
         .expect_err("foreign origin must be rejected");
 
         assert!(error.to_string().contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn accepts_an_authenticated_state_response() {
+        let payload = parse_json_response(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"library_status\":{\"total_assets\":3}}")
+            .expect("state response should parse");
+
+        assert_eq!(payload["library_status"]["total_assets"], 3);
+    }
+
+    #[test]
+    fn rejects_non_successful_or_malformed_responses() {
+        let error = parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}")
+            .expect_err("unauthenticated response must not reach the WebView");
+        assert!(error.to_string().contains("401"));
+        assert!(parse_json_response(b"not HTTP").is_err());
+    }
+
+    #[test]
+    fn forwards_the_session_cookie_only_to_the_allowlisted_state_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("state request should connect");
+            let mut request = [0_u8; 1024];
+            let size = stream
+                .read(&mut request)
+                .expect("state request should read");
+            let request = std::str::from_utf8(&request[..size]).expect("request must be UTF-8");
+            assert!(request.starts_with("GET /api/state HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":true}",
+                )
+                .expect("state response should write");
+        });
+
+        let payload = authenticated_get_json(
+            &format!("http://127.0.0.1:{port}"),
+            "memesort_session=test-token",
+            ApiRoute::State,
+        )
+        .expect("state request should succeed");
+        server.join().expect("test server should finish");
+
+        assert_eq!(payload["ok"], true);
     }
 }

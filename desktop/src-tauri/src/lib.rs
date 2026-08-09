@@ -10,6 +10,7 @@ pub fn run() {
             app.manage(sidecar::SidecarState::new(sidecar));
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![sidecar::get_app_state])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, event| {
