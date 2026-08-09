@@ -85,3 +85,27 @@ export interface AssetDetailResult {
   active_recipe_label: string;
   asset: AssetDetail;
 }
+
+export interface AssetMutationResult {
+  library_root: string;
+  asset_id: string;
+  removed_source_path: string | null;
+  asset_deleted: boolean;
+  removed_source_records: number;
+  removed_jobs: number;
+  removed_renditions: number;
+  removed_embeddings: number;
+}
+
+export interface BatchAssetActionResult {
+  library_root: string;
+  action: "delete" | "rebuild-active-index";
+  requested_asset_ids: string[];
+  affected_asset_ids: string[];
+  skipped_running_asset_ids: string[];
+  removed_source_records: number;
+  removed_jobs: number;
+  removed_renditions: number;
+  removed_embeddings: number;
+  reindex_jobs_created: number;
+}

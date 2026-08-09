@@ -22,7 +22,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             sidecar::get_app_state,
             sidecar::get_assets,
-            sidecar::get_asset_detail
+            sidecar::get_asset_detail,
+            sidecar::delete_asset,
+            sidecar::remove_source_record,
+            sidecar::batch_asset_action
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

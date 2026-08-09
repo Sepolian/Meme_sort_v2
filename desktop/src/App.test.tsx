@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
@@ -70,6 +70,38 @@ const client = {
     active_recipe_label: "Vulkan0 recipe",
     asset: assetDetail,
   }),
+  deleteAsset: async (assetId: string) => ({
+    library_root: "C:/Library",
+    asset_id: assetId,
+    removed_source_path: null,
+    asset_deleted: true,
+    removed_source_records: 1,
+    removed_jobs: 1,
+    removed_renditions: 1,
+    removed_embeddings: 1,
+  }),
+  removeSourceRecord: async (assetId: string, sourcePath: string) => ({
+    library_root: "C:/Library",
+    asset_id: assetId,
+    removed_source_path: sourcePath,
+    asset_deleted: false,
+    removed_source_records: 1,
+    removed_jobs: 0,
+    removed_renditions: 0,
+    removed_embeddings: 0,
+  }),
+  batchAssetAction: vi.fn(async (action: "delete" | "rebuild-active-index", assetIds: string[]) => ({
+    library_root: "C:/Library",
+    action,
+    requested_asset_ids: assetIds,
+    affected_asset_ids: assetIds,
+    skipped_running_asset_ids: [],
+    removed_source_records: 0,
+    removed_jobs: 0,
+    removed_renditions: 0,
+    removed_embeddings: 0,
+    reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
+  })),
 };
 
 describe("App", () => {
@@ -107,6 +139,22 @@ describe("App", () => {
     expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
     expect(await screen.findByText("reaction text")).toBeInTheDocument();
     expect(screen.getByText("C:/Source/first.gif")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete this Asset?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  });
+
+  it("confirms and queues a selected Active Index rebuild", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByLabelText("Select first.gif"));
+    fireEvent.click(screen.getByRole("button", { name: "Rebuild Active Index" }));
+
+    expect(screen.getByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Queue rebuild" }));
+
+    expect(await screen.findByText("Queued 1 Active Index rebuild(s); skipped 0 running Asset(s)."))
+      .toBeInTheDocument();
+    expect(client.batchAssetAction).toHaveBeenCalledWith("rebuild-active-index", ["123e4567-e89b-12d3-a456-426614174000"]);
   });
 
   it.each([
