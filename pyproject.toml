@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 memesort-worker = "memesort_worker.cli:main"
+memesort-sidecar = "memesort_worker.sidecar_entry:main"
 
 [project.gui-scripts]
 memesort-desktop = "memesort_worker.desktop_entry:main"
