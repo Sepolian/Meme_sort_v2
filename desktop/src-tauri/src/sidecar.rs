@@ -12,7 +12,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager};
+use tauri::{http, AppHandle, Manager};
 
 #[cfg(debug_assertions)]
 use std::path::Path;
@@ -20,6 +20,7 @@ use std::path::Path;
 const PROTOCOL_VERSION: u32 = 1;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
+pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
 
@@ -161,6 +162,13 @@ impl SidecarSession {
     fn app_state(&self) -> Result<serde_json::Value, SidecarError> {
         authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::State)
     }
+
+    fn media_response(
+        &self,
+        request: &http::Request<Vec<u8>>,
+    ) -> Result<SidecarHttpResponse, SidecarError> {
+        authenticated_get_media(&self.origin, &self.session_cookie, request)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -206,6 +214,45 @@ fn authenticated_get_json(
     parse_json_response(&response)
 }
 
+fn authenticated_get_media(
+    origin: &str,
+    session_cookie: &str,
+    request: &http::Request<Vec<u8>>,
+) -> Result<SidecarHttpResponse, SidecarError> {
+    let path = managed_media_path(request)?;
+    authenticated_get(origin, session_cookie, &path, "*/*")
+}
+
+fn authenticated_get(
+    origin: &str,
+    session_cookie: &str,
+    path: &str,
+    accept: &str,
+) -> Result<SidecarHttpResponse, SidecarError> {
+    let port = loopback_port(origin)?;
+    let mut stream = TcpStream::connect(("127.0.0.1", port))
+        .map_err(|error| SidecarError::new(format!("Could not connect to sidecar: {error}")))?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .map_err(|error| {
+            SidecarError::new(format!("Could not configure sidecar request: {error}"))
+        })?;
+    stream
+        .write_all(
+            format!(
+                "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: {accept}\r\nConnection: close\r\n\r\n",
+            )
+            .as_bytes(),
+        )
+        .map_err(|error| SidecarError::new(format!("Could not request sidecar: {error}")))?;
+
+    let mut response = Vec::new();
+    stream
+        .read_to_end(&mut response)
+        .map_err(|error| SidecarError::new(format!("Could not read sidecar response: {error}")))?;
+    parse_http_response(&response)
+}
+
 pub fn shutdown_managed_sidecar(app: &AppHandle) {
     let Some(state) = app.try_state::<SidecarState>() else {
         return;
@@ -234,6 +281,30 @@ pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, String> {
         .as_ref()
         .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
     session.app_state().map_err(|error| error.to_string())
+}
+
+pub fn media_protocol_response(
+    app: &AppHandle,
+    request: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    let result = app
+        .try_state::<SidecarState>()
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar is not available."))
+        .and_then(|state| {
+            let session = state
+                .0
+                .lock()
+                .map_err(|_| SidecarError::new("MemeSort sidecar state is unavailable."))?;
+            let session = session
+                .as_ref()
+                .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
+            session.media_response(&request)
+        });
+
+    match result {
+        Ok(response) => response.into_tauri_response(),
+        Err(error) => media_error_response(error),
+    }
 }
 
 struct SidecarLaunch {
@@ -413,23 +484,125 @@ fn loopback_port(origin: &str) -> Result<u16, SidecarError> {
 }
 
 fn parse_json_response(response: &[u8]) -> Result<serde_json::Value, SidecarError> {
+    let response = parse_http_response(response)?;
+    if response.status != 200 {
+        return Err(SidecarError::new(format!(
+            "Sidecar request failed with status {}.",
+            response.status
+        )));
+    }
+    serde_json::from_slice(&response.body)
+        .map_err(|error| SidecarError::new(format!("Invalid sidecar JSON response: {error}")))
+}
+
+#[derive(Debug)]
+struct SidecarHttpResponse {
+    status: u16,
+    content_type: Option<String>,
+    cache_control: Option<String>,
+    body: Vec<u8>,
+}
+
+impl SidecarHttpResponse {
+    fn into_tauri_response(self) -> http::Response<Vec<u8>> {
+        let mut builder = http::Response::builder().status(self.status);
+        if let Some(content_type) = self.content_type {
+            builder = builder.header(http::header::CONTENT_TYPE, content_type);
+        }
+        if let Some(cache_control) = self.cache_control {
+            builder = builder.header(http::header::CACHE_CONTROL, cache_control);
+        }
+        builder
+            .body(self.body)
+            .expect("validated sidecar response headers must be valid")
+    }
+}
+
+fn parse_http_response(response: &[u8]) -> Result<SidecarHttpResponse, SidecarError> {
     let header_end = response
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
         .ok_or_else(|| SidecarError::new("Malformed sidecar response."))?;
     let headers = std::str::from_utf8(&response[..header_end])
         .map_err(|_| SidecarError::new("Sidecar response headers were not UTF-8."))?;
-    let status = headers
-        .lines()
+    let mut lines = headers.lines();
+    let status_line = lines
         .next()
         .ok_or_else(|| SidecarError::new("Missing sidecar response status."))?;
-    if !status.contains(" 200 ") {
-        return Err(SidecarError::new(format!(
-            "Sidecar request failed with {status}."
-        )));
+    let status = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|status| status.parse::<u16>().ok())
+        .ok_or_else(|| SidecarError::new("Invalid sidecar response status."))?;
+
+    let mut content_type = None;
+    let mut cache_control = None;
+    for line in lines {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        if name.eq_ignore_ascii_case("content-type") {
+            content_type = Some(value.to_owned());
+        } else if name.eq_ignore_ascii_case("cache-control") {
+            cache_control = Some(value.to_owned());
+        }
     }
-    serde_json::from_slice(&response[header_end + 4..])
-        .map_err(|error| SidecarError::new(format!("Invalid sidecar JSON response: {error}")))
+    Ok(SidecarHttpResponse {
+        status,
+        content_type,
+        cache_control,
+        body: response[header_end + 4..].to_vec(),
+    })
+}
+
+fn managed_media_path(request: &http::Request<Vec<u8>>) -> Result<String, SidecarError> {
+    if request.method() != http::Method::GET {
+        return Err(SidecarError::new("MemeSort media only supports GET."));
+    }
+    if request.uri().query().is_some() {
+        return Err(SidecarError::new(
+            "MemeSort media URLs cannot include a query string.",
+        ));
+    }
+    let path = request.uri().path();
+    let relative_path = path
+        .strip_prefix("/media/")
+        .ok_or_else(|| SidecarError::new("Unknown MemeSort media route."))?;
+    if relative_path.is_empty() || relative_path.contains('\\') || relative_path.contains('%') {
+        return Err(SidecarError::new("Invalid MemeSort media path."));
+    }
+    let mut segments = relative_path.split('/');
+    let directory = segments.next().unwrap_or_default();
+    let file_name = segments.next().unwrap_or_default();
+    if segments.next().is_some()
+        || file_name.is_empty()
+        || matches!(file_name, "." | "..")
+        || !matches!(
+            directory,
+            "originals" | "thumbnails" | "frames" | "contact_sheets"
+        )
+    {
+        return Err(SidecarError::new("Invalid MemeSort media path."));
+    }
+    Ok(path.to_owned())
+}
+
+fn media_error_response(error: SidecarError) -> http::Response<Vec<u8>> {
+    let status = if error.0.starts_with("Unknown MemeSort media route")
+        || error.0.starts_with("Invalid MemeSort media path")
+        || error.0.starts_with("MemeSort media only supports")
+        || error.0.starts_with("MemeSort media URLs cannot")
+    {
+        http::StatusCode::BAD_REQUEST
+    } else {
+        http::StatusCode::BAD_GATEWAY
+    };
+    http::Response::builder()
+        .status(status)
+        .header(http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(b"MemeSort media is unavailable.".to_vec())
+        .expect("static response headers must be valid")
 }
 
 fn terminate_child(child: &mut Child) {
@@ -445,7 +618,11 @@ mod tests {
         thread,
     };
 
-    use super::{authenticated_get_json, parse_handshake, parse_json_response, ApiRoute};
+    use super::{
+        authenticated_get_json, authenticated_get_media, managed_media_path, parse_handshake,
+        parse_json_response, ApiRoute,
+    };
+    use tauri::http::{Method, Request, StatusCode};
 
     #[test]
     fn accepts_the_versioned_loopback_handshake() {
@@ -512,5 +689,79 @@ mod tests {
         server.join().expect("test server should finish");
 
         assert_eq!(payload["ok"], true);
+    }
+
+    #[test]
+    fn forwards_binary_media_with_its_mime_type_through_the_managed_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("media request should connect");
+            let mut request = [0_u8; 1024];
+            let size = stream
+                .read(&mut request)
+                .expect("media request should read");
+            let request = std::str::from_utf8(&request[..size]).expect("request must be UTF-8");
+            assert!(request.starts_with("GET /media/thumbnails/asset.gif HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nCache-Control: public, max-age=60\r\nContent-Length: 6\r\n\r\nGIF89a",
+                )
+                .expect("media response should write");
+        });
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/media/thumbnails/asset.gif")
+            .body(Vec::new())
+            .expect("media request should build");
+
+        let response = authenticated_get_media(
+            &format!("http://127.0.0.1:{port}"),
+            "memesort_session=test-token",
+            &request,
+        )
+        .expect("media request should succeed")
+        .into_tauri_response();
+        server.join().expect("test server should finish");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "image/gif");
+        assert_eq!(response.headers()["cache-control"], "public, max-age=60");
+        assert_eq!(response.body(), b"GIF89a");
+    }
+
+    #[test]
+    fn rejects_non_media_routes_and_unsafe_media_paths_before_connecting() {
+        for (method, uri) in [
+            (Method::GET, "/api/state"),
+            (Method::GET, "/media/originals/../library.sqlite"),
+            (Method::GET, "/media/%2e%2e/library.sqlite"),
+            (Method::GET, "/media/originals/C:\\outside.png"),
+            (Method::GET, "/media/models/runtime-manifest.json"),
+            (Method::POST, "/media/thumbnails/asset.jpg"),
+            (Method::GET, "/media/thumbnails/asset.jpg?bootstrap=secret"),
+        ] {
+            let request = Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(Vec::new())
+                .expect("request should build");
+            assert!(
+                managed_media_path(&request).is_err(),
+                "{uri} must be rejected"
+            );
+
+            let error = authenticated_get_media(
+                "http://127.0.0.1:1",
+                "memesort_session=must-not-leak",
+                &request,
+            )
+            .expect_err("unsafe request must not be sent to the sidecar");
+            assert!(
+                error.to_string().contains("MemeSort media")
+                    || error.to_string().contains("Invalid")
+            );
+        }
     }
 }

@@ -5,6 +5,15 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol(
+            sidecar::MEDIA_PROTOCOL,
+            |context, request, responder| {
+                let app = context.app_handle().clone();
+                std::thread::spawn(move || {
+                    responder.respond(sidecar::media_protocol_response(&app, request));
+                });
+            },
+        )
         .setup(|app| {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
