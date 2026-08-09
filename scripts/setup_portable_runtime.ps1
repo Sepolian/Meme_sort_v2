@@ -26,7 +26,7 @@ function Assert-ContainedPath {
 $portableRoot = [IO.Path]::GetFullPath($PortableRoot)
 $dataRoot = Join-Path $portableRoot "MemeSortData"
 $manifestPath = Join-Path $portableRoot "runtime-manifest.json"
-$sidecarPath = Join-Path $portableRoot "sidecar\memesort-sidecar-x86_64-pc-windows-msvc\memesort-sidecar-x86_64-pc-windows-msvc.exe"
+$sidecarPath = Join-Path $portableRoot "sidecar\memesort-sidecar-x86_64-pc-windows-msvc.exe"
 $ocrRequirements = Join-Path $portableRoot "requirements-ocr.txt"
 $ocrWorker = Join-Path $portableRoot "scripts\paddle_ocr_worker.py"
 

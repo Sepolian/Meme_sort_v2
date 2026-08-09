@@ -49,6 +49,14 @@ class SetupScriptTests(unittest.TestCase):
         self.assertIn("Convert-ManifestDataPath", script)
         self.assertIn("Portable manifest path must start with .runtime or .models", script)
         self.assertIn("runtime\\ocr-venv", script)
+        self.assertIn(
+            '"sidecar\\memesort-sidecar-x86_64-pc-windows-msvc.exe"',
+            script,
+        )
+        self.assertNotIn(
+            '"sidecar\\memesort-sidecar-x86_64-pc-windows-msvc\\memesort-sidecar-x86_64-pc-windows-msvc.exe"',
+            script,
+        )
         self.assertIn("--write-runtime-activation", script)
         self.assertIn("$manifest.platform.device -ne \"Vulkan0\"", script)
         self.assertIn("Assert-VerifiedFile", script)
@@ -66,6 +74,19 @@ class SetupScriptTests(unittest.TestCase):
         self.assertIn("requirements-ocr.txt", script)
         self.assertIn("paddle_ocr_worker.py", script)
         self.assertNotIn("Copy-Item -Recurse -LiteralPath (Join-Path $repoRoot \".models\")", script)
+
+    def test_tauri_rebuilds_the_embedded_ui_after_frontend_build(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        build_script = (root / "desktop" / "src-tauri" / "build.rs").read_text(
+            encoding="utf-8"
+        )
+        portable_builder = (root / "scripts" / "build_portable.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('cargo:rerun-if-changed=../dist', build_script)
+        self.assertIn("npm.cmd run tauri -- build --no-bundle", portable_builder)
+        self.assertNotIn("$cargoPath build --release", portable_builder)
 
     def test_portable_smoke_harness_starts_and_stops_the_packaged_sidecar(self) -> None:
         root = Path(__file__).resolve().parents[1]

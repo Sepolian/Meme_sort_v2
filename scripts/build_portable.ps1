@@ -38,7 +38,10 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $cargoPath -PathType Leaf)) {
     throw "Cargo is required to build the Tauri host. Install Rust with rustup and ensure cargo is available."
 }
-
+$cargoDirectory = Split-Path -Parent $cargoPath
+if (($env:Path -split ';') -notcontains $cargoDirectory) {
+    $env:Path = "$cargoDirectory;$env:Path"
+}
 & $pythonPath -m PyInstaller --version *> $null
 if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller is missing from the locked build environment. Run uv sync --group build."
@@ -63,20 +66,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Push-Location $desktopRoot
 try {
-    & npm.cmd run build
+    # The Tauri CLI supplies the release-mode build context. Calling Cargo
+    # directly marks even a --release host as `cfg(dev)`, which loads devUrl.
+    # --no-bundle preserves the portable-only distribution contract.
+    & npm.cmd run tauri -- build --no-bundle
     if ($LASTEXITCODE -ne 0) {
-        throw "Tauri frontend build failed."
-    }
-}
-finally {
-    Pop-Location
-}
-
-Push-Location $tauriRoot
-try {
-    & $cargoPath build --release
-    if ($LASTEXITCODE -ne 0) {
-        throw "Tauri host build failed."
+        throw "Tauri production host build failed."
     }
 }
 finally {
