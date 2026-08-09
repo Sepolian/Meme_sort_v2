@@ -4,6 +4,7 @@ import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
+import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
 import "./App.css";
 
 type Theme = "dark" | "light";
@@ -47,7 +48,8 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function Dashboard({ state }: { state: AppState }) {
+function Dashboard({ state, client }: { state: AppState; client: MemeSortClient }) {
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
 
   return (
@@ -58,20 +60,12 @@ function Dashboard({ state }: { state: AppState }) {
         <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
         <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
       </section>
-      {state.library_status.total_assets === 0 ? (
-        <EmptyState
-          title="No Assets yet"
-          detail="Import a folder from Setup to create managed Library Copies."
-          action={<Link className="button" to="/setup">Open setup</Link>}
-        />
-      ) : (
-        <section className="surface">
-          <h2>Library workspace</h2>
-          <p>
-            The Asset wall and Asset detail move here in the next vertical slice. Pending Assets and Failed Assets will remain browseable before they are searchable.
-          </p>
-        </section>
-      )}
+      <AssetsWorkspace
+        client={client}
+        selectedAssetId={selectedAssetId}
+        onSelectAsset={setSelectedAssetId}
+        onCloseDetail={() => setSelectedAssetId(null)}
+      />
     </Page>
   );
 }
@@ -172,10 +166,10 @@ function NotFoundPage() {
   );
 }
 
-function ApplicationRoutes({ state }: { state: AppState }) {
+function ApplicationRoutes({ state, client }: { state: AppState; client: MemeSortClient }) {
   return (
     <Routes>
-      <Route path="/" element={<Dashboard state={state} />} />
+      <Route path="/" element={<Dashboard state={state} client={client} />} />
       <Route path="/setup" element={<SetupPage state={state} />} />
       <Route path="/search" element={<SearchPage title="Search MemeSort" detail="Text, image, and similar-Asset retrieval will arrive as separate cancellable Search Request slices." />} />
       <Route path="/search/text" element={<SearchPage title="Text search" detail="Text retrieval will use an independently cancellable Search Request." />} />
@@ -231,7 +225,7 @@ export function App({ client = tauriClient }: AppProps) {
         </header>
         {stateQuery.isPending ? <LoadingState /> : null}
         {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
-        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} /> : null}
+        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} /> : null}
       </div>
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
     </div>

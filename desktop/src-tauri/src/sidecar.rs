@@ -163,6 +163,18 @@ impl SidecarSession {
         authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::State)
     }
 
+    fn assets(&self) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::Assets)
+    }
+
+    fn asset_detail(&self, asset_id: &str) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(
+            &self.origin,
+            &self.session_cookie,
+            ApiRoute::AssetDetail(validate_asset_id(asset_id)?),
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -171,15 +183,18 @@ impl SidecarSession {
     }
 }
 
-#[derive(Clone, Copy)]
 enum ApiRoute {
     State,
+    Assets,
+    AssetDetail(String),
 }
 
 impl ApiRoute {
-    fn path(self) -> &'static str {
+    fn path(&self) -> String {
         match self {
-            Self::State => "/api/state",
+            Self::State => "/api/state".to_owned(),
+            Self::Assets => "/api/assets".to_owned(),
+            Self::AssetDetail(asset_id) => format!("/api/asset-detail?asset_id={asset_id}"),
         }
     }
 }
@@ -281,6 +296,33 @@ pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, String> {
         .as_ref()
         .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
     session.app_state().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, String> {
+    with_sidecar_session(&app, |session| session.assets())
+}
+
+#[tauri::command]
+pub fn get_asset_detail(app: AppHandle, asset_id: String) -> Result<serde_json::Value, String> {
+    with_sidecar_session(&app, |session| session.asset_detail(&asset_id))
+}
+
+fn with_sidecar_session<T>(
+    app: &AppHandle,
+    operation: impl FnOnce(&SidecarSession) -> Result<T, SidecarError>,
+) -> Result<T, String> {
+    let state = app
+        .try_state::<SidecarState>()
+        .ok_or_else(|| "MemeSort sidecar is not available.".to_owned())?;
+    let session = state
+        .0
+        .lock()
+        .map_err(|_| "MemeSort sidecar state is unavailable.".to_owned())?;
+    let session = session
+        .as_ref()
+        .ok_or_else(|| "MemeSort sidecar has already stopped.".to_owned())?;
+    operation(session).map_err(|error| error.to_string())
 }
 
 pub fn media_protocol_response(
@@ -588,6 +630,21 @@ fn managed_media_path(request: &http::Request<Vec<u8>>) -> Result<String, Sideca
     Ok(path.to_owned())
 }
 
+fn validate_asset_id(asset_id: &str) -> Result<String, SidecarError> {
+    let is_uuid = asset_id.len() == 36
+        && asset_id.chars().enumerate().all(|(index, character)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                character == '-'
+            } else {
+                character.is_ascii_hexdigit()
+            }
+        });
+    if !is_uuid {
+        return Err(SidecarError::new("Invalid MemeSort Asset identifier."));
+    }
+    Ok(asset_id.to_ascii_lowercase())
+}
+
 fn media_error_response(error: SidecarError) -> http::Response<Vec<u8>> {
     let status = if error.0.starts_with("Unknown MemeSort media route")
         || error.0.starts_with("Invalid MemeSort media path")
@@ -620,7 +677,7 @@ mod tests {
 
     use super::{
         authenticated_get_json, authenticated_get_media, managed_media_path, parse_handshake,
-        parse_json_response, ApiRoute,
+        parse_json_response, validate_asset_id, ApiRoute,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -689,6 +746,62 @@ mod tests {
         server.join().expect("test server should finish");
 
         assert_eq!(payload["ok"], true);
+    }
+
+    #[test]
+    fn forwards_asset_requests_only_to_the_fixed_asset_routes() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            for expected_path in [
+                "GET /api/assets HTTP/1.1",
+                "GET /api/asset-detail?asset_id=123e4567-e89b-12d3-a456-426614174000 HTTP/1.1",
+            ] {
+                let (mut stream, _) = listener.accept().expect("asset request should connect");
+                let mut request = [0_u8; 1024];
+                let size = stream
+                    .read(&mut request)
+                    .expect("asset request should read");
+                let request = std::str::from_utf8(&request[..size]).expect("request must be UTF-8");
+                assert!(request.starts_with(expected_path));
+                assert!(request.contains("Cookie: memesort_session=test-token"));
+                stream
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":true}",
+                    )
+                    .expect("asset response should write");
+            }
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        authenticated_get_json(&origin, "memesort_session=test-token", ApiRoute::Assets)
+            .expect("assets request should succeed");
+        authenticated_get_json(
+            &origin,
+            "memesort_session=test-token",
+            ApiRoute::AssetDetail(
+                validate_asset_id("123e4567-e89b-12d3-a456-426614174000")
+                    .expect("valid identifier"),
+            ),
+        )
+        .expect("asset detail request should succeed");
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn rejects_an_invalid_asset_identifier_before_connecting() {
+        for asset_id in [
+            "",
+            "../library.sqlite",
+            "not-a-uuid",
+            "123e4567-e89b-12d3-a456-426614174000?x=1",
+            "123e4567ee9b12d3a456426614174000abcd",
+        ] {
+            assert!(
+                validate_asset_id(asset_id).is_err(),
+                "{asset_id} must be rejected"
+            );
+        }
     }
 
     #[test]

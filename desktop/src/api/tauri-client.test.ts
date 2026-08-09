@@ -10,4 +10,17 @@ describe("createMemeSortClient", () => {
 
     expect(invokeCommand).toHaveBeenCalledWith("get_app_state");
   });
+
+  it("invokes the fixed asset commands", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ assets: [] });
+    const client = createMemeSortClient(invokeCommand);
+
+    await client.getAssets();
+    await client.getAssetDetail("123e4567-e89b-12d3-a456-426614174000");
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "get_assets");
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "get_asset_detail", {
+      assetId: "123e4567-e89b-12d3-a456-426614174000",
+    });
+  });
 });
