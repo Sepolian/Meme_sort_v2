@@ -14,6 +14,7 @@ export interface AppState {
   library_status: {
     total_assets: number;
     job_counts: Record<string, number>;
+    recent_jobs?: RecentJob[];
   };
   worker_loop: WorkerLoopState;
   import_task: ImportTask;
@@ -26,6 +27,28 @@ export interface WorkerLoopState {
   interval_seconds?: number;
   last_tick_started_at?: number | null;
   last_tick_finished_at?: number | null;
+  event_log_path?: string | null;
+  recent_events?: WorkerLoopEvent[];
+  persisted_events?: WorkerLoopEvent[];
+}
+
+export interface RecentJob {
+  job_id: string;
+  type: string;
+  status: string;
+  asset_id: string | null;
+  recipe_id: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+  error_code: string | null;
+  error_detail: string | null;
+}
+
+export interface WorkerLoopEvent {
+  event: string;
+  payload: Record<string, unknown>;
+  timestamp: number;
 }
 
 export interface PendingJob {

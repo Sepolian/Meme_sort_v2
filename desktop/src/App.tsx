@@ -580,6 +580,22 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
           </section>
         </div>
       ) : null}
+      <section className="surface import-card" aria-labelledby="recent-jobs-title">
+        <h2 id="recent-jobs-title">Recent Jobs</h2>
+        <p>Latest queue records for diagnosing retries and failures.</p>
+        {(state.library_status.recent_jobs?.length ?? 0) ? <ul className="detail-list">{state.library_status.recent_jobs!.map((job) => <li key={job.job_id}><strong>{job.type} · {job.status} · attempt {job.attempt_count}</strong><span>{job.asset_id ?? "no Asset"} · updated {job.updated_at}</span>{job.error_detail ? <span>{job.error_detail}</span> : null}</li>)}</ul> : <p>No Job records are available yet.</p>}
+      </section>
+      <section className="surface import-card" aria-labelledby="worker-events-title">
+        <h2 id="worker-events-title">Worker events</h2>
+        <p>In-memory Worker Loop events from this application session.</p>
+        {(state.worker_loop.recent_events?.length ?? 0) ? <ul className="detail-list">{state.worker_loop.recent_events!.map((event, index) => <li key={`${event.event}-${event.timestamp}-${index}`}><strong>{event.event}</strong><span>timestamp {event.timestamp}</span><code>{JSON.stringify(event.payload)}</code></li>)}</ul> : <p>No Worker Loop events yet.</p>}
+      </section>
+      <section className="surface import-card" aria-labelledby="persisted-worker-log-title">
+        <h2 id="persisted-worker-log-title">Persisted worker log</h2>
+        <p>Recent Worker Loop events written to the Library log.</p>
+        {state.worker_loop.event_log_path ? <p className="mono">{state.worker_loop.event_log_path}</p> : null}
+        {(state.worker_loop.persisted_events?.length ?? 0) ? <ul className="detail-list">{state.worker_loop.persisted_events!.map((event, index) => <li key={`${event.event}-${event.timestamp}-${index}`}><strong>{event.event}</strong><span>timestamp {event.timestamp}</span><code>{JSON.stringify(event.payload)}</code></li>)}</ul> : <p>No persisted Worker events yet.</p>}
+      </section>
     </Page>
   );
 }

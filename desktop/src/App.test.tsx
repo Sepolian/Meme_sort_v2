@@ -74,8 +74,29 @@ const client = {
     library_root: "C:/Library",
     runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
     setup_state: { health_check_ok: false },
-    library_status: { total_assets: 3, job_counts: { pending: 2 } },
-  worker_loop: { paused: true, running: true },
+    library_status: {
+      total_assets: 3,
+      job_counts: { pending: 2 },
+      recent_jobs: [{
+        job_id: "123e4567-e89b-12d3-a456-426614174004",
+        type: "embed_asset",
+        status: "failed",
+        asset_id: "123e4567-e89b-12d3-a456-426614174002",
+        recipe_id: "recipe-1",
+        attempt_count: 2,
+        created_at: "2026-08-09T00:00:00Z",
+        updated_at: "2026-08-09T01:00:00Z",
+        error_code: "EmbeddingFailed",
+        error_detail: "The embedding worker stopped.",
+      }],
+    },
+  worker_loop: {
+    paused: true,
+    running: true,
+    event_log_path: "C:/Library/logs/worker-loop.jsonl",
+    recent_events: [{ event: "worker-loop-paused", payload: {}, timestamp: 1_754_704_800 }],
+    persisted_events: [{ event: "tick-finished", payload: { processed_jobs: 1 }, timestamp: 1_754_704_700 }],
+  },
   import_task: {
     status: "idle",
     running: false,
@@ -342,6 +363,20 @@ describe("App", () => {
 
     expect(client.retryFailedJobs).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Retried 2 failed Job record(s); 0 remain failed.")).toBeInTheDocument();
+  });
+
+  it("shows Recent Jobs and worker events from the read-only app-state projection", async () => {
+    renderApp("/status");
+
+    expect(await screen.findByRole("heading", { name: "Recent Jobs" })).toBeInTheDocument();
+    expect(screen.getByText("embed_asset · failed · attempt 2")).toBeInTheDocument();
+    expect(screen.getByText("The embedding worker stopped.")).toBeInTheDocument();
+    expect(screen.getByText("123e4567-e89b-12d3-a456-426614174002 · updated 2026-08-09T01:00:00Z")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Worker events" })).toBeInTheDocument();
+    expect(screen.getByText("worker-loop-paused")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Persisted worker log" })).toBeInTheDocument();
+    expect(screen.getByText("tick-finished")).toBeInTheDocument();
+    expect(screen.getByText('{"processed_jobs":1}')).toBeInTheDocument();
   });
 
   it("confirms deletion of selected Pending Job records without deleting Assets", async () => {
