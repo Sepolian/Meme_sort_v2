@@ -25,3 +25,8 @@ memesort-desktop = "memesort_worker.desktop_entry:main"
 
 [tool.setuptools]
 packages = ["memesort_worker"]
+
+[dependency-groups]
+build = [
+    "pyinstaller>=6.11,<7",
+]

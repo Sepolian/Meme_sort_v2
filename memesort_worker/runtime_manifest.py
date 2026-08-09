@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from urllib.parse import urlsplit
+
+from .app_paths import AppPaths, ENV_PORTABLE_ROOT
 
 
 MANIFEST_FILENAME = "runtime-manifest.json"
@@ -135,6 +138,7 @@ class RuntimeManifest:
     embedding: EmbeddingSpec
     logging: LoggingSpec
     shutdown_grace_seconds: float
+    portable_data_root: Path | None = None
 
     @property
     def project_root(self) -> Path:
@@ -142,23 +146,23 @@ class RuntimeManifest:
 
     @property
     def download_dir(self) -> Path:
-        return _resolve_relative(self.project_root, self.paths.download_dir)
+        return self._resolve_managed_path(self.paths.download_dir)
 
     @property
     def activation_record_path(self) -> Path:
-        return _resolve_relative(self.project_root, self.paths.activation_record)
+        return self._resolve_managed_path(self.paths.activation_record)
 
     @property
     def log_dir(self) -> Path:
-        return _resolve_relative(self.project_root, self.paths.log_dir)
+        return self._resolve_managed_path(self.paths.log_dir)
 
     @property
     def uv_install_dir(self) -> Path:
-        return _resolve_relative(self.project_root, self.toolchain.uv.install_dir)
+        return self._resolve_managed_path(self.toolchain.uv.install_dir)
 
     @property
     def llama_install_dir(self) -> Path:
-        return _resolve_relative(self.project_root, self.llama_cpp.install_dir)
+        return self._resolve_managed_path(self.llama_cpp.install_dir)
 
     @property
     def llama_server_path(self) -> Path:
@@ -166,7 +170,7 @@ class RuntimeManifest:
 
     @property
     def model_install_dir(self) -> Path:
-        return _resolve_relative(self.project_root, self.model.install_dir)
+        return self._resolve_managed_path(self.model.install_dir)
 
     @property
     def main_model_path(self) -> Path:
@@ -175,6 +179,11 @@ class RuntimeManifest:
     @property
     def projector_path(self) -> Path:
         return self.model_install_dir / self.model.projector.filename
+
+    def _resolve_managed_path(self, relative: str) -> Path:
+        if self.portable_data_root is None:
+            return _resolve_relative(self.project_root, relative)
+        return _resolve_portable_relative(self.portable_data_root, relative)
 
     @property
     def recipe_payload(self) -> dict[str, Any]:
@@ -279,10 +288,14 @@ class RuntimeManifest:
 
 
 def default_manifest_path() -> Path:
-    return Path(__file__).resolve().parents[1] / MANIFEST_FILENAME
+    return AppPaths.discover().manifest_path
 
 
-def load_runtime_manifest(path: Path | str | None = None) -> RuntimeManifest:
+def load_runtime_manifest(
+    path: Path | str | None = None,
+    *,
+    portable_data_root: Path | str | None = None,
+) -> RuntimeManifest:
     source_path = Path(path or default_manifest_path()).expanduser().resolve()
     try:
         raw = json.loads(source_path.read_text(encoding="utf-8"))
@@ -294,10 +307,21 @@ def load_runtime_manifest(path: Path | str | None = None) -> RuntimeManifest:
         ) from exc
     if not isinstance(raw, dict):
         raise RuntimeManifestError("Runtime manifest root must be an object")
-    return _parse_manifest(source_path, raw)
+    if portable_data_root is not None:
+        resolved_data_root = Path(portable_data_root).expanduser().resolve()
+    elif os.environ.get(ENV_PORTABLE_ROOT):
+        resolved_data_root = AppPaths.discover().data_root
+    else:
+        resolved_data_root = None
+    return _parse_manifest(source_path, raw, portable_data_root=resolved_data_root)
 
 
-def _parse_manifest(source_path: Path, raw: Mapping[str, Any]) -> RuntimeManifest:
+def _parse_manifest(
+    source_path: Path,
+    raw: Mapping[str, Any],
+    *,
+    portable_data_root: Path | None = None,
+) -> RuntimeManifest:
     _expect_keys(
         raw,
         {
@@ -566,6 +590,7 @@ def _parse_manifest(source_path: Path, raw: Mapping[str, Any]) -> RuntimeManifes
         shutdown_grace_seconds=_positive_number(
             raw["shutdown_grace_seconds"], "shutdown_grace_seconds"
         ),
+        portable_data_root=portable_data_root,
     )
     _validate_path_collisions(manifest)
     return manifest
@@ -674,6 +699,26 @@ def _resolve_relative(root: Path, relative: str) -> Path:
         candidate.relative_to(root.resolve())
     except ValueError as exc:
         raise RuntimeManifestError(f"Resolved path escapes project root: {relative}") from exc
+    return candidate
+
+
+def _resolve_portable_relative(data_root: Path, relative: str) -> Path:
+    parts = PurePosixPath(relative).parts
+    roots = {
+        ".runtime": data_root / "runtime",
+        ".models": data_root / "models",
+    }
+    try:
+        managed_root = roots[parts[0]]
+    except (IndexError, KeyError) as exc:
+        raise RuntimeManifestError(
+            f"Portable manifest path must start with .runtime or .models: {relative}"
+        ) from exc
+    candidate = (managed_root / Path(*parts[1:])).resolve()
+    try:
+        candidate.relative_to(data_root.resolve())
+    except ValueError as exc:
+        raise RuntimeManifestError(f"Portable manifest path escapes data root: {relative}") from exc
     return candidate
 
 

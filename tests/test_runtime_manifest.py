@@ -37,6 +37,28 @@ class RuntimeManifestTests(unittest.TestCase):
         self.assertEqual(71, len(manifest.recipe_id))
         self.assertTrue(manifest.recipe_display_id.startswith("vulkan-"))
 
+    def test_portable_data_root_rehomes_only_runtime_and_model_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            portable_data_root = Path(temp_dir) / "MemeSortData"
+            manifest = load_runtime_manifest(portable_data_root=portable_data_root)
+
+            self.assertEqual(
+                manifest.download_dir,
+                portable_data_root / "runtime" / "downloads",
+            )
+            self.assertEqual(
+                manifest.llama_install_dir,
+                portable_data_root / "runtime" / "llama.cpp-b9982-vulkan",
+            )
+            self.assertEqual(
+                manifest.model_install_dir,
+                portable_data_root / "models" / "gguf" / "qwen3-2b-q4_k_m",
+            )
+            self.assertEqual(
+                manifest.activation_record_path,
+                portable_data_root / "runtime" / "active-runtime.json",
+            )
+
     def test_unknown_fields_fail_fast(self) -> None:
         raw = self._raw_manifest()
         raw["surprise"] = True

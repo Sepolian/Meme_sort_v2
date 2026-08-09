@@ -36,6 +36,28 @@ The current semantic bundle is approximately 1.93 GB. Its archive names, sizes, 
 
 Sources are the llama.cpp [b9982 release](https://github.com/ggml-org/llama.cpp/releases/tag/b9982) and the [DevQuasar GGUF repository](https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF).
 
+## Portable desktop package
+
+The desktop distribution is portable-only: it has no MSI or NSIS installer. From a prepared development checkout, build it with:
+
+```powershell
+.\scripts\build_portable.ps1
+```
+
+The resulting `dist\MemeSort-portable.zip` expands to:
+
+```text
+MemeSort-portable/
+  MemeSort.exe
+  sidecar/
+  MemeSortData/
+    library/
+    models/
+    runtime/
+```
+
+The package does not include the managed Library, GGUF main model, multimodal projector, or llama.cpp Vulkan runtime. `MemeSortData` must remain beside `MemeSort.exe`; it is calculated from the executable location, not the current working directory or `%APPDATA%`.
+
 ## Launch and use
 
 ```powershell

@@ -10,13 +10,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from dataclasses import asdict, dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Callable, Iterable, TextIO
 
-from .app_paths import AppPaths
+from .app_paths import AppPaths, ENV_PORTABLE_ROOT
 from .local_app_host import (
     LocalAppHost,
     LocalAppHostConfig,
@@ -64,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional directory for rotating sidecar lifecycle logs.",
     )
+    parser.add_argument(
+        "--portable-root",
+        default=None,
+        help="Directory containing MemeSort.exe; runtime data stays beneath MemeSortData.",
+    )
     return parser
 
 
@@ -87,36 +93,45 @@ def main(
     protocol_stdin = stdin if stdin is not None else sys.stdin
     protocol_stdout = stdout if stdout is not None else sys.stdout
     protocol_stderr = stderr if stderr is not None else sys.stderr
-    _configure_protocol_encoding(protocol_stdout)
-    log_handler = _configure_log_handler(args.log_dir, protocol_stderr)
-
-    library_root = (
-        Path(args.library_root).expanduser().resolve()
-        if args.library_root
-        else AppPaths.discover().default_library_root
-    )
-    host = host_factory(LocalAppHostConfig(library_root=library_root))
-
+    previous_portable_root = os.environ.get(ENV_PORTABLE_ROOT)
+    if args.portable_root:
+        os.environ[ENV_PORTABLE_ROOT] = str(Path(args.portable_root).expanduser().resolve())
     try:
-        info = host.start()
-    except Exception as exc:
-        # LocalAppHost cleans partial state on start failure; calling stop keeps
-        # that guarantee true for alternate host factories used by integration
-        # harnesses as well.
-        host.stop()
-        _LOG.exception("sidecar_start_failed")
-        _write_stderr(protocol_stderr, f"MemeSort sidecar failed to start: {exc}")
-        _remove_log_handler(log_handler)
-        return 1
+        _configure_protocol_encoding(protocol_stdout)
+        log_handler = _configure_log_handler(args.log_dir, protocol_stderr)
 
-    try:
-        _write_handshake(protocol_stdout, SidecarHandshake.from_host_info(info))
-        _LOG.info("sidecar_started library_root=%s", info.library_root)
-        _wait_for_shutdown(protocol_stdin, protocol_stderr)
+        library_root = (
+            Path(args.library_root).expanduser().resolve()
+            if args.library_root
+            else AppPaths.discover().default_library_root
+        )
+        host = host_factory(LocalAppHostConfig(library_root=library_root))
+
+        try:
+            info = host.start()
+        except Exception as exc:
+            # LocalAppHost cleans partial state on start failure; calling stop keeps
+            # that guarantee true for alternate host factories used by integration
+            # harnesses as well.
+            host.stop()
+            _LOG.exception("sidecar_start_failed")
+            _write_stderr(protocol_stderr, f"MemeSort sidecar failed to start: {exc}")
+            _remove_log_handler(log_handler)
+            return 1
+
+        try:
+            _write_handshake(protocol_stdout, SidecarHandshake.from_host_info(info))
+            _LOG.info("sidecar_started library_root=%s", info.library_root)
+            _wait_for_shutdown(protocol_stdin, protocol_stderr)
+        finally:
+            report = host.stop()
+            _LOG.info("sidecar_stopped clean=%s", report.clean)
+            _remove_log_handler(log_handler)
     finally:
-        report = host.stop()
-        _LOG.info("sidecar_stopped clean=%s", report.clean)
-        _remove_log_handler(log_handler)
+        if previous_portable_root is None:
+            os.environ.pop(ENV_PORTABLE_ROOT, None)
+        else:
+            os.environ[ENV_PORTABLE_ROOT] = previous_portable_root
 
     if not report.clean:
         _write_stderr(protocol_stderr, "MemeSort sidecar did not shut down cleanly.")

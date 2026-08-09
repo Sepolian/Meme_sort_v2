@@ -11,6 +11,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
@@ -1242,12 +1245,11 @@ struct SidecarLaunch {
 
 impl SidecarLaunch {
     fn for_current_build(_app: &AppHandle) -> Result<Self, SidecarError> {
-        let library_root = default_library_root()?;
-        let log_dir = library_root.join("logs");
-
         #[cfg(debug_assertions)]
         {
             let repository_root = repository_root()?;
+            let library_root = default_library_root(&repository_root);
+            let log_dir = library_root.join("logs");
             let python = env::var_os("MEMESORT_SIDECAR_PYTHON")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| {
@@ -1278,12 +1280,10 @@ impl SidecarLaunch {
 
         #[cfg(not(debug_assertions))]
         {
-            let resource_dir = _app.path().resource_dir().map_err(|error| {
-                SidecarError::new(format!(
-                    "Could not resolve the Tauri resource directory: {error}"
-                ))
-            })?;
-            let executable = resource_dir.join(SIDECAR_BINARY_NAME);
+            let portable_root = executable_root()?;
+            let library_root = default_library_root(&portable_root);
+            let log_dir = library_root.join("logs");
+            let executable = portable_root.join("sidecar").join(SIDECAR_BINARY_NAME);
             if !executable.is_file() {
                 return Err(SidecarError::new(format!(
                     "MemeSort sidecar is missing at {}.",
@@ -1297,22 +1297,37 @@ impl SidecarLaunch {
                     library_root.display().to_string(),
                     "--log-dir".into(),
                     log_dir.display().to_string(),
+                    "--portable-root".into(),
+                    portable_root.display().to_string(),
                 ],
-                working_directory: resource_dir,
+                working_directory: portable_root,
             })
         }
     }
 
     fn spawn(&self) -> Result<Child, SidecarError> {
-        Command::new(&self.executable)
+        let mut command = Command::new(&self.executable);
+        command
             .args(&self.arguments)
             .current_dir(&self.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        command
             .spawn()
             .map_err(|error| SidecarError::new(format!("Could not start the sidecar: {error}")))
     }
+}
+
+#[cfg(not(debug_assertions))]
+fn executable_root() -> Result<PathBuf, SidecarError> {
+    env::current_exe()
+        .map_err(|error| SidecarError::new(format!("Could not resolve MemeSort.exe: {error}")))?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| SidecarError::new("Could not resolve the MemeSort portable root."))
 }
 
 #[cfg(debug_assertions)]
@@ -1324,14 +1339,11 @@ fn repository_root() -> Result<PathBuf, SidecarError> {
         .ok_or_else(|| SidecarError::new("Could not resolve the MemeSort repository root."))
 }
 
-fn default_library_root() -> Result<PathBuf, SidecarError> {
+fn default_library_root(portable_root: &Path) -> PathBuf {
     if let Some(root) = env::var_os("MEMESORT_LIBRARY_ROOT") {
-        return Ok(PathBuf::from(root));
+        return PathBuf::from(root);
     }
-    let appdata = env::var_os("APPDATA").ok_or_else(|| {
-        SidecarError::new("APPDATA is required to resolve the MemeSort Library Root.")
-    })?;
-    Ok(PathBuf::from(appdata).join("MemeSort"))
+    portable_root.join("MemeSortData").join("library")
 }
 
 fn parse_handshake(line: &str) -> Result<Handshake, SidecarError> {
@@ -1631,19 +1643,29 @@ mod tests {
     use std::{
         io::{Read, Write},
         net::TcpListener,
-        path::PathBuf,
+        path::{Path, PathBuf},
         thread,
     };
 
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
-        managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
-        validate_asset_ids, validate_duplicate_threshold, validate_search_query,
+        default_library_root, managed_media_path, parse_handshake, parse_json_response,
+        validate_asset_id, validate_asset_ids, validate_duplicate_threshold, validate_search_query,
         validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
         BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
         RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
+
+    #[test]
+    fn derives_the_default_library_from_the_portable_root() {
+        let portable_root = Path::new(r"C:\MemeSort-portable");
+
+        assert_eq!(
+            default_library_root(portable_root),
+            PathBuf::from(r"C:\MemeSort-portable\MemeSortData\library")
+        );
+    }
 
     #[test]
     fn accepts_the_versioned_loopback_handshake() {

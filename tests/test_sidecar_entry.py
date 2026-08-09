@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from memesort_worker.local_app_host import LocalAppHost, ShutdownReport, STATE_STOPPED
+from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.sidecar_entry import PROTOCOL_VERSION, SidecarHandshake, main
 
 
@@ -53,6 +54,41 @@ def _test_host_factory(config):
 
 
 class SidecarEntryTests(unittest.TestCase):
+    def test_portable_root_rehomes_manifest_artifacts_for_the_entire_sidecar_session(self) -> None:
+        class StubHost:
+            def start(self):
+                return type(
+                    "Info",
+                    (),
+                    {
+                        "origin": "http://127.0.0.1:1234",
+                        "bootstrap_url": "http://127.0.0.1:1234/?bootstrap=test",
+                        "library_root": Path("C:/library"),
+                    },
+                )()
+
+            def stop(self):
+                return ShutdownReport()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            portable_root = Path(temp_dir) / "MemeSort-portable"
+            observed: list[Path] = []
+            result = main(
+                ["--portable-root", str(portable_root)],
+                stdin=io.StringIO(),
+                stdout=io.StringIO(),
+                stderr=io.StringIO(),
+                host_factory=lambda _config: (
+                    observed.append(load_runtime_manifest().model_install_dir) or StubHost()
+                ),
+            )
+
+        self.assertEqual(0, result)
+        self.assertEqual(
+            [portable_root.resolve() / "MemeSortData" / "models" / "gguf" / "qwen3-2b-q4_k_m"],
+            observed,
+        )
+
     def _start_sidecar(self, library_root: Path):
         control = _ControlPipe()
         stdout = _NotifyingOutput()

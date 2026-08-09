@@ -9,11 +9,29 @@ from unittest import mock
 from memesort_worker.app_paths import (
     ENV_APP_ROOT,
     ENV_LIBRARY_ROOT,
+    ENV_PORTABLE_ROOT,
     AppPaths,
 )
 
 
 class AppPathsDiscoveryTests(unittest.TestCase):
+    def test_portable_layout_keeps_all_mutable_data_beside_the_executable_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            portable_root = Path(temp_dir) / "MemeSort-portable"
+            paths = AppPaths.discover(
+                env={
+                    ENV_PORTABLE_ROOT: str(portable_root),
+                    "APPDATA": r"C:\\Users\\Someone\\AppData\\Roaming",
+                }
+            )
+
+            data_root = portable_root.resolve() / "MemeSortData"
+            self.assertEqual(paths.portable_root, portable_root.resolve())
+            self.assertEqual(paths.data_root, data_root)
+            self.assertEqual(paths.default_library_root, data_root / "library")
+            self.assertEqual(paths.models_root, data_root / "models")
+            self.assertEqual(paths.runtime_root, data_root / "runtime")
+
     def test_development_layout_points_at_source_checkout(self) -> None:
         paths = AppPaths.discover(env={})
 
@@ -24,15 +42,18 @@ class AppPathsDiscoveryTests(unittest.TestCase):
         self.assertTrue(paths.static_root.is_dir())
         self.assertTrue(paths.manifest_path.is_file())
 
-    def test_roaming_location_is_the_default_library_root(self) -> None:
+    def test_application_root_is_the_default_portable_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            roaming = Path(temp_dir) / "Roaming"
-            paths = AppPaths.discover(env={"APPDATA": str(roaming)})
-
-            self.assertEqual(
-                paths.default_library_root,
-                (roaming / "MemeSort").resolve(),
+            app_root = Path(temp_dir) / "MemeSort-portable"
+            paths = AppPaths.discover(
+                env={
+                    ENV_APP_ROOT: str(app_root),
+                    "APPDATA": str(Path(temp_dir) / "Roaming"),
+                }
             )
+
+            self.assertEqual(paths.portable_root, app_root.resolve())
+            self.assertEqual(paths.default_library_root, app_root.resolve() / "MemeSortData" / "library")
 
     def test_environment_overrides_take_priority(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
