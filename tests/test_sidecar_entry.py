@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from memesort_worker.local_app_host import LocalAppHost, ShutdownReport, STATE_STOPPED
 from memesort_worker.runtime_manifest import load_runtime_manifest
+from memesort_worker.runtime_activation import expected_activation_record
 from memesort_worker.sidecar_entry import PROTOCOL_VERSION, SidecarHandshake, main
 
 
@@ -54,6 +55,44 @@ def _test_host_factory(config):
 
 
 class SidecarEntryTests(unittest.TestCase):
+    def test_activation_command_requires_an_explicit_portable_root(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        result = main(
+            ["--write-runtime-activation"],
+            stdout=stdout,
+            stderr=stderr,
+            host_factory=lambda _config: self.fail("activation must not start host"),
+        )
+
+        self.assertEqual(2, result)
+        self.assertEqual("", stdout.getvalue())
+        self.assertIn("requires an explicit --portable-root", stderr.getvalue())
+
+    def test_portable_activation_command_writes_the_rehomed_record_without_starting_host(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            portable_root = Path(temp_dir) / "MemeSort-portable"
+            stdout = io.StringIO()
+            result = main(
+                [
+                    "--portable-root",
+                    str(portable_root),
+                    "--write-runtime-activation",
+                ],
+                stdout=stdout,
+                host_factory=lambda _config: self.fail("activation must not start host"),
+            )
+            manifest = load_runtime_manifest(portable_data_root=portable_root / "MemeSortData")
+            activation_path = portable_root / "MemeSortData" / "runtime" / "active-runtime.json"
+
+            self.assertEqual(0, result)
+            self.assertEqual(f"{activation_path}\n", stdout.getvalue())
+            self.assertEqual(
+                expected_activation_record(manifest),
+                json.loads(activation_path.read_text(encoding="utf-8")),
+            )
+
     def test_portable_root_rehomes_manifest_artifacts_for_the_entire_sidecar_session(self) -> None:
         class StubHost:
             def start(self):

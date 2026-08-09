@@ -23,6 +23,8 @@ from .local_app_host import (
     LocalAppHostConfig,
     LocalAppHostInfo,
 )
+from .runtime_activation import write_runtime_activation
+from .runtime_manifest import load_runtime_manifest
 
 
 PROTOCOL_VERSION = 1
@@ -58,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--library-root",
         default=None,
-        help="Library Root. Defaults to AppData\\Roaming\\MemeSort.",
+        help="Library Root. Defaults to the managed application Library.",
     )
     parser.add_argument(
         "--log-dir",
@@ -69,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--portable-root",
         default=None,
         help="Directory containing MemeSort.exe; runtime data stays beneath MemeSortData.",
+    )
+    parser.add_argument(
+        "--write-runtime-activation",
+        action="store_true",
+        help="Write the verified runtime activation record, then exit.",
     )
     return parser
 
@@ -98,6 +105,17 @@ def main(
         os.environ[ENV_PORTABLE_ROOT] = str(Path(args.portable_root).expanduser().resolve())
     try:
         _configure_protocol_encoding(protocol_stdout)
+        if args.write_runtime_activation:
+            if not args.portable_root:
+                _write_stderr(
+                    protocol_stderr,
+                    "Portable activation requires an explicit --portable-root.",
+                )
+                return 2
+            activation_path = write_runtime_activation(load_runtime_manifest())
+            protocol_stdout.write(f"{activation_path}\n")
+            protocol_stdout.flush()
+            return 0
         log_handler = _configure_log_handler(args.log_dir, protocol_stderr)
 
         library_root = (

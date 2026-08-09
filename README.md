@@ -58,6 +58,15 @@ MemeSort-portable/
 
 The package does not include the managed Library, GGUF main model, multimodal projector, or llama.cpp Vulkan runtime. `MemeSortData` must remain beside `MemeSort.exe`; it is calculated from the executable location, not the current working directory or `%APPDATA%`.
 
+After extracting the ZIP, install the separately downloaded runtime, semantic models, and CPU OCR environment in that same folder:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\setup_portable_runtime.ps1
+```
+
+The script reads the packaged manifest, verifies every downloaded Vulkan/GGUF artifact by size and SHA256, and writes only below `MemeSortData`. It creates `MemeSortData\runtime\ocr-venv` and provisions the fixed PP-OCRv5 mobile cache at `MemeSortData\models\paddleocr`; neither is present in the ZIP. Use `-Offline` only when the required verified downloads are already present in `MemeSortData\runtime\downloads`.
+
 ## Launch and use
 
 ```powershell
@@ -74,9 +83,9 @@ Changing the manifest is a developer upgrade, not an in-app setting. Update all 
 
 ## OCR
 
-Semantic embeddings use Vulkan. OCR intentionally uses CPU in `.venv-ocr` so it remains independent of the GPU vendor and the Vulkan inference path.
+Semantic embeddings use Vulkan. OCR intentionally uses CPU in `.venv-ocr` for the repository workflow and `MemeSortData\runtime\ocr-venv` in the portable package, so it remains independent of the GPU vendor and the Vulkan inference path.
 
-The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) on CPU, with document orientation, unwarping, and text-line orientation disabled. Its worker always runs from the repository-local `.venv-ocr`; a missing environment is an explicit setup error, never a debug OCR fallback. OCR model data is cached under `.models\paddleocr`, and the worker protocol is UTF-8 on Windows.
+The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) on CPU, with document orientation, unwarping, and text-line orientation disabled. A missing environment is an explicit setup error, never a debug OCR fallback. Its cache is `.models\paddleocr` in the repository workflow and `MemeSortData\models\paddleocr` in a portable package; the worker protocol is UTF-8 on Windows.
 
 ## Validation and evaluation
 

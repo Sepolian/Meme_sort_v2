@@ -32,6 +32,34 @@ class SetupScriptTests(unittest.TestCase):
         self.assertNotIn("42a4ebc629ecc651", script)
         self.assertNotIn("3f89a7768ffa6606", script)
 
+    def test_portable_setup_installs_only_under_portable_data_root(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "scripts" / "setup_portable_runtime.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("[string]$PortableRoot = $PSScriptRoot", script)
+        self.assertIn("MemeSortData", script)
+        self.assertIn("Convert-ManifestDataPath", script)
+        self.assertIn("Portable manifest path must start with .runtime or .models", script)
+        self.assertIn("runtime\\ocr-venv", script)
+        self.assertIn("--write-runtime-activation", script)
+        self.assertIn("$manifest.platform.device -ne \"Vulkan0\"", script)
+        self.assertIn("Assert-VerifiedFile", script)
+        self.assertIn("PADDLE_PDX_CACHE_HOME", script)
+        self.assertIn("Failed to provision the pinned PaddleOCR models.", script)
+        self.assertIn("$ocrWorker --lang ch --device cpu", script)
+        self.assertNotIn("UV_PROJECT_ENVIRONMENT", script)
+
+    def test_portable_build_includes_the_provisioning_resources_but_not_artifacts(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "scripts" / "build_portable.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("setup_portable_runtime.ps1", script)
+        self.assertIn("requirements-ocr.txt", script)
+        self.assertIn("paddle_ocr_worker.py", script)
+        self.assertNotIn("Copy-Item -Recurse -LiteralPath (Join-Path $repoRoot \".models\")", script)
+
 
 if __name__ == "__main__":
     unittest.main()

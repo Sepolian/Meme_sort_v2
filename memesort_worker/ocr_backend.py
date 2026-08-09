@@ -8,6 +8,8 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
+from .app_paths import AppPaths, ENV_PORTABLE_ROOT
+
 
 class OcrBackend(Protocol):
     backend_id: str
@@ -34,9 +36,7 @@ class PaddleOcrWorkerBackend:
         # Do not inherit a user-level Paddle cache.  It can point to an
         # inaccessible or incompatible model directory and would bypass the
         # repository-local OCR installation contract.
-        worker_env["PADDLE_PDX_CACHE_HOME"] = str(
-            _project_root() / ".models" / "paddleocr"
-        )
+        worker_env["PADDLE_PDX_CACHE_HOME"] = str(_ocr_model_cache_path())
         worker_env["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
         # The parent and worker exchange one JSON object per line.  On Windows a
         # redirected Python stdout can otherwise inherit the active ANSI code
@@ -116,18 +116,39 @@ def _project_root() -> Path:
 
 
 def _ocr_python_path() -> Path:
+    if os.environ.get(ENV_PORTABLE_ROOT):
+        return (
+            AppPaths.discover().runtime_root
+            / "ocr-venv"
+            / "Scripts"
+            / "python.exe"
+        )
     root = _project_root()
     return root / ".venv-ocr" / "Scripts" / "python.exe"
+
+
+def _ocr_worker_path() -> Path:
+    if os.environ.get(ENV_PORTABLE_ROOT):
+        return AppPaths.discover().portable_root / "scripts" / "paddle_ocr_worker.py"
+    return _project_root() / "scripts" / "paddle_ocr_worker.py"
+
+
+def _ocr_model_cache_path() -> Path:
+    if os.environ.get(ENV_PORTABLE_ROOT):
+        return AppPaths.discover().models_root / "paddleocr"
+    return _project_root() / ".models" / "paddleocr"
 
 
 def get_ocr_backend(library_root: Path, _embedding_backend_name: str) -> OcrBackend:
     del library_root
     python_executable = _ocr_python_path()
-    worker_script = _project_root() / "scripts" / "paddle_ocr_worker.py"
+    worker_script = _ocr_worker_path()
     if not python_executable.is_file():
         raise RuntimeError(
-            "Pinned OCR environment is missing. Run scripts/setup_windows_llama.ps1."
+            "Pinned OCR environment is missing. Run the appropriate MemeSort setup script."
         )
+    if not worker_script.is_file():
+        raise RuntimeError(f"Pinned OCR worker is missing: {worker_script}")
     return PaddleOcrWorkerBackend(
         python_executable,
         worker_script,
