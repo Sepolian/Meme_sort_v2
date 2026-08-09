@@ -3,6 +3,9 @@ export interface AppState {
   runtime: {
     backend_name: string;
     device: string;
+    model_label?: string;
+    output_dimension?: number;
+    storage_dtype?: string;
   };
   setup_state: {
     health_check_ok: boolean;
@@ -10,6 +13,7 @@ export interface AppState {
       ready: boolean;
       ready_detail?: string;
     };
+    checklist?: Array<{ id: string; label: string; done: boolean; detail: string }>;
   };
   library_status: {
     total_assets: number;

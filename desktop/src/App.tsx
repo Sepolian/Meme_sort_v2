@@ -135,6 +135,11 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
           MemeSort uses the manifest-pinned llama.cpp Vulkan0 runtime. Runtime and model selection are not configurable from the desktop app.
         </p>
       </section>
+      <section className="surface import-card" aria-labelledby="runtime-descriptor-title">
+        <h2 id="runtime-descriptor-title">Runtime Descriptor</h2>
+        <p>{state.runtime.model_label ?? "Manifest-pinned model"} · {state.runtime.output_dimension ?? "unknown"}d · {state.runtime.storage_dtype ?? "unknown"}</p>
+        <p>{state.runtime.backend_name} / {state.runtime.device}; this descriptor is read-only.</p>
+      </section>
       {state.setup_state.health_check_ok ? (
         <section className="notice notice-success" role="status">
           <strong>Runtime ready in this app session.</strong>
@@ -148,6 +153,10 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
         <p>Checks the manifest-pinned llama.cpp Vulkan0 runtime in this application session.</p>
         <div className="import-actions"><button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void runHealthCheck()}>Run Vulkan health check</button></div>
         {healthResult ? <ul className="detail-list">{healthResult.diagnostic_steps.map((step) => <li key={`${step.step}-${step.status}`}><strong>{step.step} · {step.status} · {step.detail}</strong></li>)}</ul> : null}
+      </section>
+      <section className="surface import-card" aria-labelledby="setup-checklist-title">
+        <h2 id="setup-checklist-title">Setup checklist</h2>
+        {(state.setup_state.checklist?.length ?? 0) ? <ul className="detail-list">{state.setup_state.checklist!.map((item) => <li key={item.id}><strong>{item.done ? "Done" : "Next"} · {item.label} · {item.detail}</strong></li>)}</ul> : <p>Setup progress is not available yet.</p>}
       </section>
       <section className="surface import-card" aria-labelledby="import-title">
         <h2 id="import-title">Import Assets</h2>

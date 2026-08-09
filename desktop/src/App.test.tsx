@@ -72,8 +72,11 @@ const assetDetail: AssetDetail = {
 const client = {
   getAppState: async () => ({
     library_root: "C:/Library",
-    runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-    setup_state: { health_check_ok: false },
+    runtime: { backend_name: "llama.cpp", device: "Vulkan0", model_label: "Qwen3-VL", output_dimension: 2048, storage_dtype: "float32" },
+    setup_state: {
+      health_check_ok: false,
+      checklist: [{ id: "health-check", label: "Run runtime health check", done: false, detail: "Vulkan health has not been checked." }],
+    },
     library_status: {
       total_assets: 3,
       job_counts: { pending: 2 },
@@ -306,6 +309,15 @@ describe("App", () => {
     renderApp("/setup");
 
     expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+  });
+
+  it("shows the read-only Runtime Descriptor and setup checklist", async () => {
+    renderApp("/setup");
+
+    expect(await screen.findByRole("heading", { name: "Runtime Descriptor" })).toBeInTheDocument();
+    expect(screen.getByText("Qwen3-VL · 2048d · float32")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Setup checklist" })).toBeInTheDocument();
+    expect(screen.getByText("Next · Run runtime health check · Vulkan health has not been checked.")).toBeInTheDocument();
   });
 
   it("runs the pinned Vulkan health check and displays its diagnostic step", async () => {
