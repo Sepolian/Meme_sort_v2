@@ -1,6 +1,20 @@
+mod sidecar;
+
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            let sidecar = sidecar::SidecarSession::start(app.handle())?;
+            app.manage(sidecar::SidecarState::new(sidecar));
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                sidecar::shutdown_managed_sidecar(app);
+            }
+        });
 }
