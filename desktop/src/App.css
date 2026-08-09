@@ -75,6 +75,16 @@ p { color: var(--muted); line-height: 1.6; }
 .empty-state > div { margin-top: 20px; }
 .setup-card, .import-card { margin-bottom: 16px; }
 .import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.search-panel { margin-bottom: 16px; }
+.search-form { display: grid; gap: 8px; }
+.search-form label { color: var(--text); font-weight: 700; }
+.search-form > div { display: flex; gap: 8px; }
+.search-form input { min-width: 0; flex: 1; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--canvas); color: var(--text); }
+.search-results { display: grid; gap: 10px; }
+.search-result { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 14px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.search-result img, .search-result .media-placeholder { width: 88px; height: 68px; border-radius: 7px; object-fit: cover; }
+.search-result strong { overflow-wrap: anywhere; }
+.search-result p { margin: 5px 0 0; font-size: .875rem; }
 .mono { overflow-wrap: anywhere; font-family: "Cascadia Mono", Consolas, monospace; font-size: .875rem; }
 .notice { display: grid; gap: 4px; }
 .notice-warning { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); }

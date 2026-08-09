@@ -23,6 +23,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BATCH_ASSETS: usize = 1_000;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
+const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
@@ -338,6 +339,37 @@ impl SidecarSession {
         )
     }
 
+    fn search_text_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        query: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(
+            origin,
+            session_cookie,
+            ApiRoute::TextSearch {
+                query: validate_search_query(query)?,
+                request_id: validate_asset_id(request_id)?,
+            },
+        )
+    }
+
+    fn cancel_search_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::CancelSearch,
+            &SearchRequestPayload {
+                request_id: validate_asset_id(request_id)?,
+            },
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -350,6 +382,7 @@ enum ApiRoute {
     State,
     Assets,
     AssetDetail(String),
+    TextSearch { query: String, request_id: String },
 }
 
 #[derive(Clone, Copy)]
@@ -383,6 +416,7 @@ enum MutationRoute {
     StartImport,
     PauseImport,
     ResumeImport,
+    CancelSearch,
 }
 
 impl MutationRoute {
@@ -394,6 +428,7 @@ impl MutationRoute {
             Self::StartImport => "/api/import/start",
             Self::PauseImport => "/api/import/pause",
             Self::ResumeImport => "/api/import/resume",
+            Self::CancelSearch => "/api/search/cancel",
         }
     }
 }
@@ -425,6 +460,11 @@ struct StartImportPayload {
 struct EmptyPayload {}
 
 #[derive(Serialize)]
+struct SearchRequestPayload {
+    request_id: String,
+}
+
+#[derive(Serialize)]
 pub struct FolderSelection {
     selected_path: Option<String>,
 }
@@ -435,6 +475,10 @@ impl ApiRoute {
             Self::State => "/api/state".to_owned(),
             Self::Assets => "/api/assets".to_owned(),
             Self::AssetDetail(asset_id) => format!("/api/asset-detail?asset_id={asset_id}"),
+            Self::TextSearch { query, request_id } => format!(
+                "/api/search?query={}&top_k=18&request_id={request_id}",
+                percent_encode_query_value(query)
+            ),
         }
     }
 }
@@ -665,6 +709,31 @@ pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> 
     with_sidecar_session(&app, |session| session.resume_import())
 }
 
+#[tauri::command]
+pub async fn search_text(
+    app: AppHandle,
+    query: String,
+    request_id: String,
+) -> Result<serde_json::Value, SidecarError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_sidecar_connection(&app, |origin, session_cookie| {
+            SidecarSession::search_text_for_connection(origin, session_cookie, &query, &request_id)
+        })
+    })
+    .await
+    .map_err(|error| SidecarError::new(format!("Text Search Request did not complete: {error}")))?
+}
+
+#[tauri::command]
+pub fn cancel_search(
+    app: AppHandle,
+    request_id: String,
+) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::cancel_search_for_connection(origin, session_cookie, &request_id)
+    })
+}
+
 fn start_selected_import(
     app: &AppHandle,
     start_indexing: bool,
@@ -693,6 +762,26 @@ fn with_sidecar_session<T>(
         .as_ref()
         .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
     operation(session)
+}
+
+fn with_sidecar_connection<T>(
+    app: &AppHandle,
+    operation: impl FnOnce(&str, &str) -> Result<T, SidecarError>,
+) -> Result<T, SidecarError> {
+    let state = app
+        .try_state::<SidecarState>()
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar is not available."))?;
+    let (origin, session_cookie) = {
+        let session = state
+            .0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort sidecar state is unavailable."))?;
+        let session = session
+            .as_ref()
+            .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
+        (session.origin.clone(), session.session_cookie.clone())
+    };
+    operation(&origin, &session_cookie)
 }
 
 pub fn media_protocol_response(
@@ -1041,6 +1130,31 @@ fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
     Ok(source_path.to_owned())
 }
 
+fn validate_search_query(query: &str) -> Result<String, SidecarError> {
+    if query.trim().is_empty()
+        || query.len() > MAX_SEARCH_QUERY_BYTES
+        || query.contains('\0')
+        || query.contains('\r')
+        || query.contains('\n')
+    {
+        return Err(SidecarError::new("Invalid MemeSort text Search Request."));
+    }
+    Ok(query.to_owned())
+}
+
+fn percent_encode_query_value(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('%');
+            encoded.push_str(&format!("{byte:02X}"));
+        }
+    }
+    encoded
+}
+
 fn media_error_response(error: SidecarError) -> http::Response<Vec<u8>> {
     let status = if error.detail.starts_with("Unknown MemeSort media route")
         || error.detail.starts_with("Invalid MemeSort media path")
@@ -1075,9 +1189,9 @@ mod tests {
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
-        validate_asset_ids, validate_source_path, ApiRoute, AssetIdPayload, BatchAssetAction,
-        BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
-        RemoveSourceRecordPayload, StartImportPayload,
+        validate_asset_ids, validate_search_query, validate_source_path, ApiRoute, AssetIdPayload,
+        BatchAssetAction, BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
+        RemoveSourceRecordPayload, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1309,6 +1423,85 @@ mod tests {
         assert!(validate_source_path("").is_err());
         assert!(validate_source_path("C:/Source/unsafe\npath.gif").is_err());
         assert!(BatchAssetAction::parse("arbitrary-request").is_err());
+    }
+
+    #[test]
+    fn forwards_a_uuid_scoped_text_search_and_its_cancellation() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut search_stream, _) = listener.accept().expect("search request should connect");
+            let mut search_request = [0_u8; 1024];
+            let size = search_stream
+                .read(&mut search_request)
+                .expect("search request should read");
+            let search_request =
+                std::str::from_utf8(&search_request[..size]).expect("request must be UTF-8");
+            assert!(search_request.starts_with("GET /api/search?query=surprised%20reaction&top_k=18&request_id=123e4567-e89b-12d3-a456-426614174000 HTTP/1.1"));
+            assert!(search_request.contains("Cookie: memesort_session=test-token"));
+            search_stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"results\":[]}",
+                )
+                .expect("search response should write");
+            drop(search_stream);
+
+            let (mut cancel_stream, _) = listener.accept().expect("cancel request should connect");
+            let mut cancel_request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = cancel_stream
+                    .read(&mut chunk)
+                    .expect("cancel request should read");
+                cancel_request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = cancel_request
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers = std::str::from_utf8(&cancel_request[..header_end])
+                    .expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("cancel request should include a body length");
+                if cancel_request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let cancel_request =
+                std::str::from_utf8(&cancel_request).expect("request must be UTF-8");
+            assert!(cancel_request.starts_with("POST /api/search/cancel HTTP/1.1"));
+            assert!(cancel_request.contains("Cookie: memesort_session=test-token"));
+            assert!(
+                cancel_request.contains("\"request_id\":\"123e4567-e89b-12d3-a456-426614174000\"")
+            );
+            cancel_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"cancelled\":true}")
+                .expect("cancel response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+        let request_id = "123e4567-e89b-12d3-a456-426614174000";
+
+        SidecarSession::search_text_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            "surprised reaction",
+            request_id,
+        )
+        .expect("text search should succeed");
+        SidecarSession::cancel_search_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            request_id,
+        )
+        .expect("search cancellation should succeed");
+        server.join().expect("test server should finish");
+
+        assert!(validate_search_query("\n").is_err());
+        assert!(validate_search_query("valid query").is_ok());
     }
 
     #[test]

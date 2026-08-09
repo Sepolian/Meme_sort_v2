@@ -44,6 +44,26 @@ export interface FolderSelection {
   selected_path: string | null;
 }
 
+export interface SearchResult {
+  library_root: string;
+  active_recipe_id: string;
+  active_recipe_label: string;
+  query: string;
+  top_k: number;
+  results: SearchAsset[];
+}
+
+export interface SearchAsset {
+  asset_id: string;
+  library_url: string;
+  thumbnail_url: string | null;
+  library_path: string;
+  media_type: string;
+  score: number;
+  match_sources: string[];
+  ocr_snippet?: string | null;
+}
+
 export interface AssetSummary {
   asset_id: string;
   library_path: string;

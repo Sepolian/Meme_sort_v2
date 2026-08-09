@@ -58,4 +58,16 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(5, "pause_import");
     expect(invokeCommand).toHaveBeenNthCalledWith(6, "resume_import");
   });
+
+  it("uses a UUID-scoped command pair for text Search Requests", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ results: [] });
+    const client = createMemeSortClient(invokeCommand);
+    const requestId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.searchText("surprised reaction", requestId);
+    await client.cancelSearch(requestId);
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "search_text", { query: "surprised reaction", requestId });
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "cancel_search", { requestId });
+  });
 });

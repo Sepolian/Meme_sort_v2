@@ -119,6 +119,15 @@ const client = {
   startImportAndIndex: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   pauseImport: vi.fn(async () => ({ status: "pausing", running: true, paused: false, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   resumeImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
+  searchText: vi.fn(async (query: string) => ({
+    library_root: "C:/Library",
+    active_recipe_id: "recipe-1",
+    active_recipe_label: "Vulkan0 recipe",
+    query,
+    top_k: 18,
+    results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
+  })),
+  cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
 };
 
 describe("App", () => {
@@ -193,6 +202,16 @@ describe("App", () => {
     renderApp("/setup");
 
     expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+  });
+
+  it("submits a UUID-scoped text Search Request and shows its Asset matches", async () => {
+    renderApp("/search/text");
+
+    fireEvent.change(await screen.findByLabelText("Search text"), { target: { value: "surprised reaction" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText("originals/first.gif")).toBeInTheDocument();
+    expect(client.searchText).toHaveBeenCalledWith("surprised reaction", expect.any(String));
   });
 
   it("imports only a folder selected through the native dialog", async () => {

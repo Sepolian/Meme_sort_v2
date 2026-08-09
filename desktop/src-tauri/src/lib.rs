@@ -34,7 +34,9 @@ pub fn run() {
             sidecar::start_import,
             sidecar::start_import_and_index,
             sidecar::pause_import,
-            sidecar::resume_import
+            sidecar::resume_import,
+            sidecar::search_text,
+            sidecar::cancel_search
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

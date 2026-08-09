@@ -36,6 +36,8 @@ const client: MemeSortClient = {
   startImportAndIndex: unsupported,
   pauseImport: unsupported,
   resumeImport: unsupported,
+  searchText: unsupported,
+  cancelSearch: unsupported,
 };
 
 async function unsupported(): Promise<never> {
