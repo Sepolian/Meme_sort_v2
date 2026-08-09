@@ -10,18 +10,11 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.4.6",
     "pillow>=12.2.0",
-    # Native desktop window backend. Windows-only, matching the project's
-    # platform contract; it drives the Evergreen WebView2 runtime and pulls the
-    # pythonnet-based backend on Windows automatically.
-    "pywebview>=5.0 ; sys_platform == 'win32'",
 ]
 
 [project.scripts]
 memesort-worker = "memesort_worker.cli:main"
 memesort-sidecar = "memesort_worker.sidecar_entry:main"
-
-[project.gui-scripts]
-memesort-desktop = "memesort_worker.desktop_entry:main"
 
 [tool.setuptools]
 packages = ["memesort_worker"]

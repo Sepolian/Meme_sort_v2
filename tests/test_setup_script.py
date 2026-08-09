@@ -5,16 +5,22 @@ from pathlib import Path
 
 
 class SetupScriptTests(unittest.TestCase):
-    def test_launcher_validates_the_manifest_owned_runtime(self) -> None:
+    def test_tauri_portable_is_the_only_desktop_distribution_path(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        for launcher_name in ("start_memesort.ps1", "start_memesort.bat"):
-            with self.subTest(launcher_name=launcher_name):
-                script = (root / launcher_name).read_text(encoding="utf-8")
+        pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
 
-                self.assertIn("runtime_activation validate --manifest", script)
-                self.assertIn("runtime-manifest.json", script)
-                self.assertNotIn("MEMESORT_LLAMA_SERVER", script)
-                self.assertNotIn("llama.cpp-b9982-vulkan", script)
+        self.assertNotIn("pywebview", pyproject)
+        self.assertNotIn("memesort-desktop", pyproject)
+        for retired_path in (
+            "memesort_desktop.spec",
+            "scripts/build_windows_bundle.ps1",
+            "start_memesort.ps1",
+            "start_memesort.bat",
+            "memesort_worker/desktop_app.py",
+            "memesort_worker/desktop_entry.py",
+        ):
+            with self.subTest(retired_path=retired_path):
+                self.assertFalse((root / retired_path).exists())
 
     def test_windows_setup_is_manifest_driven_and_activates_last(self) -> None:
         script = (

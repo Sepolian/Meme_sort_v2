@@ -1,9 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Headless Python sidecar for the Tauri portable distribution.
 
-This intentionally has no pywebview, Python.NET, or legacy desktop entry point.
-Models, Vulkan runtime files, and every mutable Library file remain outside the
-bundle under MemeSortData.
+This contains the headless application host only. Models, Vulkan runtime files,
+and every mutable Library file remain outside the bundle under MemeSortData.
 """
 
 from pathlib import Path
@@ -24,7 +23,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["webview", "clr", "clr_loader"],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )

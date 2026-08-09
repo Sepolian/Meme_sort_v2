@@ -4,7 +4,6 @@ import argparse
 import json
 from typing import Sequence
 
-from .desktop_app import launch_desktop_shell, run_smoke_test
 from .launcher import launch_local_mvp_app
 from .asset_catalog import import_folder, initialize_library
 from .indexing_pipeline import run_pending_jobs as run_jobs
@@ -73,26 +72,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-browser",
         action="store_true",
         help="Do not open the local app in the default browser.",
-    )
-
-    desktop_parser = subparsers.add_parser(
-        "desktop-shell",
-        help="Open the native MemeSort desktop window backed by the local runtime",
-    )
-    desktop_parser.add_argument(
-        "--library-root",
-        default=None,
-        help="Optional library root directory. Defaults to AppData\\Roaming\\MemeSort.",
-    )
-    desktop_parser.add_argument(
-        "--browser",
-        action="store_true",
-        help="Use the controlled browser fallback instead of the native window.",
-    )
-    desktop_parser.add_argument(
-        "--smoke-test",
-        action="store_true",
-        help="Start the host, confirm it serves, and exit without a GUI.",
     )
 
     return parser
@@ -188,14 +167,6 @@ def run(argv: Sequence[str] | None = None) -> int:
             open_browser=not args.no_browser,
         )
         return 0
-
-    if args.command == "desktop-shell":
-        if args.smoke_test:
-            return run_smoke_test(library_root=args.library_root)
-        return launch_desktop_shell(
-            library_root=args.library_root,
-            use_browser=args.browser,
-        )
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

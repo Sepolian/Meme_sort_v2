@@ -10,8 +10,7 @@ on:
 
 jobs:
   tests:
-    # Windows matches the project's platform contract (pywebview is
-    # declared only for sys_platform == 'win32').
+    # Windows matches the portable Tauri desktop platform contract.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

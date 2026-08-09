@@ -69,11 +69,7 @@ The script reads the packaged manifest, verifies every downloaded Vulkan/GGUF ar
 
 ## Launch and use
 
-```powershell
-.\start_memesort.ps1
-```
-
-The launcher validates that the repository-local runtime matches `runtime-manifest.json`; it does not accept an external executable. In the application:
+Run `MemeSort.exe` from the extracted portable folder, after its portable setup has completed. In the application:
 
 1. Run the Vulkan health check and confirm the reported GPU vendor, `Vulkan0`, and 2048d text and image smoke tests.
 2. Import a local folder. Files are copied into the library; repeated content adds a source record rather than another asset.
