@@ -179,6 +179,11 @@ const client = {
   pauseWorkerLoop: vi.fn(async () => ({ running: true, paused: true })),
   resumeWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
   triggerWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
+  retryFailedJobs: vi.fn(async () => ({
+    library_root: "C:/Library",
+    retried_jobs: 2,
+    failed_jobs_remaining: 0,
+  })),
   getPendingJobs: vi.fn(async () => ({
     jobs: [{
       job_id: "123e4567-e89b-12d3-a456-426614174003",
@@ -328,6 +333,15 @@ describe("App", () => {
 
     expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
+  });
+
+  it("retries failed Job records without changing Assets", async () => {
+    renderApp("/status");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry failed Jobs" }));
+
+    expect(client.retryFailedJobs).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Retried 2 failed Job record(s); 0 remain failed.")).toBeInTheDocument();
   });
 
   it("confirms deletion of selected Pending Job records without deleting Assets", async () => {

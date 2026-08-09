@@ -49,6 +49,12 @@ export interface DeletePendingJobsResult {
   skipped_job_ids: string[];
 }
 
+export interface RetryJobsResult {
+  library_root: string;
+  retried_jobs: number;
+  failed_jobs_remaining: number;
+}
+
 export interface ImportTask {
   status: string;
   running: boolean;

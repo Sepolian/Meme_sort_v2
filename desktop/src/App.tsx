@@ -488,6 +488,20 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
     }
   };
 
+  const retryFailedJobs = async () => {
+    setIsWorking(true);
+    setFeedback(null);
+    try {
+      const result = await client.retryFailedJobs();
+      setFeedback(`Retried ${result.retried_jobs} failed Job record(s); ${result.failed_jobs_remaining} remain failed.`);
+      onStateChanged();
+    } catch (error) {
+      setFeedback(tauriErrorDetail(error, "MemeSort could not retry failed Job records. Assets and generated files were not modified."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const togglePendingJob = (jobId: string) => {
     setSelectedPendingJobIds((current) => {
       const next = new Set(current);
@@ -534,6 +548,7 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
         <div className="import-actions">
           <button className="button" type="button" disabled={isWorking || !state.worker_loop.paused} onClick={() => void runWorkerAction(client.resumeWorkerLoop, "Worker Loop resumed.")}>Resume worker</button>
           <button className="button button-secondary" type="button" disabled={isWorking || state.worker_loop.paused} onClick={() => void runWorkerAction(client.pauseWorkerLoop, "Worker Loop paused.")}>Pause worker</button>
+          <button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void retryFailedJobs()}>Retry failed Jobs</button>
           <button className="button button-secondary" type="button" disabled={isWorking || !state.worker_loop.running} onClick={() => void runWorkerAction(client.triggerWorkerLoop, "Worker Loop tick requested.")}>Run one tick</button>
         </div>
         <p role="status">{feedback ?? (state.worker_loop.paused ? "Worker Loop is paused." : "Worker Loop is running.")}</p>

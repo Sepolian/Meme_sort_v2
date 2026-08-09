@@ -43,6 +43,7 @@ const client: MemeSortClient = {
   pauseWorkerLoop: unsupported,
   resumeWorkerLoop: unsupported,
   triggerWorkerLoop: unsupported,
+  retryFailedJobs: unsupported,
   getPendingJobs: unsupported,
   deletePendingJobs: unsupported,
   cancelSearch: unsupported,

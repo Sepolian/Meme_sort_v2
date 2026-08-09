@@ -100,17 +100,19 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenCalledWith("get_duplicates", { threshold: 0.92 });
   });
 
-  it("uses only named worker-loop control commands", async () => {
+  it("uses only named worker-loop and failed-Job retry commands", async () => {
     const invokeCommand = vi.fn().mockResolvedValue({ running: true, paused: false });
     const client = createMemeSortClient(invokeCommand);
 
     await client.pauseWorkerLoop();
     await client.resumeWorkerLoop();
     await client.triggerWorkerLoop();
+    await client.retryFailedJobs();
 
     expect(invokeCommand).toHaveBeenNthCalledWith(1, "pause_worker_loop");
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "resume_worker_loop");
     expect(invokeCommand).toHaveBeenNthCalledWith(3, "trigger_worker_loop");
+    expect(invokeCommand).toHaveBeenNthCalledWith(4, "retry_failed_jobs");
   });
 
   it("lists and removes only selected Pending Job records", async () => {

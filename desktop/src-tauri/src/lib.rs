@@ -42,6 +42,7 @@ pub fn run() {
             sidecar::pause_worker_loop,
             sidecar::resume_worker_loop,
             sidecar::trigger_worker_loop,
+            sidecar::retry_failed_jobs,
             sidecar::get_pending_jobs,
             sidecar::delete_pending_jobs,
             sidecar::cancel_search
