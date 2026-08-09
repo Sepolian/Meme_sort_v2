@@ -18,6 +18,8 @@ type MutationRequest =
   | { kind: "remove-source"; assetId: string; sourcePath: string }
   | { kind: "batch"; action: "delete" | "rebuild-active-index"; assetIds: string[] };
 
+type RevealRequest = { assetId: string; target: "managed" | "source"; sourcePath?: string };
+
 interface ConfirmAction {
   title: string;
   detail: string;
@@ -65,7 +67,7 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
   return <section className="detail-section"><h3>{title}</h3>{children}</section>;
 }
 
-function AssetDetailContent({ asset, onDeleteAsset, onRemoveSourceRecord, mutating }: { asset: AssetDetail; onDeleteAsset: () => void; onRemoveSourceRecord: (sourcePath: string) => void; mutating: boolean }) {
+function AssetDetailContent({ asset, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { asset: AssetDetail; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
   const preview = mediaUrl(asset.library_url);
   return (
     <div className="detail-content">
@@ -75,6 +77,7 @@ function AssetDetailContent({ asset, onDeleteAsset, onRemoveSourceRecord, mutati
           <span className={`status-pill status-${asset.status}`}>{statusLabel(asset.status)}</span>
           <h3>{assetName(asset)}</h3>
           <p>{dimensions(asset)} · {asset.media_type} · {asset.source_record_count} Source Record{asset.source_record_count === 1 ? "" : "s"}</p>
+          <button className="button button-secondary" type="button" disabled={revealing} onClick={onRevealManaged}>Reveal Managed File</button>
           <button className="button button-danger" type="button" disabled={mutating} onClick={onDeleteAsset}>Delete Asset</button>
         </div>
       </div>
@@ -85,7 +88,7 @@ function AssetDetailContent({ asset, onDeleteAsset, onRemoveSourceRecord, mutati
         </DetailSection>
         <DetailSection title="Source Records">
           {asset.source_records.length ? <ul className="detail-list">
-            {asset.source_records.map((source) => <li key={source.source_path}><span className="mono">{source.source_path}</span><button className="text-button detail-action" type="button" disabled={mutating} onClick={() => onRemoveSourceRecord(source.source_path)}>Remove Source Record</button></li>)}
+            {asset.source_records.map((source) => <li key={source.source_path}><span className="mono">{source.source_path}</span><button className="text-button detail-action" type="button" disabled={revealing} onClick={() => onRevealSource(source.source_path)}>Reveal Source</button><button className="text-button detail-action" type="button" disabled={mutating} onClick={() => onRemoveSourceRecord(source.source_path)}>Remove Source Record</button></li>)}
           </ul> : <p>No Source Records are available.</p>}
         </DetailSection>
         <DetailSection title="OCR">
@@ -99,7 +102,7 @@ function AssetDetailContent({ asset, onDeleteAsset, onRemoveSourceRecord, mutati
   );
 }
 
-function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRemoveSourceRecord, mutating }: { assetId: string; client: MemeSortClient; onClose: () => void; onDeleteAsset: () => void; onRemoveSourceRecord: (sourcePath: string) => void; mutating: boolean }) {
+function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { assetId: string; client: MemeSortClient; onClose: () => void; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
   const detailQuery = useQuery({ queryKey: ["asset-detail", assetId], queryFn: () => client.getAssetDetail(assetId) });
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -112,7 +115,7 @@ function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRemoveSo
         <div className="dialog-title-row"><div><p className="eyebrow">Asset detail</p><h2 id="asset-detail-title">Asset details</h2></div><button className="button button-secondary" type="button" autoFocus onClick={onClose}>Close</button></div>
         {detailQuery.isPending ? <p aria-live="polite">Loading Asset detail…</p> : null}
         {detailQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Asset details are unavailable</strong><span>{tauriErrorDetail(detailQuery.error, "This Asset may no longer exist in the Library. Refresh the Asset wall and try again.")}</span></section> : null}
-        {detailQuery.data ? <AssetDetailContent asset={detailQuery.data.asset} onDeleteAsset={onDeleteAsset} onRemoveSourceRecord={onRemoveSourceRecord} mutating={mutating} /> : null}
+        {detailQuery.data ? <AssetDetailContent asset={detailQuery.data.asset} onDeleteAsset={onDeleteAsset} onRevealManaged={onRevealManaged} onRemoveSourceRecord={onRemoveSourceRecord} onRevealSource={onRevealSource} mutating={mutating} revealing={revealing} /> : null}
       </section>
     </div>
   );
@@ -165,6 +168,13 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
     },
     onError: () => { setFeedback("The requested Asset change could not be completed. The Library was not modified by the desktop UI."); setConfirmation(null); },
   });
+  const revealMutation = useMutation({
+    mutationFn: async (request: RevealRequest) => request.sourcePath === undefined
+      ? client.revealAsset(request.assetId, request.target)
+      : client.revealAsset(request.assetId, request.target, request.sourcePath),
+    onSuccess: (_result, request) => { setFeedback(request.target === "managed" ? "Opened the managed Library Copy in File Explorer." : "Opened the recorded Source Path in File Explorer."); },
+    onError: () => { setFeedback("The requested file could not be opened in File Explorer. The Library was not modified."); },
+  });
 
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
@@ -190,7 +200,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
     <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {assets.length ? <section className="asset-grid" aria-label="Assets">{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section> : <EmptyState title="No Assets yet" detail="Import a folder from Setup to create managed Library Copies." />}
-    {selectedAssetId ? <AssetDetailDialog assetId={selectedAssetId} client={client} onClose={onCloseDetail} onDeleteAsset={() => requestDeleteAsset(selectedAssetId)} onRemoveSourceRecord={(sourcePath) => requestRemoveSource(selectedAssetId, sourcePath)} mutating={mutation.isPending} /> : null}
+    {selectedAssetId ? <AssetDetailDialog assetId={selectedAssetId} client={client} onClose={onCloseDetail} onDeleteAsset={() => requestDeleteAsset(selectedAssetId)} onRevealManaged={() => revealMutation.mutate({ assetId: selectedAssetId, target: "managed" })} onRemoveSourceRecord={(sourcePath) => requestRemoveSource(selectedAssetId, sourcePath)} onRevealSource={(sourcePath) => revealMutation.mutate({ assetId: selectedAssetId, target: "source", sourcePath })} mutating={mutation.isPending} revealing={revealMutation.isPending} /> : null}
     {confirmation ? <ConfirmDialog action={confirmation} pending={mutation.isPending} onCancel={() => setConfirmation(null)} onConfirm={() => mutation.mutate(confirmation.request)} /> : null}
   </>;
 }

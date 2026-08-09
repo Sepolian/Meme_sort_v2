@@ -27,6 +27,7 @@ const client: MemeSortClient = {
   }),
   getAssets: unsupported,
   getAssetDetail: unsupported,
+  revealAsset: unsupported,
   deleteAsset: unsupported,
   removeSourceRecord: unsupported,
   batchAssetAction: unsupported,

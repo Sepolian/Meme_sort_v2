@@ -46,6 +46,7 @@ pub fn run() {
             sidecar::retry_failed_jobs,
             sidecar::get_pending_jobs,
             sidecar::delete_pending_jobs,
+            sidecar::reveal_asset,
             sidecar::cancel_search
         ])
         .build(tauri::generate_context!())

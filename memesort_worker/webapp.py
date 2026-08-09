@@ -428,6 +428,22 @@ def create_app(
                 else:
                     raise ValueError(f"Unsupported batch action: {action}")
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/resolve-asset-reveal-target" and method == "POST":
+                payload = _read_json_body(environ, max_body_bytes)
+                target = str(payload.get("target") or "managed")
+                target_path = resolve_asset_reveal_path(
+                    library_root_path,
+                    asset_id=str(payload["asset_id"]),
+                    target=target,
+                    source_path=str(payload.get("source_path") or ""),
+                )
+                status_line, headers, body = _json_response(
+                    HTTPStatus.OK,
+                    {
+                        "resolved_path": str(target_path),
+                        "target": target,
+                    },
+                )
             elif path == "/api/reveal-asset-file" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
                 target = str(payload.get("target") or "managed")

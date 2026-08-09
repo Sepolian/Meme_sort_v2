@@ -128,4 +128,16 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(1, "get_pending_jobs");
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "delete_pending_jobs", { jobIds: [jobId] });
   });
+
+  it("uses the fixed Asset reveal command for managed and recorded source files", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue(undefined);
+    const client = createMemeSortClient(invokeCommand);
+    const assetId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.revealAsset(assetId, "managed");
+    await client.revealAsset(assetId, "source", "C:/Source/asset.gif");
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "reveal_asset", { assetId, target: "managed" });
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "reveal_asset", { assetId, target: "source", sourcePath: "C:/Source/asset.gif" });
+  });
 });

@@ -1,10 +1,10 @@
 use std::{
     env,
     error::Error,
-    fmt,
+    fmt, fs,
     io::{BufRead, BufReader, Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{mpsc, Mutex},
     thread,
@@ -14,9 +14,6 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
-
-#[cfg(debug_assertions)]
-use std::path::Path;
 
 const PROTOCOL_VERSION: u32 = 1;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -507,6 +504,56 @@ impl SidecarSession {
         )
     }
 
+    fn resolve_asset_reveal_target_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+        target: AssetRevealTarget,
+        source_path: Option<&str>,
+    ) -> Result<PathBuf, SidecarError> {
+        let source_path = match target {
+            AssetRevealTarget::Managed => None,
+            AssetRevealTarget::Source => {
+                Some(validate_source_path(source_path.ok_or_else(|| {
+                    SidecarError::new("Choose a Source Record to reveal.")
+                })?)?)
+            }
+        };
+        let payload = authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ResolveAssetRevealTarget,
+            &AssetRevealTargetPayload {
+                asset_id: validate_asset_id(asset_id)?,
+                target: target.as_api_value(),
+                source_path,
+            },
+        )?;
+        let response_target = payload
+            .get("target")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| SidecarError::new("Sidecar did not return an Asset reveal target."))?;
+        if response_target != target.as_api_value() {
+            return Err(SidecarError::new(
+                "Sidecar returned an unexpected Asset reveal target.",
+            ));
+        }
+        let resolved_path = payload
+            .get("resolved_path")
+            .and_then(serde_json::Value::as_str)
+            .filter(|path| !path.is_empty() && !path.contains('\0'))
+            .ok_or_else(|| {
+                SidecarError::new("Sidecar did not return a valid Asset reveal path.")
+            })?;
+        let resolved_path = PathBuf::from(resolved_path);
+        if !resolved_path.is_absolute() {
+            return Err(SidecarError::new(
+                "Sidecar returned a non-absolute Asset reveal path.",
+            ));
+        }
+        Ok(resolved_path)
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -564,6 +611,7 @@ enum MutationRoute {
     RunRuntimeHealthCheck,
     RetryFailedJobs,
     DeletePendingJobs,
+    ResolveAssetRevealTarget,
 }
 
 impl MutationRoute {
@@ -583,6 +631,30 @@ impl MutationRoute {
             Self::RunRuntimeHealthCheck => "/api/health",
             Self::RetryFailedJobs => "/api/retry-failed-jobs",
             Self::DeletePendingJobs => "/api/pending-jobs/delete",
+            Self::ResolveAssetRevealTarget => "/api/resolve-asset-reveal-target",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AssetRevealTarget {
+    Managed,
+    Source,
+}
+
+impl AssetRevealTarget {
+    fn parse(value: &str) -> Result<Self, SidecarError> {
+        match value {
+            "managed" => Ok(Self::Managed),
+            "source" => Ok(Self::Source),
+            _ => Err(SidecarError::new("Invalid MemeSort Asset reveal target.")),
+        }
+    }
+
+    fn as_api_value(self) -> &'static str {
+        match self {
+            Self::Managed => "managed",
+            Self::Source => "source",
         }
     }
 }
@@ -628,6 +700,14 @@ struct SearchImagePayload {
 #[derive(Serialize)]
 struct PendingJobIdsPayload {
     job_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct AssetRevealTargetPayload {
+    asset_id: String,
+    target: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -994,6 +1074,26 @@ pub fn delete_pending_jobs(
     })
 }
 
+#[tauri::command]
+pub fn reveal_asset(
+    app: AppHandle,
+    asset_id: String,
+    target: String,
+    source_path: Option<String>,
+) -> Result<(), SidecarError> {
+    let target = AssetRevealTarget::parse(&target)?;
+    let resolved_path = with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::resolve_asset_reveal_target_for_connection(
+            origin,
+            session_cookie,
+            &asset_id,
+            target,
+            source_path.as_deref(),
+        )
+    })?;
+    reveal_path_in_file_explorer(&resolved_path)
+}
+
 fn start_selected_import(
     app: &AppHandle,
     start_indexing: bool,
@@ -1005,6 +1105,22 @@ fn start_selected_import(
     with_sidecar_session(app, |session| {
         session.start_import(source_folder, start_indexing)
     })
+}
+
+fn reveal_path_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
+    let metadata = fs::metadata(path).map_err(|error| {
+        SidecarError::new(format!("Could not access the Asset reveal path: {error}"))
+    })?;
+    if !metadata.is_file() {
+        return Err(SidecarError::new(
+            "The resolved Asset reveal path is not a file.",
+        ));
+    }
+    Command::new("explorer.exe")
+        .arg(format!("/select,{}", path.display()))
+        .spawn()
+        .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
+    Ok(())
 }
 
 fn with_sidecar_session<T>(
@@ -1473,9 +1589,9 @@ mod tests {
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
         validate_asset_ids, validate_duplicate_threshold, validate_search_query,
-        validate_source_path, ApiRoute, AssetIdPayload, BatchAssetAction, BatchAssetActionPayload,
-        EmptyPayload, ImportSelection, MutationRoute, RemoveSourceRecordPayload,
-        SearchImageSelection, SidecarSession, StartImportPayload,
+        validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
+        BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
+        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1698,6 +1814,59 @@ mod tests {
         )
         .expect("batch request should succeed");
         server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn resolves_a_managed_asset_reveal_target_only_through_the_fixed_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("reveal request should connect");
+            let mut request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = stream.read(&mut chunk).expect("reveal request should read");
+                request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers =
+                    std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("reveal request should include a body length");
+                if request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+            assert!(request.starts_with("POST /api/resolve-asset-reveal-target HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            assert!(request.contains("\"asset_id\":\"123e4567-e89b-12d3-a456-426614174000\""));
+            assert!(request.contains("\"target\":\"managed\""));
+            assert!(!request.contains("source_path"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"resolved_path\":\"C:/MemeSort/originals/asset.png\",\"target\":\"managed\"}",
+                )
+                .expect("reveal response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        let path = SidecarSession::resolve_asset_reveal_target_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            "123e4567-e89b-12d3-a456-426614174000",
+            AssetRevealTarget::Managed,
+            None,
+        )
+        .expect("managed Asset reveal target should resolve");
+        server.join().expect("test server should finish");
+
+        assert_eq!(path, PathBuf::from("C:/MemeSort/originals/asset.png"));
     }
 
     #[test]

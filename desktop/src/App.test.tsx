@@ -120,6 +120,7 @@ const client = {
     active_recipe_label: "Vulkan0 recipe",
     asset: assetDetail,
   }),
+  revealAsset: vi.fn(async () => undefined),
   deleteAsset: async (assetId: string) => ({
     library_root: "C:/Library",
     asset_id: assetId,
@@ -275,6 +276,19 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
     expect(screen.getByRole("alertdialog", { name: "Delete this Asset?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  });
+
+  it("reveals an Asset's managed Library Copy and its recorded Source Path", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reveal Managed File" }));
+    expect(await screen.findByText("Opened the managed Library Copy in File Explorer.")).toBeInTheDocument();
+    expect(client.revealAsset).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174000", "managed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reveal Source" }));
+    expect(await screen.findByText("Opened the recorded Source Path in File Explorer.")).toBeInTheDocument();
+    expect(client.revealAsset).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174000", "source", "C:/Source/first.gif");
   });
 
   it("confirms and queues a selected Active Index rebuild", async () => {

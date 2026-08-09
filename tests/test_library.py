@@ -595,6 +595,32 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(expected.to_dict(), payload)
         rebuild.assert_called_once_with(library_root.resolve(), ["asset-a"])
 
+    def test_web_resolve_asset_reveal_target_validates_the_managed_library_copy_without_opening_explorer(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            asset_id = str(list_assets(library_root).assets[0]["asset_id"])
+            app = create_app(str(library_root))
+            try:
+                with patch("memesort_worker.webapp.reveal_path_in_file_explorer") as reveal:
+                    status, payload = self._request(
+                        app,
+                        "POST",
+                        "/api/resolve-asset-reveal-target",
+                        {"asset_id": asset_id, "target": "managed"},
+                    )
+            finally:
+                app.shutdown()
+
+            self.assertEqual("200 OK", status)
+            self.assertEqual("managed", payload["target"])
+            self.assertEqual(
+                str((library_root / list_assets(library_root).assets[0]["library_path"]).resolve()),
+                payload["resolved_path"],
+            )
+            reveal.assert_not_called()
+
     def test_http_search_cancellation_only_cancels_its_own_queued_request(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))

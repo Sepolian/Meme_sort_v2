@@ -7,6 +7,7 @@ export interface MemeSortClient {
   getAppState(): Promise<AppState>;
   getAssets(): Promise<AssetListResult>;
   getAssetDetail(assetId: string): Promise<AssetDetailResult>;
+  revealAsset(assetId: string, target: "managed" | "source", sourcePath?: string): Promise<void>;
   deleteAsset(assetId: string): Promise<AssetMutationResult>;
   removeSourceRecord(assetId: string, sourcePath: string): Promise<AssetMutationResult>;
   batchAssetAction(action: "delete" | "rebuild-active-index", assetIds: string[]): Promise<BatchAssetActionResult>;
@@ -35,6 +36,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     getAppState: () => invokeCommand<AppState>("get_app_state"),
     getAssets: () => invokeCommand<AssetListResult>("get_assets"),
     getAssetDetail: (assetId) => invokeCommand<AssetDetailResult>("get_asset_detail", { assetId }),
+    revealAsset: (assetId, target, sourcePath) => invokeCommand("reveal_asset", sourcePath === undefined ? { assetId, target } : { assetId, target, sourcePath }),
     deleteAsset: (assetId) => invokeCommand<AssetMutationResult>("delete_asset", { assetId }),
     removeSourceRecord: (assetId, sourcePath) => invokeCommand<AssetMutationResult>("remove_source_record", { assetId, sourcePath }),
     batchAssetAction: (action, assetIds) => invokeCommand<BatchAssetActionResult>("batch_asset_action", { action, assetIds }),
