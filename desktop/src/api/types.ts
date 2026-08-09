@@ -63,6 +63,15 @@ export interface ImageSearchResult {
   results: SearchAsset[];
 }
 
+export interface SimilarityResult {
+  library_root: string;
+  active_recipe_id: string;
+  active_recipe_label: string;
+  asset_id: string;
+  top_k: number;
+  results: SearchAsset[];
+}
+
 export interface SearchAsset {
   asset_id: string;
   library_url: string;

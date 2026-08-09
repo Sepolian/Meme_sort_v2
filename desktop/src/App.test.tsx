@@ -40,6 +40,21 @@ const assets: AssetListResult = {
       source_records: [{ source_path: "C:/Source/failed.png" }],
       status: "failed",
     },
+    {
+      asset_id: "123e4567-e89b-12d3-a456-426614174002",
+      library_path: "originals/indexed.png",
+      library_url: "/media/originals/indexed.png",
+      thumbnail_url: "/media/thumbnails/indexed.jpg",
+      media_type: "image/png",
+      content_hash: "hash-3",
+      width: 160,
+      height: 90,
+      imported_at: "2026-08-09T00:00:00Z",
+      updated_at: "2026-08-09T00:00:00Z",
+      source_record_count: 1,
+      source_records: [{ source_path: "C:/Source/indexed.png" }],
+      status: "indexed",
+    },
   ],
 };
 
@@ -133,6 +148,14 @@ const client = {
     active_recipe_label: "Vulkan0 recipe",
     query_path: "C:/Source/query.png",
     query_media_type: "image/png",
+    top_k: 18,
+    results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
+  })),
+  findSimilar: vi.fn(async (assetId: string) => ({
+    library_root: "C:/Library",
+    active_recipe_id: "recipe-1",
+    active_recipe_label: "Vulkan0 recipe",
+    asset_id: assetId,
     top_k: 18,
     results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
   })),
@@ -234,6 +257,21 @@ describe("App", () => {
 
     expect(await screen.findByRole("region", { name: "Image search results" })).toBeInTheDocument();
     expect(client.searchImage).toHaveBeenCalledWith(expect.any(String));
+    expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
+  });
+
+  it("finds Assets similar to a selected Indexed Asset", async () => {
+    renderApp("/search/similar");
+
+    const selector = await screen.findByLabelText("Indexed Asset");
+    await screen.findByRole("option", { name: "originals/indexed.png" });
+    expect(screen.getByRole("button", { name: "Find similar" })).toBeDisabled();
+    fireEvent.change(selector, { target: { value: "123e4567-e89b-12d3-a456-426614174002" } });
+    expect(screen.getByRole("button", { name: "Find similar" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Find similar" }));
+
+    expect(await screen.findByRole("region", { name: "Similar Asset results" })).toBeInTheDocument();
+    expect(client.findSimilar).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174002");
     expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
   });
 

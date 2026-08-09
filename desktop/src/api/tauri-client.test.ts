@@ -80,4 +80,14 @@ describe("createMemeSortClient", () => {
 
     expect(invokeCommand).toHaveBeenCalledWith("search_image", { requestId });
   });
+
+  it("uses a fixed command for finding Assets similar to an Indexed Asset", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ results: [] });
+    const client = createMemeSortClient(invokeCommand);
+    const assetId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.findSimilar(assetId);
+
+    expect(invokeCommand).toHaveBeenCalledWith("find_similar", { assetId });
+  });
 });

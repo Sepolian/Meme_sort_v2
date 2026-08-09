@@ -397,6 +397,20 @@ impl SidecarSession {
         )
     }
 
+    fn find_similar_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(
+            origin,
+            session_cookie,
+            ApiRoute::SimilarAssets {
+                asset_id: validate_asset_id(asset_id)?,
+            },
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -410,6 +424,7 @@ enum ApiRoute {
     Assets,
     AssetDetail(String),
     TextSearch { query: String, request_id: String },
+    SimilarAssets { asset_id: String },
 }
 
 #[derive(Clone, Copy)]
@@ -515,6 +530,9 @@ impl ApiRoute {
                 "/api/search?query={}&top_k=18&request_id={request_id}",
                 percent_encode_query_value(query)
             ),
+            Self::SimilarAssets { asset_id } => {
+                format!("/api/find-similar?asset_id={asset_id}&top_k=18")
+            }
         }
     }
 }
@@ -791,6 +809,13 @@ pub async fn search_image(
     })
     .await
     .map_err(|error| SidecarError::new(format!("Image Search Request did not complete: {error}")))?
+}
+
+#[tauri::command]
+pub fn find_similar(app: AppHandle, asset_id: String) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::find_similar_for_connection(origin, session_cookie, &asset_id)
+    })
 }
 
 fn start_selected_import(
@@ -1617,6 +1642,36 @@ mod tests {
             "123e4567-e89b-12d3-a456-426614174000",
         )
         .expect("image search should succeed");
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_similar_asset_retrieval_only_to_its_fixed_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("similar request should connect");
+            let mut request = [0_u8; 1024];
+            let size = stream
+                .read(&mut request)
+                .expect("similar request should read");
+            let request = std::str::from_utf8(&request[..size]).expect("request must be UTF-8");
+            assert!(request.starts_with("GET /api/find-similar?asset_id=123e4567-e89b-12d3-a456-426614174000&top_k=18 HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"results\":[]}",
+                )
+                .expect("similar response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        SidecarSession::find_similar_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            "123e4567-e89b-12d3-a456-426614174000",
+        )
+        .expect("similar retrieval should succeed");
         server.join().expect("test server should finish");
     }
 

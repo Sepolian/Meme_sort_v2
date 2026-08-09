@@ -38,6 +38,7 @@ const client: MemeSortClient = {
   resumeImport: unsupported,
   searchText: unsupported,
   searchImage: unsupported,
+  findSimilar: unsupported,
   cancelSearch: unsupported,
 };
 

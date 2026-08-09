@@ -345,6 +345,66 @@ function ImageSearchPage({ client }: { client: MemeSortClient }) {
   );
 }
 
+function SimilarSearchPage({ client }: { client: MemeSortClient }) {
+  const [assetId, setAssetId] = useState("");
+  const [results, setResults] = useState<SearchAsset[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const assetsQuery = useQuery({
+    queryKey: ["similar-search-assets"],
+    queryFn: () => client.getAssets(),
+  });
+  const indexedAssets = assetsQuery.data?.assets.filter((asset) => asset.status === "indexed") ?? [];
+
+  const search = async () => {
+    if (!assetId) return;
+    setIsSearching(true);
+    setError(null);
+    try {
+      const result = await client.findSimilar(assetId);
+      setResults(result.results);
+    } catch (requestError) {
+      setError(tauriErrorDetail(requestError, "MemeSort could not find similar Assets."));
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  return (
+    <Page title="Find similar Assets" eyebrow="Active Index Recipe">
+      <section className="surface search-panel">
+        <h2>Asset to Assets</h2>
+        <p>Only Indexed Assets participate in semantic retrieval with the Active Index Recipe.</p>
+        <label htmlFor="similar-asset">Indexed Asset</label>
+        <div className="search-form">
+          <select id="similar-asset" value={assetId} disabled={assetsQuery.isPending || isSearching} onChange={(event) => setAssetId(event.target.value)}>
+            <option value="">Choose an Indexed Asset</option>
+            {indexedAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.library_path}</option>)}
+          </select>
+          <button className="button" type="button" disabled={assetsQuery.isPending || isSearching || !assetId} onClick={() => void search()}>
+            Find similar
+          </button>
+        </div>
+        {assetsQuery.isError ? <p role="alert">{tauriErrorDetail(assetsQuery.error, "MemeSort could not load Indexed Assets.")}</p> : null}
+        {!assetsQuery.isPending && !assetsQuery.isError && !indexedAssets.length ? <p>No Indexed Assets are available yet.</p> : null}
+      </section>
+      {isSearching ? <p aria-live="polite">Finding similar Assets in the Active Index Recipe…</p> : null}
+      {error ? <section className="notice notice-warning" role="alert"><strong>Search unavailable</strong><span>{error}</span></section> : null}
+      {results ? (
+        results.length ? <section className="search-results" aria-label="Similar Asset results" role="region">
+          {results.map((result) => {
+            const preview = mediaUrl(result.thumbnail_url) ?? mediaUrl(result.library_url);
+            return <article className="search-result" key={result.asset_id}>
+              {preview ? <img src={preview} alt="" /> : <div className="media-placeholder" aria-hidden="true" />}
+              <div><strong>{result.library_path}</strong><p>{result.match_sources.join(" + ")} match · score {result.score.toFixed(3)}</p>{result.ocr_snippet ? <p>{result.ocr_snippet}</p> : null}</div>
+            </article>;
+          })}
+        </section> : <EmptyState title="No similar Assets yet" detail="Index more Assets with the Active Index Recipe to expand this search." />
+      ) : null}
+    </Page>
+  );
+}
+
 function DuplicatesPage() {
   return (
     <Page title="Duplicate assets" eyebrow="Library maintenance">
@@ -418,7 +478,7 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
       <Route path="/search" element={<SearchPage title="Search MemeSort" detail="Text, image, and similar-Asset retrieval will arrive as separate cancellable Search Request slices." />} />
       <Route path="/search/text" element={<TextSearchPage client={client} />} />
       <Route path="/search/image" element={<ImageSearchPage client={client} />} />
-      <Route path="/search/similar" element={<SearchPage title="Find similar Assets" detail="Choose an Asset from the library to find semantically similar Assets." />} />
+      <Route path="/search/similar" element={<SimilarSearchPage client={client} />} />
       <Route path="/duplicates" element={<DuplicatesPage />} />
       <Route path="/status" element={<StatusPage state={state} />} />
       <Route path="*" element={<NotFoundPage />} />
