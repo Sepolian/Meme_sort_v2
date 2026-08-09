@@ -179,6 +179,19 @@ const client = {
   pauseWorkerLoop: vi.fn(async () => ({ running: true, paused: true })),
   resumeWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
   triggerWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
+  getPendingJobs: vi.fn(async () => ({
+    jobs: [{
+      job_id: "123e4567-e89b-12d3-a456-426614174003",
+      type: "embed_asset",
+      asset_id: "123e4567-e89b-12d3-a456-426614174002",
+      asset_path: "originals/indexed.png",
+      recipe_id: "recipe-1",
+      attempt_count: 0,
+      created_at: "2026-08-09T00:00:00Z",
+      updated_at: "2026-08-09T00:00:00Z",
+    }],
+  })),
+  deletePendingJobs: vi.fn(async (jobIds: string[]) => ({ requested_job_ids: jobIds, deleted_job_ids: jobIds, skipped_job_ids: [] })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
 };
 
@@ -315,6 +328,18 @@ describe("App", () => {
 
     expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
+  });
+
+  it("confirms deletion of selected Pending Job records without deleting Assets", async () => {
+    renderApp("/status");
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+
+    expect(client.deletePendingJobs).toHaveBeenCalledWith(["123e4567-e89b-12d3-a456-426614174003"]);
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
   });
 
   it("imports only a folder selected through the native dialog", async () => {

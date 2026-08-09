@@ -28,6 +28,27 @@ export interface WorkerLoopState {
   last_tick_finished_at?: number | null;
 }
 
+export interface PendingJob {
+  job_id: string;
+  type: string;
+  asset_id: string | null;
+  asset_path: string | null;
+  recipe_id: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PendingJobsResult {
+  jobs: PendingJob[];
+}
+
+export interface DeletePendingJobsResult {
+  requested_job_ids: string[];
+  deleted_job_ids: string[];
+  skipped_job_ids: string[];
+}
+
 export interface ImportTask {
   status: string;
   running: boolean;

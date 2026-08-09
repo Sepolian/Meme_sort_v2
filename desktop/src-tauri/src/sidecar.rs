@@ -461,6 +461,28 @@ impl SidecarSession {
         )
     }
 
+    fn pending_jobs_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(origin, session_cookie, ApiRoute::PendingJobs)
+    }
+
+    fn delete_pending_jobs_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        job_ids: &[String],
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::DeletePendingJobs,
+            &PendingJobIdsPayload {
+                job_ids: validate_job_ids(job_ids)?,
+            },
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -476,6 +498,7 @@ enum ApiRoute {
     TextSearch { query: String, request_id: String },
     SimilarAssets { asset_id: String },
     Duplicates { threshold: f64 },
+    PendingJobs,
 }
 
 #[derive(Clone, Copy)]
@@ -514,6 +537,7 @@ enum MutationRoute {
     PauseWorkerLoop,
     ResumeWorkerLoop,
     TriggerWorkerLoop,
+    DeletePendingJobs,
 }
 
 impl MutationRoute {
@@ -530,6 +554,7 @@ impl MutationRoute {
             Self::PauseWorkerLoop => "/api/worker-loop/pause",
             Self::ResumeWorkerLoop => "/api/worker-loop/resume",
             Self::TriggerWorkerLoop => "/api/worker-loop/trigger",
+            Self::DeletePendingJobs => "/api/pending-jobs/delete",
         }
     }
 }
@@ -573,6 +598,11 @@ struct SearchImagePayload {
 }
 
 #[derive(Serialize)]
+struct PendingJobIdsPayload {
+    job_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
 pub struct FolderSelection {
     selected_path: Option<String>,
 }
@@ -591,6 +621,7 @@ impl ApiRoute {
                 format!("/api/find-similar?asset_id={asset_id}&top_k=18")
             }
             Self::Duplicates { threshold } => format!("/api/duplicates?threshold={threshold}"),
+            Self::PendingJobs => "/api/pending-jobs".to_owned(),
         }
     }
 }
@@ -901,6 +932,23 @@ pub fn resume_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarEr
 pub fn trigger_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::trigger_worker_loop_for_connection(origin, session_cookie)
+    })
+}
+
+#[tauri::command]
+pub fn get_pending_jobs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::pending_jobs_for_connection(origin, session_cookie)
+    })
+}
+
+#[tauri::command]
+pub fn delete_pending_jobs(
+    app: AppHandle,
+    job_ids: Vec<String>,
+) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::delete_pending_jobs_for_connection(origin, session_cookie, &job_ids)
     })
 }
 
@@ -1283,6 +1331,20 @@ fn validate_asset_ids(asset_ids: &[String]) -> Result<Vec<String>, SidecarError>
         let asset_id = validate_asset_id(asset_id)?;
         if !validated.contains(&asset_id) {
             validated.push(asset_id);
+        }
+    }
+    Ok(validated)
+}
+
+fn validate_job_ids(job_ids: &[String]) -> Result<Vec<String>, SidecarError> {
+    if job_ids.is_empty() || job_ids.len() > MAX_BATCH_ASSETS {
+        return Err(SidecarError::new("Invalid MemeSort Pending Job selection."));
+    }
+    let mut validated = Vec::with_capacity(job_ids.len());
+    for job_id in job_ids {
+        let job_id = validate_asset_id(job_id)?;
+        if !validated.contains(&job_id) {
+            validated.push(job_id);
         }
     }
     Ok(validated)
@@ -1847,6 +1909,77 @@ mod tests {
             .expect("resume should succeed");
         SidecarSession::trigger_worker_loop_for_connection(&origin, "memesort_session=test-token")
             .expect("trigger should succeed");
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_pending_job_management_only_to_fixed_routes() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut list_stream, _) = listener.accept().expect("pending jobs should connect");
+            let mut list_request = [0_u8; 1024];
+            let size = list_stream
+                .read(&mut list_request)
+                .expect("pending jobs should read");
+            let list_request =
+                std::str::from_utf8(&list_request[..size]).expect("request must be UTF-8");
+            assert!(list_request.starts_with("GET /api/pending-jobs HTTP/1.1"));
+            assert!(list_request.contains("Cookie: memesort_session=test-token"));
+            list_stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"jobs\":[]}",
+                )
+                .expect("pending jobs response should write");
+            drop(list_stream);
+
+            let (mut delete_stream, _) = listener.accept().expect("pending delete should connect");
+            let mut delete_request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = delete_stream
+                    .read(&mut chunk)
+                    .expect("pending delete should read");
+                delete_request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = delete_request
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers = std::str::from_utf8(&delete_request[..header_end])
+                    .expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("pending delete should include a body length");
+                if delete_request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let delete_request =
+                std::str::from_utf8(&delete_request).expect("request must be UTF-8");
+            assert!(delete_request.starts_with("POST /api/pending-jobs/delete HTTP/1.1"));
+            assert!(delete_request.contains("Cookie: memesort_session=test-token"));
+            assert!(
+                delete_request.contains("\"job_ids\":[\"123e4567-e89b-12d3-a456-426614174000\"]")
+            );
+            delete_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"deleted_job_ids\":[]}")
+                .expect("pending delete response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+        let job_ids = vec!["123e4567-e89b-12d3-a456-426614174000".to_owned()];
+
+        SidecarSession::pending_jobs_for_connection(&origin, "memesort_session=test-token")
+            .expect("pending jobs should succeed");
+        SidecarSession::delete_pending_jobs_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            &job_ids,
+        )
+        .expect("pending delete should succeed");
         server.join().expect("test server should finish");
     }
 

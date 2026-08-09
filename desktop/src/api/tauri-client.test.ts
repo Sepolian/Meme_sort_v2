@@ -112,4 +112,16 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "resume_worker_loop");
     expect(invokeCommand).toHaveBeenNthCalledWith(3, "trigger_worker_loop");
   });
+
+  it("lists and removes only selected Pending Job records", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ jobs: [] });
+    const client = createMemeSortClient(invokeCommand);
+    const jobId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.getPendingJobs();
+    await client.deletePendingJobs([jobId]);
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "get_pending_jobs");
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "delete_pending_jobs", { jobIds: [jobId] });
+  });
 });

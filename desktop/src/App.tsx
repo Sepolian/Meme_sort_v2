@@ -470,6 +470,9 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
   const [isWorking, setIsWorking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [selectedPendingJobIds, setSelectedPendingJobIds] = useState<Set<string>>(() => new Set());
+  const [pendingJobDeleteConfirmation, setPendingJobDeleteConfirmation] = useState(false);
+  const pendingJobsQuery = useQuery({ queryKey: ["pending-jobs"], queryFn: () => client.getPendingJobs() });
 
   const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setIsWorking(true);
@@ -480,6 +483,36 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
       onStateChanged();
     } catch (error) {
       setFeedback(tauriErrorDetail(error, "MemeSort could not update the Worker Loop."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const togglePendingJob = (jobId: string) => {
+    setSelectedPendingJobIds((current) => {
+      const next = new Set(current);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
+  const deleteSelectedPendingJobs = async () => {
+    const jobIds = [...selectedPendingJobIds];
+    if (!jobIds.length) return;
+
+    setIsWorking(true);
+    setFeedback(null);
+    try {
+      const result = await client.deletePendingJobs(jobIds);
+      setFeedback(`Deleted ${result.deleted_job_ids.length} Pending Job record(s); skipped ${result.skipped_job_ids.length}.`);
+      setSelectedPendingJobIds(new Set());
+      setPendingJobDeleteConfirmation(false);
+      await pendingJobsQuery.refetch();
+      onStateChanged();
+    } catch (error) {
+      setFeedback(tauriErrorDetail(error, "MemeSort could not delete the selected Pending Job records. Assets and generated files were not modified."));
+      setPendingJobDeleteConfirmation(false);
     } finally {
       setIsWorking(false);
     }
@@ -505,6 +538,33 @@ function StatusPage({ state, client, onStateChanged }: { state: AppState; client
         </div>
         <p role="status">{feedback ?? (state.worker_loop.paused ? "Worker Loop is paused." : "Worker Loop is running.")}</p>
       </section>
+      <section className="surface import-card" aria-labelledby="pending-jobs-title">
+        <h2 id="pending-jobs-title">Pending Jobs</h2>
+        <p>Delete only unclaimed queue records. Assets and generated files remain unchanged.</p>
+        {pendingJobsQuery.isPending ? <p aria-live="polite">Loading Pending Jobs…</p> : null}
+        {pendingJobsQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Pending Jobs are unavailable</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void pendingJobsQuery.refetch()}>Retry Pending Jobs</button></section> : null}
+        {pendingJobsQuery.data ? (
+          pendingJobsQuery.data.jobs.length ? <>
+            <ul className="detail-list pending-job-list">
+              {pendingJobsQuery.data.jobs.map((job) => <li key={job.job_id}>
+                <label className="asset-select"><input type="checkbox" checked={selectedPendingJobIds.has(job.job_id)} onChange={() => togglePendingJob(job.job_id)} />Select Pending Job {job.type}</label>
+                <span>{job.asset_path ?? "No Asset path"}{job.recipe_id ? ` · ${job.recipe_id}` : ""} · attempt {job.attempt_count}</span>
+              </li>)}
+            </ul>
+            <div className="import-actions"><button className="button button-danger" type="button" disabled={isWorking || !selectedPendingJobIds.size} onClick={() => setPendingJobDeleteConfirmation(true)}>Delete selected Pending Jobs</button></div>
+          </> : <p>No Pending Jobs are waiting to be claimed.</p>
+        ) : null}
+      </section>
+      {pendingJobDeleteConfirmation ? (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={isWorking ? undefined : () => setPendingJobDeleteConfirmation(false)}>
+          <section className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="pending-job-delete-title" onMouseDown={(event) => event.stopPropagation()}>
+            <p className="eyebrow">Confirm change</p>
+            <h2 id="pending-job-delete-title">Delete {selectedPendingJobIds.size} Pending Job(s)?</h2>
+            <p>This deletes only unclaimed queue records. Assets and generated files remain unchanged.</p>
+            <div className="dialog-actions"><button className="button button-secondary" type="button" disabled={isWorking} onClick={() => setPendingJobDeleteConfirmation(false)}>Cancel</button><button className="button button-danger" type="button" autoFocus disabled={isWorking} onClick={() => void deleteSelectedPendingJobs()}>{isWorking ? "Working…" : "Delete Pending Jobs"}</button></div>
+          </section>
+        </div>
+      ) : null}
     </Page>
   );
 }
