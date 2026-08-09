@@ -13,6 +13,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
+use tauri_plugin_dialog::DialogExt;
 
 #[cfg(debug_assertions)]
 use std::path::Path;
@@ -61,6 +62,35 @@ pub struct SidecarSession {
 }
 
 pub struct SidecarState(Mutex<Option<SidecarSession>>);
+
+/// A source folder selected through the native dialog for this desktop session.
+/// The WebView never supplies this path to an import command.
+pub struct ImportSelection(Mutex<Option<PathBuf>>);
+
+impl ImportSelection {
+    pub fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    fn replace(&self, path: Option<PathBuf>) -> Result<Option<String>, SidecarError> {
+        let selected_path = path.as_ref().map(|path| path.display().to_string());
+        let mut selection = self
+            .0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?;
+        *selection = path;
+        Ok(selected_path)
+    }
+
+    fn selected_path(&self) -> Result<String, SidecarError> {
+        self.0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .ok_or_else(|| SidecarError::new("Choose a source folder before importing."))
+    }
+}
 
 impl SidecarState {
     pub fn new(session: SidecarSession) -> Self {
@@ -220,6 +250,40 @@ impl SidecarSession {
         )
     }
 
+    fn start_import(
+        &self,
+        source_folder: String,
+        start_indexing: bool,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            &self.origin,
+            &self.session_cookie,
+            MutationRoute::StartImport,
+            &StartImportPayload {
+                path: source_folder,
+                start_indexing,
+            },
+        )
+    }
+
+    fn pause_import(&self) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            &self.origin,
+            &self.session_cookie,
+            MutationRoute::PauseImport,
+            &EmptyPayload {},
+        )
+    }
+
+    fn resume_import(&self) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            &self.origin,
+            &self.session_cookie,
+            MutationRoute::ResumeImport,
+            &EmptyPayload {},
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -262,6 +326,9 @@ enum MutationRoute {
     RemoveSourceRecord,
     DeleteAsset,
     BatchAssetAction,
+    StartImport,
+    PauseImport,
+    ResumeImport,
 }
 
 impl MutationRoute {
@@ -270,6 +337,9 @@ impl MutationRoute {
             Self::RemoveSourceRecord => "/api/remove-source-record",
             Self::DeleteAsset => "/api/delete-asset",
             Self::BatchAssetAction => "/api/assets/batch-action",
+            Self::StartImport => "/api/import/start",
+            Self::PauseImport => "/api/import/pause",
+            Self::ResumeImport => "/api/import/resume",
         }
     }
 }
@@ -289,6 +359,20 @@ struct RemoveSourceRecordPayload {
 struct BatchAssetActionPayload {
     action: &'static str,
     asset_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct StartImportPayload {
+    path: String,
+    start_indexing: bool,
+}
+
+#[derive(Serialize)]
+struct EmptyPayload {}
+
+#[derive(Serialize)]
+pub struct FolderSelection {
+    selected_path: Option<String>,
 }
 
 impl ApiRoute {
@@ -470,6 +554,62 @@ pub fn batch_asset_action(
     let action = BatchAssetAction::parse(&action).map_err(|error| error.to_string())?;
     with_sidecar_session(&app, |session| {
         session.batch_asset_action(action, &asset_ids)
+    })
+}
+
+#[tauri::command]
+pub fn choose_import_folder(app: AppHandle) -> Result<FolderSelection, String> {
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Choose a folder to import into MemeSort")
+        .blocking_pick_folder();
+    let path = path
+        .map(|path| {
+            path.into_path()
+                .map_err(|error| SidecarError::new(error.to_string()))
+        })
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    let selection = app
+        .try_state::<ImportSelection>()
+        .ok_or_else(|| "MemeSort import selection is unavailable.".to_owned())?;
+    let selected_path = selection.replace(path).map_err(|error| error.to_string())?;
+    Ok(FolderSelection { selected_path })
+}
+
+#[tauri::command]
+pub fn start_import(app: AppHandle) -> Result<serde_json::Value, String> {
+    start_selected_import(&app, false)
+}
+
+#[tauri::command]
+pub fn start_import_and_index(app: AppHandle) -> Result<serde_json::Value, String> {
+    start_selected_import(&app, true)
+}
+
+#[tauri::command]
+pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, String> {
+    with_sidecar_session(&app, |session| session.pause_import())
+}
+
+#[tauri::command]
+pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, String> {
+    with_sidecar_session(&app, |session| session.resume_import())
+}
+
+fn start_selected_import(
+    app: &AppHandle,
+    start_indexing: bool,
+) -> Result<serde_json::Value, String> {
+    let selection = app
+        .try_state::<ImportSelection>()
+        .ok_or_else(|| "MemeSort import selection is unavailable.".to_owned())?;
+    let source_folder = selection
+        .selected_path()
+        .map_err(|error| error.to_string())?;
+    with_sidecar_session(app, |session| {
+        session.start_import(source_folder, start_indexing)
     })
 }
 
@@ -863,6 +1003,7 @@ mod tests {
     use std::{
         io::{Read, Write},
         net::TcpListener,
+        path::PathBuf,
         thread,
     };
 
@@ -870,7 +1011,8 @@ mod tests {
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
         validate_asset_ids, validate_source_path, ApiRoute, AssetIdPayload, BatchAssetAction,
-        BatchAssetActionPayload, MutationRoute, RemoveSourceRecordPayload,
+        BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
+        RemoveSourceRecordPayload, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1092,6 +1234,92 @@ mod tests {
         assert!(validate_source_path("").is_err());
         assert!(validate_source_path("C:/Source/unsafe\npath.gif").is_err());
         assert!(BatchAssetAction::parse("arbitrary-request").is_err());
+    }
+
+    #[test]
+    fn keeps_import_paths_in_the_native_selection_state() {
+        let selection = ImportSelection::new();
+        assert!(selection.selected_path().is_err());
+
+        let selected = selection
+            .replace(Some(PathBuf::from("C:/Source/Memes")))
+            .expect("selection should be stored");
+
+        assert_eq!(selected.as_deref(), Some("C:/Source/Memes"));
+        assert_eq!(
+            selection.selected_path().expect("path should be available"),
+            "C:/Source/Memes"
+        );
+    }
+
+    #[test]
+    fn forwards_import_controls_only_to_fixed_routes_with_the_private_cookie() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            for (path, expected_payload) in [
+                ("/api/import/start", "\"start_indexing\":true"),
+                ("/api/import/pause", "{}"),
+                ("/api/import/resume", "{}"),
+            ] {
+                let (mut stream, _) = listener.accept().expect("import request should connect");
+                let mut request = Vec::new();
+                loop {
+                    let mut chunk = [0_u8; 1024];
+                    let size = stream.read(&mut chunk).expect("import request should read");
+                    request.extend_from_slice(&chunk[..size]);
+                    let Some(header_end) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    else {
+                        continue;
+                    };
+                    let headers =
+                        std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .expect("request should include a body length");
+                    if request.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+                assert!(request.starts_with(&format!("POST {path} HTTP/1.1")));
+                assert!(request.contains("Cookie: memesort_session=test-token"));
+                assert!(request.contains(expected_payload));
+                stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}")
+                    .expect("import response should write");
+            }
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        authenticated_post_json(
+            &origin,
+            "memesort_session=test-token",
+            MutationRoute::StartImport,
+            &StartImportPayload {
+                path: "C:/Source/Memes".to_owned(),
+                start_indexing: true,
+            },
+        )
+        .expect("start import should succeed");
+        authenticated_post_json(
+            &origin,
+            "memesort_session=test-token",
+            MutationRoute::PauseImport,
+            &EmptyPayload {},
+        )
+        .expect("pause import should succeed");
+        authenticated_post_json(
+            &origin,
+            "memesort_session=test-token",
+            MutationRoute::ResumeImport,
+            &EmptyPayload {},
+        )
+        .expect("resume import should succeed");
+        server.join().expect("test server should finish");
     }
 
     #[test]

@@ -60,8 +60,19 @@ const client = {
     runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
     setup_state: { health_check_ok: false },
     library_status: { total_assets: 3, job_counts: { pending: 2 } },
-    worker_loop: { paused: true, running: true },
-    pending_jobs: [{ job_id: "job-1" }],
+  worker_loop: { paused: true, running: true },
+  import_task: {
+    status: "idle",
+    running: false,
+    paused: false,
+    pause_requested: false,
+    source_folder: null,
+    started_at: null,
+    finished_at: null,
+    result: null,
+    error: null,
+  },
+  pending_jobs: [{ job_id: "job-1" }],
   }),
   getAssets: async () => assets,
   getAssetDetail: async () => ({
@@ -102,6 +113,11 @@ const client = {
     removed_embeddings: 0,
     reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
   })),
+  chooseImportFolder: vi.fn(async () => ({ selected_path: "C:/Source/Memes" })),
+  startImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
+  startImportAndIndex: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
+  pauseImport: vi.fn(async () => ({ status: "pausing", running: true, paused: false, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
+  resumeImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
 };
 
 describe("App", () => {
@@ -176,6 +192,19 @@ describe("App", () => {
     renderApp("/setup");
 
     expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+  });
+
+  it("imports only a folder selected through the native dialog", async () => {
+    renderApp("/setup");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Choose import folder" }));
+    expect(await screen.findByText("C:/Source/Memes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import folder" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Import folder" }));
+
+    expect(client.chooseImportFolder).toHaveBeenCalledTimes(1);
+    expect(client.startImport).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Import started in the background.")).toBeInTheDocument();
   });
 
   it("closes the keyboard help dialog with Escape", async () => {

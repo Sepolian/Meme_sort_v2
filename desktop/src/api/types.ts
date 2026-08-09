@@ -19,7 +19,29 @@ export interface AppState {
     paused: boolean;
     running: boolean;
   };
+  import_task: ImportTask;
   pending_jobs: Array<{ job_id: string }>;
+}
+
+export interface ImportTask {
+  status: string;
+  running: boolean;
+  paused: boolean;
+  pause_requested: boolean;
+  source_folder: string | null;
+  started_at: number | null;
+  finished_at: number | null;
+  result: {
+    new_assets?: number;
+    duplicate_assets?: number;
+  } | null;
+  error: {
+    detail: string;
+  } | null;
+}
+
+export interface FolderSelection {
+  selected_path: string | null;
 }
 
 export interface AssetSummary {

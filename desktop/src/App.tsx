@@ -70,8 +70,44 @@ function Dashboard({ state, client }: { state: AppState; client: MemeSortClient 
   );
 }
 
-function SetupPage({ state }: { state: AppState }) {
+function SetupPage({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   const detail = state.setup_state.runtime_readiness?.ready_detail;
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [isWorking, setIsWorking] = useState(false);
+  const importTask = state.import_task;
+  const importRunning = importTask?.running ?? false;
+  const canStartIndexing = state.setup_state.health_check_ok;
+
+  const runImportAction = async (action: () => Promise<unknown>, successMessage: string) => {
+    setIsWorking(true);
+    setFeedback(null);
+    try {
+      await action();
+      setFeedback(successMessage);
+      onStateChanged();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "MemeSort could not complete the import action.");
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const importStatus = (() => {
+    if (importRunning) {
+      if (importTask.paused) return "Import paused. Resume to continue with the next file.";
+      if (importTask.pause_requested) return "Pausing import after the current file finishes safely.";
+      return `Importing ${importTask.source_folder ?? "folder"}. Pause takes effect between files.`;
+    }
+    if (importTask?.status === "completed") {
+      return `Import completed: ${importTask.result?.new_assets ?? 0} new Asset(s), ${importTask.result?.duplicate_assets ?? 0} duplicate(s).`;
+    }
+    if (importTask?.status === "failed" || importTask?.status === "cancelled") {
+      return `Import ${importTask.status}: ${importTask.error?.detail ?? "unknown error"}`;
+    }
+    return "Choose a folder with the native dialog to begin an import.";
+  })();
+
   return (
     <Page title="Setup & runtime" eyebrow="Pinned Runtime">
       <section className="surface setup-card">
@@ -89,6 +125,58 @@ function SetupPage({ state }: { state: AppState }) {
       ) : (
         <RuntimeNotReady detail={detail} />
       )}
+      <section className="surface import-card" aria-labelledby="import-title">
+        <h2 id="import-title">Import Assets</h2>
+        <p>Choose a source folder with the native dialog. MemeSort creates durable Library Copies; source paths remain import metadata.</p>
+        <p className="mono">{selectedFolder ?? "No source folder selected"}</p>
+        <div className="import-actions">
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isWorking || importRunning}
+            onClick={() => void runImportAction(async () => {
+              const result = await client.chooseImportFolder();
+              setSelectedFolder(result.selected_path);
+            }, "Folder selection updated.")}
+          >
+            Choose import folder
+          </button>
+          <button
+            className="button"
+            type="button"
+            disabled={isWorking || importRunning || !selectedFolder}
+            onClick={() => void runImportAction(client.startImport, "Import started in the background.")}
+          >
+            Import folder
+          </button>
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isWorking || importRunning || !selectedFolder || !canStartIndexing}
+            onClick={() => void runImportAction(client.startImportAndIndex, "Import and indexing started in the background.")}
+          >
+            Import and index
+          </button>
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isWorking || !importRunning || importTask.pause_requested}
+            onClick={() => void runImportAction(client.pauseImport, "Pause requested. The current file will finish safely.")}
+          >
+            Pause import
+          </button>
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isWorking || !importRunning || !importTask.pause_requested}
+            onClick={() => void runImportAction(client.resumeImport, "Import resumed.")}
+          >
+            Resume import
+          </button>
+        </div>
+        <p role="status">{feedback ?? importStatus}</p>
+        {!canStartIndexing ? <p>Indexing remains unavailable until this app session has an authorized Pinned Runtime.</p> : null}
+      </section>
     </Page>
   );
 }
@@ -166,11 +254,11 @@ function NotFoundPage() {
   );
 }
 
-function ApplicationRoutes({ state, client }: { state: AppState; client: MemeSortClient }) {
+function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   return (
     <Routes>
       <Route path="/" element={<Dashboard state={state} client={client} />} />
-      <Route path="/setup" element={<SetupPage state={state} />} />
+      <Route path="/setup" element={<SetupPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="/search" element={<SearchPage title="Search MemeSort" detail="Text, image, and similar-Asset retrieval will arrive as separate cancellable Search Request slices." />} />
       <Route path="/search/text" element={<SearchPage title="Text search" detail="Text retrieval will use an independently cancellable Search Request." />} />
       <Route path="/search/image" element={<SearchPage title="Image search" detail="Image retrieval will use the native image picker and a scoped Search Request." />} />
@@ -225,7 +313,7 @@ export function App({ client = tauriClient }: AppProps) {
         </header>
         {stateQuery.isPending ? <LoadingState /> : null}
         {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
-        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} /> : null}
+        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
       </div>
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
     </div>

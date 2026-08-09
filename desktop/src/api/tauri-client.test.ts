@@ -39,4 +39,21 @@ describe("createMemeSortClient", () => {
       assetIds: ["123e4567-e89b-12d3-a456-426614174000"],
     });
   });
+
+  it("uses path-free commands for a native-selected import", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ status: "running" });
+    const client = createMemeSortClient(invokeCommand);
+
+    await client.chooseImportFolder();
+    await client.startImport();
+    await client.startImportAndIndex();
+    await client.pauseImport();
+    await client.resumeImport();
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "choose_import_folder");
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "start_import");
+    expect(invokeCommand).toHaveBeenNthCalledWith(3, "start_import_and_index");
+    expect(invokeCommand).toHaveBeenNthCalledWith(4, "pause_import");
+    expect(invokeCommand).toHaveBeenNthCalledWith(5, "resume_import");
+  });
 });

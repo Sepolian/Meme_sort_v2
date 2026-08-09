@@ -73,7 +73,8 @@ p { color: var(--muted); line-height: 1.6; }
 .surface p:last-child, .empty-state p:last-child { margin-bottom: 0; }
 .empty-state { max-width: 720px; }
 .empty-state > div { margin-top: 20px; }
-.setup-card { margin-bottom: 16px; }
+.setup-card, .import-card { margin-bottom: 16px; }
+.import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 .mono { overflow-wrap: anywhere; font-family: "Cascadia Mono", Consolas, monospace; font-size: .875rem; }
 .notice { display: grid; gap: 4px; }
 .notice-warning { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); }

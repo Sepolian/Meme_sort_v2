@@ -5,6 +5,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol(
             sidecar::MEDIA_PROTOCOL,
             |context, request, responder| {
@@ -17,6 +18,7 @@ pub fn run() {
         .setup(|app| {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
+            app.manage(sidecar::ImportSelection::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -25,7 +27,12 @@ pub fn run() {
             sidecar::get_asset_detail,
             sidecar::delete_asset,
             sidecar::remove_source_record,
-            sidecar::batch_asset_action
+            sidecar::batch_asset_action,
+            sidecar::choose_import_folder,
+            sidecar::start_import,
+            sidecar::start_import_and_index,
+            sidecar::pause_import,
+            sidecar::resume_import
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
