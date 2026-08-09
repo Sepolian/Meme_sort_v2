@@ -70,4 +70,14 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(1, "search_text", { query: "surprised reaction", requestId });
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "cancel_search", { requestId });
   });
+
+  it("uses a path-free command for a native-selected image Search Request", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ results: [] });
+    const client = createMemeSortClient(invokeCommand);
+    const requestId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.searchImage(requestId);
+
+    expect(invokeCommand).toHaveBeenCalledWith("search_image", { requestId });
+  });
 });

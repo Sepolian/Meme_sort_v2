@@ -260,6 +260,91 @@ function TextSearchPage({ client }: { client: MemeSortClient }) {
   );
 }
 
+function ImageSearchPage({ client }: { client: MemeSortClient }) {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [results, setResults] = useState<SearchAsset[] | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const activeRequestId = useRef<string | null>(null);
+
+  const cancelCurrentSearch = useCallback(() => {
+    const requestId = activeRequestId.current;
+    if (!requestId) return;
+    activeRequestId.current = null;
+    void client.cancelSearch(requestId);
+  }, [client]);
+
+  useEffect(() => () => cancelCurrentSearch(), [cancelCurrentSearch]);
+
+  const chooseImage = async () => {
+    setIsSelecting(true);
+    setError(null);
+    try {
+      const selection = await client.chooseSearchImage();
+      setSelectedImage(selection.selected_path);
+    } catch (selectionError) {
+      setError(tauriErrorDetail(selectionError, "MemeSort could not choose an image."));
+    } finally {
+      setIsSelecting(false);
+    }
+  };
+
+  const search = async () => {
+    if (!selectedImage) return;
+    cancelCurrentSearch();
+    const requestId = crypto.randomUUID();
+    activeRequestId.current = requestId;
+    setIsSearching(true);
+    setError(null);
+    try {
+      const result = await client.searchImage(requestId);
+      if (activeRequestId.current === requestId) setResults(result.results);
+    } catch (requestError) {
+      if (activeRequestId.current === requestId) {
+        setError(tauriErrorDetail(requestError, "MemeSort could not complete this Search Request."));
+      }
+    } finally {
+      if (activeRequestId.current === requestId) {
+        activeRequestId.current = null;
+        setIsSearching(false);
+      }
+    }
+  };
+
+  return (
+    <Page title="Image search" eyebrow="Search Request">
+      <section className="surface search-panel">
+        <h2>Search by image</h2>
+        <p>Choose an image with the native dialog. Its filesystem path stays outside the WebView.</p>
+        <p className="mono">{selectedImage ?? "No image selected"}</p>
+        <div className="import-actions">
+          <button className="button button-secondary" type="button" disabled={isSelecting || isSearching} onClick={() => void chooseImage()}>
+            Choose image
+          </button>
+          <button className="button" type="button" disabled={isSelecting || isSearching || !selectedImage} onClick={() => void search()}>
+            Search image
+          </button>
+        </div>
+        <p>Each request is scoped to this page and is cancelled when you replace it or leave the page.</p>
+      </section>
+      {isSearching ? <p aria-live="polite">Searching the Active Index Recipe…</p> : null}
+      {error ? <section className="notice notice-warning" role="alert"><strong>Search unavailable</strong><span>{error}</span></section> : null}
+      {results ? (
+        results.length ? <section className="search-results" aria-label="Image search results" role="region">
+          {results.map((result) => {
+            const preview = mediaUrl(result.thumbnail_url) ?? mediaUrl(result.library_url);
+            return <article className="search-result" key={result.asset_id}>
+              {preview ? <img src={preview} alt="" /> : <div className="media-placeholder" aria-hidden="true" />}
+              <div><strong>{result.library_path}</strong><p>{result.match_sources.join(" + ")} match · score {result.score.toFixed(3)}</p>{result.ocr_snippet ? <p>{result.ocr_snippet}</p> : null}</div>
+            </article>;
+          })}
+        </section> : <EmptyState title="No matches yet" detail="Choose another image, or index more Assets with the Active Index Recipe." />
+      ) : null}
+    </Page>
+  );
+}
+
 function DuplicatesPage() {
   return (
     <Page title="Duplicate assets" eyebrow="Library maintenance">
@@ -332,7 +417,7 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
       <Route path="/setup" element={<SetupPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="/search" element={<SearchPage title="Search MemeSort" detail="Text, image, and similar-Asset retrieval will arrive as separate cancellable Search Request slices." />} />
       <Route path="/search/text" element={<TextSearchPage client={client} />} />
-      <Route path="/search/image" element={<SearchPage title="Image search" detail="Image retrieval will use the native image picker and a scoped Search Request." />} />
+      <Route path="/search/image" element={<ImageSearchPage client={client} />} />
       <Route path="/search/similar" element={<SearchPage title="Find similar Assets" detail="Choose an Asset from the library to find semantically similar Assets." />} />
       <Route path="/duplicates" element={<DuplicatesPage />} />
       <Route path="/status" element={<StatusPage state={state} />} />

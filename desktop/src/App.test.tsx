@@ -127,6 +127,15 @@ const client = {
     top_k: 18,
     results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
   })),
+  searchImage: vi.fn(async () => ({
+    library_root: "C:/Library",
+    active_recipe_id: "recipe-1",
+    active_recipe_label: "Vulkan0 recipe",
+    query_path: "C:/Source/query.png",
+    query_media_type: "image/png",
+    top_k: 18,
+    results: [{ asset_id: "123e4567-e89b-12d3-a456-426614174000", library_url: "/media/originals/first.gif", thumbnail_url: "/media/thumbnails/first.jpg", library_path: "originals/first.gif", media_type: "image/gif", score: 0.92, match_sources: ["visual"] }],
+  })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
 };
 
@@ -212,6 +221,20 @@ describe("App", () => {
 
     expect(await screen.findByText("originals/first.gif")).toBeInTheDocument();
     expect(client.searchText).toHaveBeenCalledWith("surprised reaction", expect.any(String));
+  });
+
+  it("searches an image selected through the native dialog", async () => {
+    renderApp("/search/image");
+
+    expect(await screen.findByRole("button", { name: "Search image" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Choose image" }));
+    expect(await screen.findByText("C:/Source/query.png")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search image" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Search image" }));
+
+    expect(await screen.findByRole("region", { name: "Image search results" })).toBeInTheDocument();
+    expect(client.searchImage).toHaveBeenCalledWith(expect.any(String));
+    expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
   });
 
   it("imports only a folder selected through the native dialog", async () => {

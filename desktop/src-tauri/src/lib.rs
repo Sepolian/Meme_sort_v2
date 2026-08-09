@@ -36,6 +36,7 @@ pub fn run() {
             sidecar::pause_import,
             sidecar::resume_import,
             sidecar::search_text,
+            sidecar::search_image,
             sidecar::cancel_search
         ])
         .build(tauri::generate_context!())

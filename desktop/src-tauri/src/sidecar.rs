@@ -145,6 +145,15 @@ impl SearchImageSelection {
         *selection = path;
         Ok(selected_path)
     }
+
+    fn selected_path(&self) -> Result<String, SidecarError> {
+        self.0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort image selection is unavailable."))?
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .ok_or_else(|| SidecarError::new("Choose an image before searching."))
+    }
 }
 
 impl SidecarState {
@@ -370,6 +379,24 @@ impl SidecarSession {
         )
     }
 
+    fn search_image_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        image_path: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::SearchImage,
+            &SearchImagePayload {
+                path: image_path.to_owned(),
+                top_k: 18,
+                request_id: validate_asset_id(request_id)?,
+            },
+        )
+    }
+
     fn media_response(
         &self,
         request: &http::Request<Vec<u8>>,
@@ -417,6 +444,7 @@ enum MutationRoute {
     PauseImport,
     ResumeImport,
     CancelSearch,
+    SearchImage,
 }
 
 impl MutationRoute {
@@ -429,6 +457,7 @@ impl MutationRoute {
             Self::PauseImport => "/api/import/pause",
             Self::ResumeImport => "/api/import/resume",
             Self::CancelSearch => "/api/search/cancel",
+            Self::SearchImage => "/api/search-image",
         }
     }
 }
@@ -461,6 +490,13 @@ struct EmptyPayload {}
 
 #[derive(Serialize)]
 struct SearchRequestPayload {
+    request_id: String,
+}
+
+#[derive(Serialize)]
+struct SearchImagePayload {
+    path: String,
+    top_k: u8,
     request_id: String,
 }
 
@@ -732,6 +768,29 @@ pub fn cancel_search(
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::cancel_search_for_connection(origin, session_cookie, &request_id)
     })
+}
+
+#[tauri::command]
+pub async fn search_image(
+    app: AppHandle,
+    request_id: String,
+) -> Result<serde_json::Value, SidecarError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let selection = app
+            .try_state::<SearchImageSelection>()
+            .ok_or_else(|| SidecarError::new("MemeSort image selection is unavailable."))?;
+        let image_path = selection.selected_path()?;
+        with_sidecar_connection(&app, |origin, session_cookie| {
+            SidecarSession::search_image_for_connection(
+                origin,
+                session_cookie,
+                &image_path,
+                &request_id,
+            )
+        })
+    })
+    .await
+    .map_err(|error| SidecarError::new(format!("Image Search Request did not complete: {error}")))?
 }
 
 fn start_selected_import(
@@ -1191,7 +1250,7 @@ mod tests {
         managed_media_path, parse_handshake, parse_json_response, validate_asset_id,
         validate_asset_ids, validate_search_query, validate_source_path, ApiRoute, AssetIdPayload,
         BatchAssetAction, BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
-        RemoveSourceRecordPayload, SidecarSession, StartImportPayload,
+        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1502,6 +1561,63 @@ mod tests {
 
         assert!(validate_search_query("\n").is_err());
         assert!(validate_search_query("valid query").is_ok());
+    }
+
+    #[test]
+    fn forwards_a_native_selected_image_search_only_to_its_fixed_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("image search should connect");
+            let mut request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = stream.read(&mut chunk).expect("image search should read");
+                request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers =
+                    std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("image search should include a body length");
+                if request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+            assert!(request.starts_with("POST /api/search-image HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            assert!(request.contains("\"path\":\"C:/Source/query.png\""));
+            assert!(request.contains("\"top_k\":18"));
+            assert!(request.contains("\"request_id\":\"123e4567-e89b-12d3-a456-426614174000\""));
+            assert!(!request.contains("start_indexing"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"results\":[]}",
+                )
+                .expect("image search response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+        let selection = SearchImageSelection::new();
+        selection
+            .replace(Some(PathBuf::from("C:/Source/query.png")))
+            .expect("native image selection should be stored");
+
+        SidecarSession::search_image_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            &selection
+                .selected_path()
+                .expect("selected image path should be available"),
+            "123e4567-e89b-12d3-a456-426614174000",
+        )
+        .expect("image search should succeed");
+        server.join().expect("test server should finish");
     }
 
     #[test]

@@ -53,6 +53,16 @@ export interface SearchResult {
   results: SearchAsset[];
 }
 
+export interface ImageSearchResult {
+  library_root: string;
+  active_recipe_id: string;
+  active_recipe_label: string;
+  query_path: string;
+  query_media_type: string;
+  top_k: number;
+  results: SearchAsset[];
+}
+
 export interface SearchAsset {
   asset_id: string;
   library_url: string;

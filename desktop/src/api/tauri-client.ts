@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, FolderSelection, ImportTask, SearchResult } from "./types";
+import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, FolderSelection, ImageSearchResult, ImportTask, SearchResult } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -17,6 +17,7 @@ export interface MemeSortClient {
   pauseImport(): Promise<ImportTask>;
   resumeImport(): Promise<ImportTask>;
   searchText(query: string, requestId: string): Promise<SearchResult>;
+  searchImage(requestId: string): Promise<ImageSearchResult>;
   cancelSearch(requestId: string): Promise<{ request_id: string; cancelled: boolean; was_active: boolean }>;
 }
 
@@ -35,6 +36,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     pauseImport: () => invokeCommand<ImportTask>("pause_import"),
     resumeImport: () => invokeCommand<ImportTask>("resume_import"),
     searchText: (query, requestId) => invokeCommand<SearchResult>("search_text", { query, requestId }),
+    searchImage: (requestId) => invokeCommand<ImageSearchResult>("search_image", { requestId }),
     cancelSearch: (requestId) => invokeCommand("cancel_search", { requestId }),
   };
 }
