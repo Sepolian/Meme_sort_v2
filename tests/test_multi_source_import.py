@@ -3,7 +3,10 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
+import threading
 import unittest
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +31,33 @@ class _ReparseMetadata:
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._metadata, name)
+
+
+class _CommitOutcomeUncertainConnection:
+    """Report one commit failure after SQLite has durably committed it."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+        self._reported_uncertain_commit = False
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._connection, name)
+
+    def __enter__(self) -> "_CommitOutcomeUncertainConnection":
+        self._connection.__enter__()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> bool:
+        suppress = self._connection.__exit__(exc_type, exc, traceback)
+        if exc_type is None and not self._reported_uncertain_commit:
+            self._reported_uncertain_commit = True
+            raise sqlite3.OperationalError("commit acknowledgement was lost")
+        return suppress
 
 
 class MultiSourceImportTests(unittest.TestCase):
@@ -441,6 +471,327 @@ class MultiSourceImportTests(unittest.TestCase):
             ImportFailureCode.DATABASE_WRITE_FAILED,
             result.failure_details[0].code,
         )
+
+    def test_keeps_a_referenced_library_copy_when_commit_acknowledgement_is_lost(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            asset_catalog.initialize_library(library_root)
+            original_connect = asset_catalog.connect
+            connection_count = 0
+
+            def connect_with_uncertain_import_commit(
+                database_file: Path,
+            ) -> sqlite3.Connection | _CommitOutcomeUncertainConnection:
+                nonlocal connection_count
+                connection_count += 1
+                connection = original_connect(database_file)
+                if connection_count == 2:
+                    return _CommitOutcomeUncertainConnection(connection)
+                return connection
+
+            with patch.object(
+                asset_catalog,
+                "connect",
+                side_effect=connect_with_uncertain_import_commit,
+            ):
+                result = import_sources(library_root, [source])
+            assets = list_assets(library_root)
+            originals = list((library_root / "originals").iterdir())
+            retained_copy_is_file = len(originals) == 1 and originals[0].is_file()
+
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(0, result.failed_files)
+        self.assertEqual(1, len(assets.assets))
+        self.assertEqual(1, len(originals))
+        self.assertTrue(retained_copy_is_file)
+
+    def test_concurrent_equal_content_imports_reuse_the_winning_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_source = root / "first.png"
+            second_source = root / "second.png"
+            library_root = root / "library"
+            self._write_image(first_source, (255, 0, 0))
+            second_source.write_bytes(first_source.read_bytes())
+            asset_catalog.initialize_library(library_root)
+            ready_to_finalize = threading.Barrier(2)
+            original_replace = asset_catalog.os.replace
+
+            def replace_after_both_candidates_are_verified(
+                source_path: object,
+                destination_path: object,
+            ) -> None:
+                if Path(destination_path).parent == library_root / "originals":
+                    ready_to_finalize.wait(timeout=5)
+                original_replace(source_path, destination_path)
+
+            with (
+                patch.object(
+                    asset_catalog.os,
+                    "replace",
+                    side_effect=replace_after_both_candidates_are_verified,
+                ),
+                ThreadPoolExecutor(max_workers=2) as executor,
+            ):
+                first_future = executor.submit(
+                    import_sources,
+                    library_root,
+                    [first_source],
+                )
+                second_future = executor.submit(
+                    import_sources,
+                    library_root,
+                    [second_source],
+                )
+                results = [first_future.result(), second_future.result()]
+
+            assets = list_assets(library_root)
+            originals = list((library_root / "originals").iterdir())
+
+        self.assertEqual(1, sum(result.new_assets for result in results))
+        self.assertEqual(1, sum(result.duplicate_assets for result in results))
+        self.assertEqual(0, sum(result.failed_files for result in results))
+        self.assertEqual(2, sum(result.source_records_added for result in results))
+        self.assertEqual(1, len(assets.assets))
+        self.assertEqual(2, assets.assets[0]["source_record_count"])
+        self.assertEqual(1, len(originals))
+
+    def test_concurrent_imports_of_one_source_count_one_add_and_one_refresh(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            asset_catalog.initialize_library(library_root)
+            ready_to_finalize = threading.Barrier(2)
+            original_replace = asset_catalog.os.replace
+
+            def replace_after_both_candidates_are_verified(
+                source_path: object,
+                destination_path: object,
+            ) -> None:
+                if Path(destination_path).parent == library_root / "originals":
+                    ready_to_finalize.wait(timeout=5)
+                original_replace(source_path, destination_path)
+
+            with (
+                patch.object(
+                    asset_catalog.os,
+                    "replace",
+                    side_effect=replace_after_both_candidates_are_verified,
+                ),
+                ThreadPoolExecutor(max_workers=2) as executor,
+            ):
+                futures = [
+                    executor.submit(import_sources, library_root, [source])
+                    for _ in range(2)
+                ]
+                results = [future.result() for future in futures]
+
+            assets = list_assets(library_root)
+
+        self.assertEqual(1, sum(result.new_assets for result in results))
+        self.assertEqual(1, sum(result.duplicate_assets for result in results))
+        self.assertEqual(1, sum(result.source_records_added for result in results))
+        self.assertEqual(1, sum(result.source_records_refreshed for result in results))
+        self.assertEqual(0, sum(result.failed_files for result in results))
+        self.assertEqual(1, assets.assets[0]["source_record_count"])
+
+    def test_reconciles_a_lost_race_winner_source_commit_acknowledgement(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_source = root / "first.png"
+            second_source = root / "second.png"
+            library_root = root / "library"
+            self._write_image(first_source, (255, 0, 0))
+            second_source.write_bytes(first_source.read_bytes())
+            asset_catalog.initialize_library(library_root)
+            ready_to_finalize = threading.Barrier(2)
+            original_replace = asset_catalog.os.replace
+            original_recover = asset_catalog._recover_new_asset_commit
+
+            def replace_after_both_candidates_are_verified(
+                source_path: object,
+                destination_path: object,
+            ) -> None:
+                if Path(destination_path).parent == library_root / "originals":
+                    ready_to_finalize.wait(timeout=5)
+                original_replace(source_path, destination_path)
+
+            def recover_with_uncertain_winner_source_commit(
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                original_connect = asset_catalog.connect
+                connection_count = 0
+
+                def connect_with_one_uncertain_commit(
+                    database_file: Path,
+                ) -> sqlite3.Connection | _CommitOutcomeUncertainConnection:
+                    nonlocal connection_count
+                    connection_count += 1
+                    connection = original_connect(database_file)
+                    if connection_count == 1:
+                        return _CommitOutcomeUncertainConnection(connection)
+                    return connection
+
+                with patch.object(
+                    asset_catalog,
+                    "connect",
+                    side_effect=connect_with_one_uncertain_commit,
+                ):
+                    return original_recover(*args, **kwargs)
+
+            with (
+                patch.object(
+                    asset_catalog.os,
+                    "replace",
+                    side_effect=replace_after_both_candidates_are_verified,
+                ),
+                patch.object(
+                    asset_catalog,
+                    "_recover_new_asset_commit",
+                    side_effect=recover_with_uncertain_winner_source_commit,
+                ),
+                ThreadPoolExecutor(max_workers=2) as executor,
+            ):
+                first_future = executor.submit(
+                    import_sources,
+                    library_root,
+                    [first_source],
+                )
+                second_future = executor.submit(
+                    import_sources,
+                    library_root,
+                    [second_source],
+                )
+                results = [first_future.result(), second_future.result()]
+
+            assets = list_assets(library_root)
+
+        self.assertEqual(1, sum(result.new_assets for result in results))
+        self.assertEqual(1, sum(result.duplicate_assets for result in results))
+        self.assertEqual(0, sum(result.failed_files for result in results))
+        self.assertEqual(2, sum(result.source_records_added for result in results))
+        self.assertEqual(2, assets.assets[0]["source_record_count"])
+
+    def test_counts_a_duplicate_when_its_commit_acknowledgement_is_lost(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_source = root / "first.png"
+            second_source = root / "second.png"
+            library_root = root / "library"
+            self._write_image(first_source, (255, 0, 0))
+            second_source.write_bytes(first_source.read_bytes())
+            import_sources(library_root, [first_source])
+            original_connect = asset_catalog.connect
+            connection_count = 0
+
+            def connect_with_uncertain_duplicate_commit(
+                database_file: Path,
+            ) -> sqlite3.Connection | _CommitOutcomeUncertainConnection:
+                nonlocal connection_count
+                connection_count += 1
+                connection = original_connect(database_file)
+                if connection_count == 2:
+                    return _CommitOutcomeUncertainConnection(connection)
+                return connection
+
+            with patch.object(
+                asset_catalog,
+                "connect",
+                side_effect=connect_with_uncertain_duplicate_commit,
+            ):
+                result = import_sources(library_root, [second_source])
+            assets = list_assets(library_root)
+
+        self.assertEqual(1, result.duplicate_assets)
+        self.assertEqual(0, result.failed_files)
+        self.assertEqual(1, result.source_records_added)
+        self.assertEqual(2, assets.assets[0]["source_record_count"])
+
+    def test_recovery_removes_only_recognized_uncataloged_import_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            asset_catalog.initialize_library(library_root)
+            originals = library_root / "originals"
+            abandoned_id = str(uuid.uuid4())
+            abandoned_temporary = originals / f".{abandoned_id}.tmp"
+            abandoned_final = originals / f"{abandoned_id}.png"
+            abandoned_marker = originals / f".{abandoned_id}.png.pending"
+            ordinary_content = originals / "keep-this-file.png"
+            unrecognized_temporary = originals / ".not-an-import-id.tmp"
+            abandoned_temporary.write_bytes(b"partial")
+            abandoned_final.write_bytes(b"complete but uncataloged")
+            abandoned_marker.touch()
+            ordinary_content.write_bytes(b"ordinary content")
+            unrecognized_temporary.write_bytes(b"unknown ownership")
+
+            asset_catalog.initialize_library(library_root)
+            recovered_names = {path.name for path in originals.iterdir()}
+            result = import_sources(library_root, [source])
+            remaining_names = {path.name for path in originals.iterdir()}
+
+        self.assertEqual(1, result.new_assets)
+        self.assertNotIn(abandoned_temporary.name, recovered_names)
+        self.assertNotIn(abandoned_final.name, recovered_names)
+        self.assertNotIn(abandoned_marker.name, recovered_names)
+        self.assertNotIn(abandoned_temporary.name, remaining_names)
+        self.assertNotIn(abandoned_final.name, remaining_names)
+        self.assertNotIn(abandoned_marker.name, remaining_names)
+        self.assertIn(ordinary_content.name, remaining_names)
+        self.assertIn(unrecognized_temporary.name, remaining_names)
+
+    def test_verifies_required_library_locations_before_copying_candidates(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            original_open = asset_catalog.Path.open
+
+            def open_with_unusable_originals(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                if (
+                    path.parent == library_root / "originals"
+                    and path.name.startswith(".library-location-check-")
+                ):
+                    raise PermissionError("originals is not writable")
+                return original_open(path, *args, **kwargs)
+
+            with (
+                patch.object(
+                    asset_catalog.Path,
+                    "open",
+                    new=open_with_unusable_originals,
+                ),
+                patch.object(
+                    asset_catalog.shutil,
+                    "copy2",
+                    wraps=asset_catalog.shutil.copy2,
+                ) as copy_file,
+                self.assertRaisesRegex(PermissionError, "not writable"),
+            ):
+                import_sources(library_root, [source])
+
+        copy_file.assert_not_called()
 
     def test_removes_overlapping_top_level_sources_before_scanning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

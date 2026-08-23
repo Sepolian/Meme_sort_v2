@@ -12,8 +12,10 @@ import os
 import shutil
 import sqlite3
 import stat
+import threading
 import uuid
 from collections.abc import Sequence
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +62,24 @@ MAX_IMPORT_DISCOVERED_FILES = 100_000
 MAX_IMPORT_SOURCE_BYTES = 30 * 1024 * 1024
 MAX_IMPORT_FRAME_PIXELS = 64_000_000
 MAX_IMPORT_GIF_FRAMES = 1_000
+
+_ACTIVE_IMPORT_FILES: set[Path] = set()
+_ACTIVE_IMPORT_FILES_LOCK = threading.Lock()
+
+
+def _mark_import_file_active(file_path: Path) -> None:
+    with _ACTIVE_IMPORT_FILES_LOCK:
+        _ACTIVE_IMPORT_FILES.add(file_path)
+
+
+def _release_active_import_file(file_path: Path) -> None:
+    with _ACTIVE_IMPORT_FILES_LOCK:
+        _ACTIVE_IMPORT_FILES.discard(file_path)
+
+
+def _import_file_is_active(file_path: Path) -> bool:
+    with _ACTIVE_IMPORT_FILES_LOCK:
+        return file_path in _ACTIVE_IMPORT_FILES
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +173,14 @@ class _CandidateImportError(Exception):
         self.stage = stage
         self.code = code
         self.detail = detail
+
+
+@dataclass(frozen=True)
+class _CatalogCommitOutcome:
+    asset_id: str
+    is_new_asset: bool
+    source_change: str
+    jobs_created: int
 
 
 @dataclass
@@ -815,8 +843,77 @@ def _delete_unreferenced_library_copy(file_path: Path) -> None:
     )
 
 
+def _uuid_from_owned_name(value: str) -> str | None:
+    try:
+        parsed = uuid.UUID(value)
+    except ValueError:
+        return None
+    canonical = str(parsed)
+    return canonical if value.lower() == canonical else None
+
+
+def _abandoned_temporary_name(file_name: str) -> bool:
+    if not file_name.startswith(".") or not file_name.endswith(".tmp"):
+        return False
+    return _uuid_from_owned_name(file_name[1:-4]) is not None
+
+
+def _pending_final_name(marker_name: str) -> str | None:
+    if not marker_name.startswith(".") or not marker_name.endswith(".pending"):
+        return None
+    final_name = marker_name[1:-8]
+    final_path = Path(final_name)
+    if final_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        return None
+    if _uuid_from_owned_name(final_path.stem) is None:
+        return None
+    return final_name
+
+
+def _delete_owned_file_best_effort(file_path: Path) -> None:
+    try:
+        _delete_unreferenced_library_copy(file_path)
+    except _CandidateImportError:
+        pass
+
+
+def _recover_abandoned_import_files(
+    library_root_path: Path,
+    conn: sqlite3.Connection,
+) -> None:
+    """Clean only import-owned names whose Library Copy is not cataloged."""
+    originals_path = library_root_path / "originals"
+    referenced_paths = {
+        str(row["library_path"])
+        for row in conn.execute("SELECT library_path FROM asset").fetchall()
+    }
+    for candidate in sorted(originals_path.iterdir(), key=lambda path: path.name):
+        candidate_relative = (Path("originals") / candidate.name).as_posix()
+        if _abandoned_temporary_name(candidate.name):
+            if _import_file_is_active(candidate):
+                continue
+            if candidate_relative not in referenced_paths:
+                _delete_owned_file_best_effort(candidate)
+            continue
+
+        final_name = _pending_final_name(candidate.name)
+        if final_name is None or candidate_relative in referenced_paths:
+            continue
+        if _import_file_is_active(candidate):
+            continue
+        final_relative = (Path("originals") / final_name).as_posix()
+        if final_relative not in referenced_paths:
+            _delete_owned_file_best_effort(originals_path / final_name)
+        _delete_owned_file_best_effort(candidate)
+
+
 def upsert_source_record(
-    conn: sqlite3.Connection, asset_id: str, source_path: str, now: str
+    conn: sqlite3.Connection,
+    asset_id: str,
+    source_path: str,
+    now: str,
+    *,
+    new_source_record_id: str | None = None,
 ) -> str:
     existing = conn.execute(
         """
@@ -849,9 +946,180 @@ def upsert_source_record(
         )
         VALUES (?, ?, ?, ?, ?)
         """,
-        (str(uuid.uuid4()), asset_id, source_path, now, now),
+        (new_source_record_id or str(uuid.uuid4()), asset_id, source_path, now, now),
     )
     return "added"
+
+
+def _recover_new_asset_commit(
+    library_root_path: Path,
+    *,
+    attempted_asset_id: str,
+    content_hash: str,
+    source_path: str,
+    now: str,
+) -> _CatalogCommitOutcome | None:
+    """Resolve an uncertain commit or a unique-content race from durable state."""
+    with closing(connect(database_path(library_root_path))) as recovery_conn:
+        winner = recovery_conn.execute(
+            """
+            SELECT id
+            FROM asset
+            WHERE content_hash = ?
+              AND deleted_at IS NULL
+            """,
+            (content_hash,),
+        ).fetchone()
+        if winner is None:
+            return None
+
+        winner_id = str(winner["id"])
+        if winner_id == attempted_asset_id:
+            source_record = recovery_conn.execute(
+                """
+                SELECT id
+                FROM source_record
+                WHERE asset_id = ?
+                  AND source_path = ?
+                """,
+                (winner_id, source_path),
+            ).fetchone()
+            if source_record is None:
+                return None
+            jobs_created = int(
+                recovery_conn.execute(
+                    "SELECT COUNT(*) FROM job WHERE asset_id = ?",
+                    (winner_id,),
+                ).fetchone()[0]
+            )
+            return _CatalogCommitOutcome(
+                asset_id=winner_id,
+                is_new_asset=True,
+                source_change="added",
+                jobs_created=jobs_created,
+            )
+
+        source_change = _commit_existing_asset_source_record(
+            library_root_path,
+            recovery_conn,
+            asset_id=winner_id,
+            source_path=source_path,
+            now=now,
+        )
+        return _CatalogCommitOutcome(
+            asset_id=winner_id,
+            is_new_asset=False,
+            source_change=source_change,
+            jobs_created=0,
+        )
+
+
+def _library_copy_is_referenced(
+    library_root_path: Path,
+    destination_relative: Path,
+) -> bool:
+    """Conservatively decide whether cleanup may remove a final Library Copy."""
+    try:
+        recovery_conn = connect(database_path(library_root_path))
+    except sqlite3.Error:
+        return True
+    with closing(recovery_conn):
+        try:
+            row = recovery_conn.execute(
+                "SELECT id FROM asset WHERE library_path = ?",
+                (destination_relative.as_posix(),),
+            ).fetchone()
+            return row is not None
+        except sqlite3.Error:
+            return True
+
+
+def _recover_existing_asset_source_commit(
+    library_root_path: Path,
+    *,
+    asset_id: str,
+    source_path: str,
+    source_existed_before: bool,
+    attempted_source_record_id: str,
+    now: str,
+) -> str | None:
+    """Confirm an existing Asset's Source Record after a reported failure."""
+    with closing(connect(database_path(library_root_path))) as recovery_conn:
+        row = recovery_conn.execute(
+            """
+            SELECT id, last_seen_at
+            FROM source_record
+            WHERE asset_id = ?
+              AND source_path = ?
+            """,
+            (asset_id, source_path),
+        ).fetchone()
+        if row is None:
+            return None
+        if not source_existed_before:
+            if str(row["id"]) == attempted_source_record_id:
+                return "added"
+            return "refreshed"
+        if str(row["last_seen_at"]) == now:
+            return "refreshed"
+        return None
+
+
+def _commit_existing_asset_source_record(
+    library_root_path: Path,
+    conn: sqlite3.Connection,
+    *,
+    asset_id: str,
+    source_path: str,
+    now: str,
+) -> str:
+    """Commit or reconcile one Source Record for an existing Asset."""
+    existing_source_record = conn.execute(
+        """
+        SELECT id
+        FROM source_record
+        WHERE asset_id = ?
+          AND source_path = ?
+        """,
+        (asset_id, source_path),
+    ).fetchone()
+    source_existed_before = existing_source_record is not None
+    attempted_source_record_id = str(uuid.uuid4())
+    try:
+        with conn:
+            return upsert_source_record(
+                conn=conn,
+                asset_id=asset_id,
+                source_path=source_path,
+                now=now,
+                new_source_record_id=attempted_source_record_id,
+            )
+    except sqlite3.Error:
+        recovered_source_change = _recover_existing_asset_source_commit(
+            library_root_path,
+            asset_id=asset_id,
+            source_path=source_path,
+            source_existed_before=source_existed_before,
+            attempted_source_record_id=attempted_source_record_id,
+            now=now,
+        )
+        if recovered_source_change is None:
+            raise
+        return recovered_source_change
+
+
+def _verify_import_library_locations(library_root_path: Path) -> None:
+    """Prove every required Library directory accepts a short-lived write."""
+    for relative_directory in LIBRARY_DIRS:
+        directory = library_root_path / relative_directory
+        if not directory.is_dir():
+            raise OSError(f"Required Library location is not a directory: {directory}")
+        probe = directory / f".library-location-check-{uuid.uuid4()}.probe"
+        try:
+            with probe.open("xb"):
+                pass
+        finally:
+            probe.unlink(missing_ok=True)
 
 
 def delete_asset_rows(
@@ -944,6 +1212,7 @@ def initialize_library(
     try:
         with conn:
             create_schema(conn)
+            _recover_abandoned_import_files(library_root, conn)
             recipe_id, _, _ = activate_manifest_recipe(conn, provider)
             ocr_artifacts.ensure_default_ocr_recipe(conn)
             ocr_artifacts.ensure_missing_ocr_jobs(conn, now=utc_now())
@@ -1024,19 +1293,23 @@ def _import_file_candidates(
                 ).fetchone()
 
                 if existing_asset is not None:
+                    existing_asset_id = str(existing_asset["id"])
                     try:
-                        with conn:
-                            source_change = upsert_source_record(
-                                conn=conn,
-                                asset_id=str(existing_asset["id"]),
-                                source_path=str(file_path),
-                                now=now,
-                            )
+                        source_change = _commit_existing_asset_source_record(
+                            library_root_path,
+                            conn,
+                            asset_id=existing_asset_id,
+                            source_path=str(file_path),
+                            now=now,
+                        )
                     except sqlite3.Error as error:
                         raise _CandidateImportError(
                             stage=ImportFailureStage.DATABASE,
                             code=ImportFailureCode.DATABASE_WRITE_FAILED,
-                            detail="The duplicate Asset could not be cataloged.",
+                            detail=(
+                                "The existing Asset's Source Record could not "
+                                "be cataloged."
+                            ),
                         ) from error
                     duplicate_assets += 1
                     if source_change == "added":
@@ -1051,6 +1324,13 @@ def _import_file_candidates(
                 )
                 destination_absolute = library_root_path / destination_relative
                 temporary_absolute = library_root_path / "originals" / f".{asset_id}.tmp"
+                pending_marker = (
+                    library_root_path
+                    / "originals"
+                    / f".{asset_id}{file_path.suffix.lower()}.pending"
+                )
+                finalization_started = False
+                _mark_import_file_active(temporary_absolute)
                 try:
                     try:
                         shutil.copy2(file_path, temporary_absolute)
@@ -1099,16 +1379,27 @@ def _import_file_candidates(
                             detail="The source file changed while it was being copied.",
                         )
                     try:
+                        _mark_import_file_active(pending_marker)
+                        pending_marker.touch(exist_ok=False)
+                        finalization_started = True
                         os.replace(temporary_absolute, destination_absolute)
                     except OSError as error:
+                        _delete_owned_file_best_effort(pending_marker)
+                        _release_active_import_file(pending_marker)
                         raise _CandidateImportError(
                             stage=ImportFailureStage.COPY,
                             code=ImportFailureCode.LIBRARY_COPY_FAILED,
                             detail="The verified Library Copy could not be finalized.",
                         ) from error
                 finally:
-                    _delete_unreferenced_library_copy(temporary_absolute)
+                    try:
+                        _delete_unreferenced_library_copy(temporary_absolute)
+                    finally:
+                        _release_active_import_file(temporary_absolute)
+                    if finalization_started and not destination_absolute.exists():
+                        _delete_owned_file_best_effort(pending_marker)
 
+                catalog_outcome: _CatalogCommitOutcome | None = None
                 try:
                     with conn:
                         conn.execute(
@@ -1166,16 +1457,52 @@ def _import_file_candidates(
                             ocr_recipe_id=ocr_recipe_id,
                         )
                 except (OSError, sqlite3.Error) as error:
-                    _delete_unreferenced_library_copy(destination_absolute)
-                    raise _CandidateImportError(
-                        stage=ImportFailureStage.DATABASE,
-                        code=ImportFailureCode.DATABASE_WRITE_FAILED,
-                        detail="The verified Library Copy could not be cataloged.",
-                    ) from error
+                    try:
+                        catalog_outcome = _recover_new_asset_commit(
+                            library_root_path,
+                            attempted_asset_id=asset_id,
+                            content_hash=content_hash,
+                            source_path=str(file_path),
+                            now=now,
+                        )
+                    except sqlite3.Error:
+                        catalog_outcome = None
+                    if catalog_outcome is None:
+                        if not _library_copy_is_referenced(
+                            library_root_path,
+                            destination_relative,
+                        ):
+                            _delete_unreferenced_library_copy(destination_absolute)
+                            _delete_owned_file_best_effort(pending_marker)
+                        _release_active_import_file(pending_marker)
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.DATABASE,
+                            code=ImportFailureCode.DATABASE_WRITE_FAILED,
+                            detail="The verified Library Copy could not be cataloged.",
+                        ) from error
+                else:
+                    catalog_outcome = _CatalogCommitOutcome(
+                        asset_id=asset_id,
+                        is_new_asset=True,
+                        source_change=source_change,
+                        jobs_created=created_jobs,
+                    )
 
-                new_assets += 1
-                jobs_created += created_jobs
-                if source_change == "added":
+                if catalog_outcome.asset_id != asset_id:
+                    if not _library_copy_is_referenced(
+                        library_root_path,
+                        destination_relative,
+                    ):
+                        _delete_unreferenced_library_copy(destination_absolute)
+                _delete_owned_file_best_effort(pending_marker)
+                _release_active_import_file(pending_marker)
+
+                if catalog_outcome.is_new_asset:
+                    new_assets += 1
+                else:
+                    duplicate_assets += 1
+                jobs_created += catalog_outcome.jobs_created
+                if catalog_outcome.source_change == "added":
                     source_records_added += 1
                 else:
                     source_records_refreshed += 1
@@ -1642,6 +1969,7 @@ def import_sources(
 
     init_result = initialize_library(library_root_path, provider)
     library_root_path = Path(init_result.library_root)
+    _verify_import_library_locations(library_root_path)
     summary = _import_file_candidates(
         library_root_path,
         file_paths,
