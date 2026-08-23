@@ -5,7 +5,9 @@ import unittest
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
+from memesort_worker import asset_catalog
 from memesort_worker.library import (
     ImportBatchError,
     ImportBatchErrorCode,
@@ -212,6 +214,26 @@ class ImportFolderCompatibilityTests(unittest.TestCase):
             },
             {field.name for field in fields(result)},
         )
+
+    def test_folder_adapter_stops_at_the_scan_limit_before_library_creation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_root = root / "source"
+            library_root = root / "library"
+            source_root.mkdir()
+            for name in ("one.txt", "two.txt", "three.txt"):
+                (source_root / name).write_text(name)
+
+            with patch.object(asset_catalog, "MAX_IMPORT_DISCOVERED_FILES", 2):
+                with self.assertRaises(ImportBatchError) as raised:
+                    import_folder(library_root, source_root)
+            library_created = library_root.exists()
+
+        self.assertEqual(ImportBatchErrorCode.FILE_LIMIT_EXCEEDED, raised.exception.code)
+        self.assertIsNotNone(raised.exception.partial_result)
+        self.assertFalse(library_created)
 
 
 if __name__ == "__main__":

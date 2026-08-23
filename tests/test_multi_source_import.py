@@ -1,16 +1,32 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
 from memesort_worker.library import (
+    ImportBatchError,
+    ImportBatchErrorCode,
     ImportBatchPreflightError,
+    ImportFailureCode,
+    ImportFailureStage,
     import_sources,
     list_assets,
 )
+from memesort_worker import asset_catalog
+
+
+class _ReparseMetadata:
+    def __init__(self, metadata: object) -> None:
+        self._metadata = metadata
+        self.st_file_attributes = 0x400
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._metadata, name)
 
 
 class MultiSourceImportTests(unittest.TestCase):
@@ -49,6 +65,444 @@ class MultiSourceImportTests(unittest.TestCase):
         self.assertEqual(0, result.source_records_refreshed)
         self.assertEqual(6, result.jobs_created)
         self.assertEqual(2, len(assets.assets))
+
+    def test_imports_a_mixed_file_and_directory_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            nested_directory = source_directory / "nested"
+            source_directory.mkdir()
+            nested_directory.mkdir()
+            first_source = source_directory / "first.png"
+            second_source = nested_directory / "second.png"
+            explicit_source = root / "explicit.png"
+            self._write_image(first_source, (255, 0, 0))
+            self._write_image(second_source, (0, 0, 255))
+            self._write_image(explicit_source, (0, 255, 0))
+
+            result = import_sources(
+                root / "library",
+                [source_directory, explicit_source],
+            )
+            assets = list_assets(root / "library")
+
+        self.assertEqual(2, result.selected_sources)
+        self.assertEqual(2, result.effective_sources)
+        self.assertEqual(3, result.discovered_files)
+        self.assertEqual(3, result.supported_files)
+        self.assertEqual(3, result.processed_files)
+        self.assertEqual(3, result.new_assets)
+        self.assertEqual(3, len(assets.assets))
+
+    def test_removes_overlapping_top_level_sources_before_scanning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            nested_directory = source_directory / "nested"
+            source_directory.mkdir()
+            nested_directory.mkdir()
+            nested_source = nested_directory / "reaction.png"
+            self._write_image(nested_source, (255, 0, 0))
+
+            result = import_sources(
+                root / "library",
+                [
+                    source_directory,
+                    nested_directory,
+                    nested_source,
+                    source_directory,
+                ],
+            )
+            assets = list_assets(root / "library")
+
+        self.assertEqual(4, result.selected_sources)
+        self.assertEqual(1, result.effective_sources)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.processed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(0, result.duplicate_assets)
+        self.assertEqual(1, len(assets.assets))
+
+    def test_deduplicates_case_variant_directory_sources_on_windows(self) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows path case rules are not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            source_directory.mkdir()
+            self._write_image(source_directory / "reaction.png", (255, 0, 0))
+            case_variant = Path(str(source_directory).upper())
+
+            result = import_sources(
+                root / "library",
+                [source_directory, case_variant],
+            )
+
+        self.assertEqual(2, result.selected_sources)
+        self.assertEqual(1, result.effective_sources)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.processed_files)
+
+    def test_skips_reparse_entries_while_scanning_a_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            external_directory = root / "external"
+            source_directory.mkdir()
+            external_directory.mkdir()
+            self._write_image(source_directory / "local.png", (255, 0, 0))
+            self._write_image(external_directory / "external.png", (0, 0, 255))
+            linked_directory = source_directory / "linked"
+            try:
+                linked_directory.symlink_to(external_directory, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Directory symlinks are unavailable: {error}")
+
+            result = import_sources(root / "library", [source_directory])
+            assets = list_assets(root / "library")
+
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.supported_files)
+        self.assertEqual(1, result.reparse_points_skipped)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, len(assets.assets))
+
+    def test_counts_a_reparse_file_as_a_skip_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            source_directory.mkdir()
+            reparse_source = source_directory / "unsafe.png"
+            self._write_image(reparse_source, (255, 0, 0))
+            original_lstat = asset_catalog.os.lstat
+
+            def lstat_with_reparse(path: object, *args: object, **kwargs: object) -> object:
+                metadata = original_lstat(path, *args, **kwargs)
+                if Path(path) == reparse_source:
+                    return _ReparseMetadata(metadata)
+                return metadata
+
+            with patch.object(
+                asset_catalog.os,
+                "lstat",
+                side_effect=lstat_with_reparse,
+            ):
+                result = import_sources(root / "library", [source_directory])
+                assets = list_assets(root / "library")
+
+        self.assertEqual(0, result.discovered_files)
+        self.assertEqual(1, result.reparse_points_skipped)
+        self.assertEqual(0, result.new_assets)
+        self.assertEqual(0, len(assets.assets))
+
+    def test_rechecks_a_queued_directory_before_scanning_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            queued_directory = source_directory / "queued"
+            source_directory.mkdir()
+            queued_directory.mkdir()
+            self._write_image(queued_directory / "reaction.png", (255, 0, 0))
+            original_lstat = asset_catalog.os.lstat
+            queued_directory_checks = 0
+
+            def lstat_with_late_reparse(
+                path: object,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                nonlocal queued_directory_checks
+                metadata = original_lstat(path, *args, **kwargs)
+                if Path(path) == queued_directory:
+                    queued_directory_checks += 1
+                    if queued_directory_checks == 2:
+                        return _ReparseMetadata(metadata)
+                return metadata
+
+            with patch.object(
+                asset_catalog.os,
+                "lstat",
+                side_effect=lstat_with_late_reparse,
+            ):
+                result = import_sources(root / "library", [source_directory])
+                assets = list_assets(root / "library")
+
+        self.assertEqual(2, queued_directory_checks)
+        self.assertEqual(0, result.discovered_files)
+        self.assertEqual(1, result.reparse_points_skipped)
+        self.assertEqual(0, result.new_assets)
+        self.assertEqual(0, len(assets.assets))
+
+    def test_discards_entries_if_a_directory_becomes_a_reparse_point_while_opening(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            queued_directory = source_directory / "queued"
+            source_directory.mkdir()
+            queued_directory.mkdir()
+            self._write_image(queued_directory / "reaction.png", (255, 0, 0))
+            original_lstat = asset_catalog.os.lstat
+            original_scandir = asset_catalog.os.scandir
+            queued_directory_opened = False
+
+            def scandir_while_reparse_replaces_directory(path: object) -> object:
+                nonlocal queued_directory_opened
+                if Path(path) == queued_directory:
+                    queued_directory_opened = True
+                return original_scandir(path)
+
+            def lstat_after_opening_reparse(
+                path: object,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                metadata = original_lstat(path, *args, **kwargs)
+                if Path(path) == queued_directory and queued_directory_opened:
+                    return _ReparseMetadata(metadata)
+                return metadata
+
+            with (
+                patch.object(
+                    asset_catalog.os,
+                    "scandir",
+                    side_effect=scandir_while_reparse_replaces_directory,
+                ),
+                patch.object(
+                    asset_catalog.os,
+                    "lstat",
+                    side_effect=lstat_after_opening_reparse,
+                ),
+            ):
+                result = import_sources(root / "library", [source_directory])
+                assets = list_assets(root / "library")
+
+        self.assertTrue(queued_directory_opened)
+        self.assertEqual(0, result.discovered_files)
+        self.assertEqual(1, result.reparse_points_skipped)
+        self.assertEqual(0, result.new_assets)
+        self.assertEqual(0, len(assets.assets))
+
+    def test_locks_a_windows_directory_against_replacement_while_scanning(self) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows directory-sharing semantics are not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            moved_directory = root / "moved-reactions"
+            source_directory.mkdir()
+            (source_directory / "entry.txt").write_text("not media")
+            replacement_was_blocked = False
+            replacement_attempted = False
+
+            def try_to_replace_source_directory() -> None:
+                nonlocal replacement_attempted, replacement_was_blocked
+                if replacement_attempted:
+                    return
+                replacement_attempted = True
+                try:
+                    source_directory.rename(moved_directory)
+                except PermissionError:
+                    replacement_was_blocked = True
+
+            result = import_sources(
+                root / "library",
+                [source_directory],
+                wait_for_permission=try_to_replace_source_directory,
+            )
+            source_directory.rename(moved_directory)
+            source_was_released_after_scanning = moved_directory.exists()
+
+        self.assertTrue(replacement_attempted)
+        self.assertTrue(replacement_was_blocked)
+        self.assertTrue(source_was_released_after_scanning)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.unsupported_files)
+
+    def test_locks_windows_descendants_against_replacement_while_scanning(
+        self,
+    ) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows directory-sharing semantics are not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            nested_directory = source_directory / "nested"
+            moved_directory = source_directory / "moved-nested"
+            source_directory.mkdir()
+            nested_directory.mkdir()
+            (nested_directory / "entry.txt").write_text("not media")
+            replacement_was_blocked = False
+            replacement_attempted = False
+
+            def try_to_replace_nested_directory() -> None:
+                nonlocal replacement_attempted, replacement_was_blocked
+                if replacement_attempted:
+                    return
+                replacement_attempted = True
+                try:
+                    nested_directory.rename(moved_directory)
+                except PermissionError:
+                    replacement_was_blocked = True
+
+            result = import_sources(
+                root / "library",
+                [source_directory],
+                wait_for_permission=try_to_replace_nested_directory,
+            )
+            nested_directory.rename(moved_directory)
+            descendant_was_released_after_scanning = moved_directory.exists()
+
+        self.assertTrue(replacement_attempted)
+        self.assertTrue(replacement_was_blocked)
+        self.assertTrue(descendant_was_released_after_scanning)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.unsupported_files)
+
+    def test_records_unreadable_directory_as_a_scan_failure_and_imports_other_sources(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            unreadable_directory = root / "unreadable"
+            unreadable_directory.mkdir()
+            usable_source = root / "usable.png"
+            self._write_image(usable_source, (255, 0, 0))
+            original_scandir = asset_catalog.os.scandir
+
+            def scandir_with_unreadable_directory(path: object) -> object:
+                if Path(path) == unreadable_directory:
+                    raise PermissionError("Access denied")
+                return original_scandir(path)
+
+            with patch.object(
+                asset_catalog.os,
+                "scandir",
+                side_effect=scandir_with_unreadable_directory,
+            ):
+                result = import_sources(
+                    root / "library",
+                    [unreadable_directory, usable_source],
+                )
+            assets = list_assets(root / "library")
+
+        self.assertEqual(1, result.scan_failures)
+        self.assertEqual(1, len(result.failure_details))
+        self.assertEqual(ImportFailureStage.SCAN, result.failure_details[0].stage)
+        self.assertEqual(ImportFailureCode.SCAN_FAILED, result.failure_details[0].code)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(1, result.processed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, len(assets.assets))
+
+    def test_reports_directory_entry_scan_failures_in_stable_name_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            source_directory.mkdir()
+            first_unreadable_source = source_directory / "a-unreadable.png"
+            second_unreadable_source = source_directory / "z-unreadable.png"
+            self._write_image(first_unreadable_source, (255, 0, 0))
+            self._write_image(second_unreadable_source, (0, 0, 255))
+            unreadable_sources = {
+                first_unreadable_source,
+                second_unreadable_source,
+            }
+            original_lstat = asset_catalog.os.lstat
+
+            def lstat_with_unreadable_entries(
+                path: object,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                if Path(path) in unreadable_sources:
+                    raise PermissionError("Access denied")
+                return original_lstat(path, *args, **kwargs)
+
+            with patch.object(
+                asset_catalog.os,
+                "lstat",
+                side_effect=lstat_with_unreadable_entries,
+            ):
+                result = import_sources(root / "library", [source_directory])
+
+        self.assertEqual(2, result.scan_failures)
+        self.assertEqual(
+            ["a-unreadable.png", "z-unreadable.png"],
+            [failure.source_name for failure in result.failure_details],
+        )
+
+    def test_stops_at_the_unique_discovery_limit_before_creating_the_library(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            library_root = root / "library"
+            source_directory.mkdir()
+            for name in ("one.txt", "two.txt", "three.txt"):
+                (source_directory / name).write_text(name)
+
+            self.assertEqual(100_000, asset_catalog.MAX_IMPORT_DISCOVERED_FILES)
+            with patch.object(asset_catalog, "MAX_IMPORT_DISCOVERED_FILES", 2):
+                with self.assertRaises(ImportBatchError) as raised:
+                    import_sources(library_root, [source_directory])
+            library_created = library_root.exists()
+
+        error = raised.exception
+        self.assertEqual(ImportBatchErrorCode.FILE_LIMIT_EXCEEDED, error.code)
+        self.assertIsNotNone(error.partial_result)
+        assert error.partial_result is not None
+        self.assertEqual(2, error.partial_result.discovered_files)
+        self.assertEqual(2, error.partial_result.unsupported_files)
+        self.assertEqual(1, error.partial_result.scan_failures)
+        self.assertFalse(library_created)
+
+    def test_checks_pause_permission_between_directory_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_directory = root / "reactions"
+            source_directory.mkdir()
+            (source_directory / "first").mkdir()
+            (source_directory / "second").mkdir()
+            pause_checks: list[None] = []
+
+            result = import_sources(
+                root / "library",
+                [source_directory],
+                wait_for_permission=lambda: pause_checks.append(None),
+            )
+
+        self.assertEqual(0, result.discovered_files)
+        self.assertEqual(2, len(pause_checks))
+
+    def test_empty_directories_and_unsupported_files_complete_as_skips(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            empty_directory = root / "empty"
+            mixed_directory = root / "mixed"
+            empty_directory.mkdir()
+            mixed_directory.mkdir()
+            (mixed_directory / "notes.txt").write_text("not media")
+
+            result = import_sources(
+                root / "library",
+                [empty_directory, mixed_directory],
+            )
+            assets = list_assets(root / "library")
+
+        self.assertEqual(2, result.selected_sources)
+        self.assertEqual(2, result.effective_sources)
+        self.assertEqual(1, result.discovered_files)
+        self.assertEqual(0, result.supported_files)
+        self.assertEqual(1, result.unsupported_files)
+        self.assertEqual(0, result.processed_files)
+        self.assertEqual(0, result.failure_count)
+        self.assertEqual(0, len(assets.assets))
 
     def test_rejects_the_whole_batch_before_library_creation_when_a_source_is_invalid(
         self,
@@ -144,17 +598,18 @@ class MultiSourceImportTests(unittest.TestCase):
                     self.assertIn("sequence", raised.exception.detail.lower())
                     self.assertFalse(library_root.exists())
 
-    def test_rejects_a_directory_when_only_explicit_files_are_supported(self) -> None:
+    def test_accepts_an_empty_directory_as_an_import_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source_directory = root / "source"
             source_directory.mkdir()
 
-            with self.assertRaises(ImportBatchPreflightError) as raised:
-                import_sources(root / "library", [source_directory])
+            result = import_sources(root / "library", [source_directory])
 
-            self.assertIn("regular file", raised.exception.detail)
-            self.assertFalse((root / "library").exists())
+        self.assertEqual(1, result.selected_sources)
+        self.assertEqual(1, result.effective_sources)
+        self.assertEqual(0, result.discovered_files)
+        self.assertEqual(0, result.failure_count)
 
     def test_rejects_paths_that_cannot_be_safely_transported(self) -> None:
         unsafe_paths = (

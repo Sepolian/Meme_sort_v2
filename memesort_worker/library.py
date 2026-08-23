@@ -258,7 +258,7 @@ def import_sources(
     wait_for_permission: Callable[[], None] | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> ImportBatchResult:
-    """Import explicit regular files through the multi-source batch seam."""
+    """Import files and directories through the multi-source batch seam."""
     return asset_catalog.import_sources(
         library_root,
         sources,

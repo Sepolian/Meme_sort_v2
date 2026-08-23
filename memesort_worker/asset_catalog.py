@@ -23,9 +23,13 @@ from . import asset_preprocessing
 from . import job_queue
 from . import ocr_artifacts
 from .import_contracts import (
+    ImportBatchError,
     ImportBatchErrorCode,
     ImportBatchPreflightError,
     ImportBatchResult,
+    ImportFailure,
+    ImportFailureCode,
+    ImportFailureStage,
 )
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 
@@ -52,6 +56,7 @@ SUPPORTED_EXTENSIONS = {
 
 MAX_IMPORT_SOURCES = 256
 MAX_IMPORT_PATH_UTF8_BYTES = 32 * 1024
+MAX_IMPORT_DISCOVERED_FILES = 100_000
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +104,34 @@ class _FileImportSummary:
     source_records_refreshed: int
     jobs_created: int
     active_recipe_id: str
+
+
+@dataclass
+class _DirectoryScanSummary:
+    candidates: list[Path]
+    reparse_points_skipped: int
+    failure_details: list[ImportFailure]
+    limit_exceeded: bool
+
+
+@dataclass(frozen=True)
+class _ValidatedImportSource:
+    normalized_path: Path
+    canonical_path: Path
+    is_directory: bool
+
+
+@dataclass
+class _DirectoryScanGuard:
+    handle: int | None
+    is_reparse_point: bool
+    is_directory: bool
+
+    def close(self) -> None:
+        if self.handle is None:
+            return
+        _close_windows_handle(self.handle)
+        self.handle = None
 
 
 @dataclass
@@ -164,6 +197,135 @@ def utc_now() -> str:
 
 def resolve_path(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
+
+
+def _is_reparse_point(metadata: object) -> bool:
+    reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat.S_ISLNK(getattr(metadata, "st_mode")) or bool(
+        getattr(metadata, "st_file_attributes", 0) & reparse_attribute
+    )
+
+
+def _candidate_path_key(path: Path) -> str:
+    return os.path.normcase(os.path.abspath(path))
+
+
+def _same_file_identity(first: object, second: object) -> bool:
+    return (
+        getattr(first, "st_dev"),
+        getattr(first, "st_ino"),
+    ) == (
+        getattr(second, "st_dev"),
+        getattr(second, "st_ino"),
+    )
+
+
+def _close_windows_handle(handle: int) -> None:
+    if os.name != "nt":
+        return
+
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    close_handle(wintypes.HANDLE(handle))
+
+
+def _open_directory_scan_guard(path: Path) -> _DirectoryScanGuard:
+    """Open and lock a Windows directory without traversing a reparse point."""
+    if os.name != "nt":
+        return _DirectoryScanGuard(
+            handle=None,
+            is_reparse_point=False,
+            is_directory=True,
+        )
+
+    import ctypes
+    from ctypes import wintypes
+
+    class ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("file_attributes", wintypes.DWORD),
+            ("creation_time", wintypes.FILETIME),
+            ("last_access_time", wintypes.FILETIME),
+            ("last_write_time", wintypes.FILETIME),
+            ("volume_serial_number", wintypes.DWORD),
+            ("file_size_high", wintypes.DWORD),
+            ("file_size_low", wintypes.DWORD),
+            ("number_of_links", wintypes.DWORD),
+            ("file_index_high", wintypes.DWORD),
+            ("file_index_low", wintypes.DWORD),
+        ]
+
+    file_list_directory = 0x0001
+    file_share_read = 0x0001
+    open_existing = 3
+    file_flag_backup_semantics = 0x02000000
+    file_flag_open_reparse_point = 0x00200000
+    file_attribute_directory = 0x0010
+    file_attribute_reparse_point = 0x0400
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    get_file_information = kernel32.GetFileInformationByHandle
+    get_file_information.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(ByHandleFileInformation),
+    ]
+    get_file_information.restype = wintypes.BOOL
+
+    handle = create_file(
+        str(path),
+        file_list_directory,
+        file_share_read,
+        None,
+        open_existing,
+        file_flag_backup_semantics | file_flag_open_reparse_point,
+        None,
+    )
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        raise OSError(
+            ctypes.get_last_error(),
+            "The directory could not be opened for safe scanning.",
+            str(path),
+        )
+
+    guard = _DirectoryScanGuard(
+        handle=int(handle),
+        is_reparse_point=False,
+        is_directory=True,
+    )
+    try:
+        information = ByHandleFileInformation()
+        if not get_file_information(handle, ctypes.byref(information)):
+            raise OSError(
+                ctypes.get_last_error(),
+                "The opened directory could not be inspected.",
+                str(path),
+            )
+        attributes = int(information.file_attributes)
+        guard.is_reparse_point = bool(attributes & file_attribute_reparse_point)
+        guard.is_directory = bool(attributes & file_attribute_directory)
+        if guard.is_reparse_point or not guard.is_directory:
+            guard.close()
+        return guard
+    except Exception:
+        guard.close()
+        raise
 
 
 def database_path(library_root: Path) -> Path:
@@ -812,6 +974,241 @@ def _import_file_candidates(
     )
 
 
+def _append_unique_candidate(
+    candidate: Path,
+    candidates: list[Path],
+    candidate_keys: set[str],
+    failure_details: list[ImportFailure],
+) -> bool:
+    candidate_key = _candidate_path_key(candidate)
+    if candidate_key in candidate_keys:
+        return False
+    if len(candidate_keys) >= MAX_IMPORT_DISCOVERED_FILES:
+        failure_details.append(
+            ImportFailure(
+                stage=ImportFailureStage.SCAN,
+                code=ImportFailureCode.FILE_LIMIT_EXCEEDED,
+                source_name=str(candidate),
+                detail=(
+                    "Scanning stopped after the unique-file discovery limit was "
+                    "reached."
+                ),
+            )
+        )
+        return True
+
+    candidate_keys.add(candidate_key)
+    candidates.append(candidate)
+    return False
+
+
+def _scan_directory_candidates(
+    source_directory: Path,
+    candidate_keys: set[str],
+    wait_for_permission: Callable[[], None] | None = None,
+) -> _DirectoryScanSummary:
+    """Discover regular files without following descendant reparse points."""
+    candidates: list[Path] = []
+    reparse_points_skipped = 0
+    failure_details: list[ImportFailure] = []
+    limit_exceeded = False
+    pending_scan_work: list[Path | _DirectoryScanGuard] = [source_directory]
+    directory_guards: list[_DirectoryScanGuard] = []
+
+    try:
+        if source_directory.parent != source_directory:
+            try:
+                source_parent_guard = _open_directory_scan_guard(
+                    source_directory.parent
+                )
+            except OSError:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(source_directory),
+                        detail="The source directory parent could not be locked.",
+                    )
+                )
+                return _DirectoryScanSummary(
+                    candidates=candidates,
+                    reparse_points_skipped=reparse_points_skipped,
+                    failure_details=failure_details,
+                    limit_exceeded=limit_exceeded,
+                )
+            if source_parent_guard.is_reparse_point:
+                reparse_points_skipped += 1
+                return _DirectoryScanSummary(
+                    candidates=candidates,
+                    reparse_points_skipped=reparse_points_skipped,
+                    failure_details=failure_details,
+                    limit_exceeded=limit_exceeded,
+                )
+            if not source_parent_guard.is_directory:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(source_directory),
+                        detail="The source directory parent is not a directory.",
+                    )
+                )
+                return _DirectoryScanSummary(
+                    candidates=candidates,
+                    reparse_points_skipped=reparse_points_skipped,
+                    failure_details=failure_details,
+                    limit_exceeded=limit_exceeded,
+                )
+            directory_guards.append(source_parent_guard)
+
+        while pending_scan_work:
+            scan_work = pending_scan_work.pop()
+            if isinstance(scan_work, _DirectoryScanGuard):
+                scan_work.close()
+                continue
+            current_directory = scan_work
+            try:
+                current_metadata = os.lstat(current_directory)
+            except OSError:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(current_directory),
+                        detail="The directory could not be inspected before scanning.",
+                    )
+                )
+                continue
+            if _is_reparse_point(current_metadata):
+                reparse_points_skipped += 1
+                continue
+            if not stat.S_ISDIR(current_metadata.st_mode):
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(current_directory),
+                        detail="The directory changed before it could be scanned.",
+                    )
+                )
+                continue
+
+            try:
+                directory_guard = _open_directory_scan_guard(current_directory)
+            except OSError:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(current_directory),
+                        detail="The directory could not be locked for safe scanning.",
+                    )
+                )
+                continue
+            if directory_guard.is_reparse_point:
+                reparse_points_skipped += 1
+                continue
+            if not directory_guard.is_directory:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(current_directory),
+                        detail="The directory changed before it could be locked.",
+                    )
+                )
+                continue
+            directory_guards.append(directory_guard)
+
+            try:
+                with os.scandir(current_directory) as entries:
+                    opened_directory_metadata = os.lstat(current_directory)
+                    if _is_reparse_point(opened_directory_metadata):
+                        reparse_points_skipped += 1
+                        directory_guard.close()
+                        continue
+                    if not _same_file_identity(
+                        current_metadata,
+                        opened_directory_metadata,
+                    ):
+                        failure_details.append(
+                            ImportFailure(
+                                stage=ImportFailureStage.SCAN,
+                                code=ImportFailureCode.SCAN_FAILED,
+                                source_name=str(current_directory),
+                                detail="The directory changed while it was being opened.",
+                            )
+                        )
+                        directory_guard.close()
+                        continue
+                    ordered_entries = sorted(
+                        entries,
+                        key=lambda entry: (os.path.normcase(entry.name), entry.name),
+                    )
+            except OSError:
+                failure_details.append(
+                    ImportFailure(
+                        stage=ImportFailureStage.SCAN,
+                        code=ImportFailureCode.SCAN_FAILED,
+                        source_name=str(current_directory),
+                        detail="The directory could not be scanned.",
+                    )
+                )
+                directory_guard.close()
+                continue
+
+            child_directories: list[Path] = []
+            for entry in ordered_entries:
+                if wait_for_permission is not None:
+                    wait_for_permission()
+
+                try:
+                    metadata = os.lstat(entry.path)
+                except OSError:
+                    failure_details.append(
+                        ImportFailure(
+                            stage=ImportFailureStage.SCAN,
+                            code=ImportFailureCode.SCAN_FAILED,
+                            source_name=entry.name,
+                            detail="The directory entry could not be inspected.",
+                        )
+                    )
+                    continue
+                if _is_reparse_point(metadata):
+                    reparse_points_skipped += 1
+                    continue
+                if stat.S_ISDIR(metadata.st_mode):
+                    child_directories.append(Path(entry.path))
+                elif stat.S_ISREG(metadata.st_mode):
+                    limit_exceeded = _append_unique_candidate(
+                        Path(entry.path),
+                        candidates,
+                        candidate_keys,
+                        failure_details,
+                    )
+                    if limit_exceeded:
+                        break
+
+            if limit_exceeded:
+                directory_guard.close()
+                break
+            if child_directories:
+                pending_scan_work.append(directory_guard)
+                pending_scan_work.extend(reversed(child_directories))
+            else:
+                directory_guard.close()
+
+        return _DirectoryScanSummary(
+            candidates=candidates,
+            reparse_points_skipped=reparse_points_skipped,
+            failure_details=failure_details,
+            limit_exceeded=limit_exceeded,
+        )
+    finally:
+        for directory_guard in reversed(directory_guards):
+            directory_guard.close()
+
+
 def import_folder(
     library_root: Path | str,
     source_folder: Path | str,
@@ -819,38 +1216,33 @@ def import_folder(
     image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> ImportFolderResult:
-    """Import supported files, optionally waiting at each file boundary."""
-    init_result = initialize_library(library_root, provider)
-    library_root_path = Path(init_result.library_root)
+    """Adapt the legacy single-folder API to the multi-source import seam."""
     source_root = resolve_path(source_folder)
     if not source_root.exists() or not source_root.is_dir():
         raise ValueError(
             f"Source folder does not exist or is not a directory: {source_root}"
         )
 
-    file_paths = [
-        file_path
-        for file_path in sorted(source_root.rglob("*"))
-        if file_path.is_file()
-    ]
-    summary = _import_file_candidates(
-        library_root_path,
-        file_paths,
+    batch_result = import_sources(
+        library_root,
+        [source_folder],
         wait_for_permission=wait_for_permission,
         image_dimensions_fn=image_dimensions_fn,
+        provider=provider,
     )
+    assert batch_result.active_recipe_id is not None
     return ImportFolderResult(
-        library_root=str(library_root_path),
+        library_root=batch_result.library_root,
         source_folder=str(source_root),
-        discovered_files=summary.discovered_files,
-        supported_files=summary.supported_files,
-        unsupported_files=summary.unsupported_files,
-        new_assets=summary.new_assets,
-        duplicate_assets=summary.duplicate_assets,
-        source_records_added=summary.source_records_added,
-        source_records_refreshed=summary.source_records_refreshed,
-        jobs_created=summary.jobs_created,
-        active_recipe_id=summary.active_recipe_id,
+        discovered_files=batch_result.discovered_files,
+        supported_files=batch_result.supported_files,
+        unsupported_files=batch_result.unsupported_files,
+        new_assets=batch_result.new_assets,
+        duplicate_assets=batch_result.duplicate_assets,
+        source_records_added=batch_result.source_records_added,
+        source_records_refreshed=batch_result.source_records_refreshed,
+        jobs_created=batch_result.jobs_created,
+        active_recipe_id=batch_result.active_recipe_id,
     )
 
 
@@ -861,7 +1253,7 @@ def import_sources(
     image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> ImportBatchResult:
-    """Import explicit regular files as one synchronous Import Batch."""
+    """Import files and directories as one synchronous Import Batch."""
     if not isinstance(sources, Sequence) or isinstance(
         sources,
         (str, bytes, bytearray),
@@ -896,8 +1288,7 @@ def import_sources(
                 detail="Every Import Source path must be transport-safe UTF-8.",
             )
     library_root_path = resolve_path(library_root)
-    source_paths_by_canonical_key: dict[str, Path] = {}
-    reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    sources_by_canonical_key: dict[str, _ValidatedImportSource] = {}
     for source in sources:
         normalized_source = Path(
             os.path.abspath(Path(source).expanduser())
@@ -909,17 +1300,18 @@ def import_sources(
                 code=ImportBatchErrorCode.INVALID_SOURCE,
                 detail="An Import Source does not exist or cannot be inspected.",
             ) from error
-        if stat.S_ISLNK(source_metadata.st_mode) or (
-            getattr(source_metadata, "st_file_attributes", 0) & reparse_attribute
-        ):
+        if _is_reparse_point(source_metadata):
             raise ImportBatchPreflightError(
                 code=ImportBatchErrorCode.INVALID_SOURCE,
                 detail="Top-level reparse-point Import Sources are not allowed.",
             )
-        if not stat.S_ISREG(source_metadata.st_mode):
+        if not (
+            stat.S_ISREG(source_metadata.st_mode)
+            or stat.S_ISDIR(source_metadata.st_mode)
+        ):
             raise ImportBatchPreflightError(
                 code=ImportBatchErrorCode.INVALID_SOURCE,
-                detail="Every Import Source must be a regular file.",
+                detail="Every Import Source must be a regular file or directory.",
             )
         try:
             canonical_source = normalized_source.resolve(strict=True)
@@ -938,15 +1330,91 @@ def import_sources(
                 detail="Import Sources must be outside the Library Root.",
             )
         canonical_key = os.path.normcase(str(canonical_source))
-        source_paths_by_canonical_key.setdefault(canonical_key, normalized_source)
+        sources_by_canonical_key.setdefault(
+            canonical_key,
+            _ValidatedImportSource(
+                normalized_path=normalized_source,
+                canonical_path=canonical_source,
+                is_directory=stat.S_ISDIR(source_metadata.st_mode),
+            ),
+        )
 
-    source_paths = list(source_paths_by_canonical_key.values())
+    effective_sources = [
+        source
+        for canonical_key, source in sources_by_canonical_key.items()
+        if not any(
+            directory_key != canonical_key
+            and source.canonical_path.is_relative_to(directory.canonical_path)
+            for directory_key, directory in sources_by_canonical_key.items()
+            if directory.is_directory
+        )
+    ]
+    file_paths: list[Path] = []
+    candidate_keys: set[str] = set()
+    reparse_points_skipped = 0
+    scan_failure_details: list[ImportFailure] = []
+    limit_exceeded = False
+    for source in effective_sources:
+        if source.is_directory:
+            directory_scan = _scan_directory_candidates(
+                source.normalized_path,
+                candidate_keys,
+                wait_for_permission=wait_for_permission,
+            )
+            file_paths.extend(directory_scan.candidates)
+            reparse_points_skipped += directory_scan.reparse_points_skipped
+            scan_failure_details.extend(directory_scan.failure_details)
+            limit_exceeded = directory_scan.limit_exceeded
+        else:
+            limit_exceeded = _append_unique_candidate(
+                source.normalized_path,
+                file_paths,
+                candidate_keys,
+                scan_failure_details,
+            )
+
+        if limit_exceeded:
+            break
+
+    if limit_exceeded:
+        supported_files = sum(
+            source_path.suffix.lower() in SUPPORTED_EXTENSIONS
+            for source_path in file_paths
+        )
+        partial_result = ImportBatchResult(
+            library_root=str(library_root_path),
+            selected_sources=len(sources),
+            effective_sources=len(effective_sources),
+            discovered_files=len(file_paths),
+            supported_files=supported_files,
+            unsupported_files=len(file_paths) - supported_files,
+            reparse_points_skipped=reparse_points_skipped,
+            scan_failures=len(scan_failure_details),
+            processed_files=0,
+            succeeded_files=0,
+            failed_files=0,
+            new_assets=0,
+            duplicate_assets=0,
+            source_records_added=0,
+            source_records_refreshed=0,
+            jobs_created=0,
+            failure_details=tuple(scan_failure_details),
+            active_recipe_id=None,
+        )
+        raise ImportBatchError(
+            code=ImportBatchErrorCode.FILE_LIMIT_EXCEEDED,
+            detail=(
+                "The Import Batch reached the 100,000 unique-file discovery "
+                "limit before Library writes began."
+            ),
+            partial_result=partial_result,
+        )
 
     init_result = initialize_library(library_root_path, provider)
     library_root_path = Path(init_result.library_root)
     summary = _import_file_candidates(
         library_root_path,
-        source_paths,
+        file_paths,
         wait_for_permission=wait_for_permission,
         image_dimensions_fn=image_dimensions_fn,
     )
@@ -954,12 +1422,12 @@ def import_sources(
     return ImportBatchResult(
         library_root=str(library_root_path),
         selected_sources=len(sources),
-        effective_sources=len(source_paths),
+        effective_sources=len(effective_sources),
         discovered_files=summary.discovered_files,
         supported_files=summary.supported_files,
         unsupported_files=summary.unsupported_files,
-        reparse_points_skipped=0,
-        scan_failures=0,
+        reparse_points_skipped=reparse_points_skipped,
+        scan_failures=len(scan_failure_details),
         processed_files=summary.supported_files,
         succeeded_files=succeeded_files,
         failed_files=0,
@@ -968,6 +1436,7 @@ def import_sources(
         source_records_added=summary.source_records_added,
         source_records_refreshed=summary.source_records_refreshed,
         jobs_created=summary.jobs_created,
+        failure_details=tuple(scan_failure_details),
         active_recipe_id=summary.active_recipe_id,
     )
 
