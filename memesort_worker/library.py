@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Callable
 
 from . import asset_catalog
-from . import asset_preprocessing
 from . import ocr_artifacts
 from .import_contracts import (
     ImportBatchError,
@@ -219,10 +218,6 @@ class SetupStateResult:
         return asdict(self)
 
 
-def _safe_image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int | None, int | None]:
-    return asset_preprocessing.safe_image_dimensions_from_bytes(image_bytes)
-
-
 def initialize_library(
     root: Path | str,
     provider: RuntimeRecipeProvider | None = None,
@@ -247,7 +242,6 @@ def import_folder(
         library_root,
         source_folder,
         wait_for_permission=wait_for_permission,
-        image_dimensions_fn=_safe_image_dimensions_from_bytes,
         provider=provider,
     )
 
@@ -263,7 +257,6 @@ def import_sources(
         library_root,
         sources,
         wait_for_permission=wait_for_permission,
-        image_dimensions_fn=_safe_image_dimensions_from_bytes,
         provider=provider,
     )
 

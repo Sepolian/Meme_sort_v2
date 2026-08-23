@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -93,6 +94,353 @@ class MultiSourceImportTests(unittest.TestCase):
         self.assertEqual(3, result.processed_files)
         self.assertEqual(3, result.new_assets)
         self.assertEqual(3, len(assets.assets))
+
+    def test_continues_after_a_corrupt_image_and_removes_its_library_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            valid_source = root / "valid.png"
+            corrupt_source = root / "corrupt.png"
+            library_root = root / "library"
+            self._write_image(valid_source, (255, 0, 0))
+            corrupt_source.write_bytes(b"not an image")
+
+            result = import_sources(
+                library_root,
+                [valid_source, corrupt_source],
+            )
+            assets = list_assets(library_root)
+            originals = list((library_root / "originals").iterdir())
+
+        self.assertEqual(2, result.processed_files)
+        self.assertEqual(1, result.succeeded_files)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, len(assets.assets))
+        self.assertEqual(1, len(originals))
+        self.assertEqual(ImportFailureStage.VALIDATION, result.failure_details[0].stage)
+        self.assertEqual(
+            ImportFailureCode.IMAGE_DECODE_FAILED,
+            result.failure_details[0].code,
+        )
+
+    def test_rejects_a_corrupt_duplicate_from_a_legacy_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            corrupt_source = root / "corrupt.png"
+            corrupt_source.write_bytes(b"not an image")
+            asset_catalog.initialize_library(library_root)
+            legacy_copy = library_root / "originals" / "legacy.png"
+            legacy_copy.write_bytes(corrupt_source.read_bytes())
+            content_hash = asset_catalog.compute_sha256(corrupt_source)
+            conn = asset_catalog.connect(asset_catalog.database_path(library_root))
+            try:
+                with conn:
+                    now = asset_catalog.utc_now()
+                    conn.execute(
+                        """
+                        INSERT INTO asset (
+                            id, library_path, media_type, content_hash, byte_size,
+                            width, height, imported_at, updated_at, deleted_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "legacy-asset",
+                            "originals/legacy.png",
+                            "image/png",
+                            content_hash,
+                            legacy_copy.stat().st_size,
+                            None,
+                            None,
+                            now,
+                            now,
+                            None,
+                        ),
+                    )
+            finally:
+                conn.close()
+
+            result = import_sources(library_root, [corrupt_source])
+
+        self.assertEqual(1, result.processed_files)
+        self.assertEqual(0, result.duplicate_assets)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(
+            ImportFailureCode.IMAGE_DECODE_FAILED,
+            result.failure_details[0].code,
+        )
+
+    def test_retries_temporary_copy_cleanup_without_aborting_later_candidates(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            changing_source = root / "changing.png"
+            valid_source = root / "valid.png"
+            self._write_image(changing_source, (0, 0, 255))
+            self._write_image(valid_source, (255, 0, 0))
+            original_unlink = asset_catalog.Path.unlink
+            original_copy2 = asset_catalog.shutil.copy2
+            cleanup_lock_reported = False
+
+            def copy2_with_changed_first_copy(
+                source_path: object,
+                target_path: object,
+            ) -> str:
+                copied = original_copy2(source_path, target_path)
+                if Path(source_path) == changing_source:
+                    Path(target_path).write_bytes(b"changed during copy")
+                return copied
+
+            def unlink_with_one_transient_lock(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> None:
+                nonlocal cleanup_lock_reported
+                if (
+                    not cleanup_lock_reported
+                    and path.name.endswith(".tmp")
+                    and path.exists()
+                ):
+                    cleanup_lock_reported = True
+                    raise PermissionError("copy is temporarily locked")
+                original_unlink(path, *args, **kwargs)
+
+            with (
+                patch.object(
+                    asset_catalog.Path,
+                    "unlink",
+                    new=unlink_with_one_transient_lock,
+                ),
+                patch.object(
+                    asset_catalog.shutil,
+                    "copy2",
+                    side_effect=copy2_with_changed_first_copy,
+                ),
+            ):
+                result = import_sources(
+                    root / "library",
+                    [changing_source, valid_source],
+                )
+            originals = list((root / "library" / "originals").iterdir())
+
+        self.assertTrue(cleanup_lock_reported)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, len(originals))
+
+    def test_rejects_an_oversized_temporary_library_copy_without_retaining_it(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            original_copy2 = asset_catalog.shutil.copy2
+
+            def copy2_that_exceeds_the_limit(source_path: object, target_path: object) -> str:
+                copied = original_copy2(source_path, target_path)
+                Path(target_path).write_bytes(b"x" * 100_001)
+                return copied
+
+            with (
+                patch.object(asset_catalog, "MAX_IMPORT_SOURCE_BYTES", 100_000),
+                patch.object(
+                    asset_catalog.shutil,
+                    "copy2",
+                    side_effect=copy2_that_exceeds_the_limit,
+                ),
+            ):
+                result = import_sources(library_root, [source])
+            originals = list((library_root / "originals").iterdir())
+
+        self.assertEqual(1, result.processed_files)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(0, result.new_assets)
+        self.assertEqual([], originals)
+        self.assertEqual(
+            ImportFailureCode.LIBRARY_COPY_TOO_LARGE,
+            result.failure_details[0].code,
+        )
+
+    def test_continues_when_a_supported_source_disappears_before_processing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            valid_source = root / "valid.png"
+            disappeared_source = root / "disappeared.png"
+            library_root = root / "library"
+            self._write_image(valid_source, (255, 0, 0))
+            self._write_image(disappeared_source, (0, 0, 255))
+            permission_checks = 0
+
+            def remove_the_second_candidate() -> None:
+                nonlocal permission_checks
+                permission_checks += 1
+                if permission_checks == 2:
+                    disappeared_source.unlink()
+
+            result = import_sources(
+                library_root,
+                [valid_source, disappeared_source],
+                wait_for_permission=remove_the_second_candidate,
+            )
+            assets = list_assets(library_root)
+
+        self.assertEqual(2, result.processed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(1, len(assets.assets))
+        self.assertEqual(
+            ImportFailureCode.SOURCE_MISSING,
+            result.failure_details[0].code,
+        )
+
+    def test_rechecks_supported_candidate_safety_at_processing_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+            processing_started = False
+            original_lstat = asset_catalog.os.lstat
+
+            def lstat_with_late_reparse(
+                path: object,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                metadata = original_lstat(path, *args, **kwargs)
+                if processing_started and Path(path) == source:
+                    return _ReparseMetadata(metadata)
+                return metadata
+
+            def mark_processing_started() -> None:
+                nonlocal processing_started
+                processing_started = True
+
+            with patch.object(
+                asset_catalog.os,
+                "lstat",
+                side_effect=lstat_with_late_reparse,
+            ):
+                result = import_sources(
+                    library_root,
+                    [source],
+                    wait_for_permission=mark_processing_started,
+                )
+
+        self.assertEqual(1, result.processed_files)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(
+            ImportFailureCode.SOURCE_REPARSE_POINT,
+            result.failure_details[0].code,
+        )
+
+    def test_rejects_source_files_over_the_import_size_limit_individually(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            oversized_source = root / "oversized.png"
+            valid_source = root / "valid.png"
+            self._write_image(valid_source, (255, 0, 0))
+            oversized_source.write_bytes(b"x" * 100_001)
+
+            with patch.object(asset_catalog, "MAX_IMPORT_SOURCE_BYTES", 100_000):
+                result = import_sources(
+                    root / "library",
+                    [valid_source, oversized_source],
+                )
+
+        self.assertEqual(2, result.processed_files)
+        self.assertEqual(1, result.new_assets)
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(
+            ImportFailureCode.SOURCE_TOO_LARGE,
+            result.failure_details[0].code,
+        )
+
+    def test_rejects_a_frame_that_exceeds_the_pixel_limit_individually(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "large-frame.png"
+            self._write_image(source, (255, 0, 0))
+
+            with patch.object(asset_catalog, "MAX_IMPORT_FRAME_PIXELS", 1_000):
+                result = import_sources(root / "library", [source])
+
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(
+            ImportFailureCode.IMAGE_FRAME_TOO_LARGE,
+            result.failure_details[0].code,
+        )
+
+    def test_rejects_gifs_that_exceed_the_frame_limit_individually(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "animated.gif"
+            first_frame = Image.new("RGB", (40, 30), (255, 0, 0))
+            second_frame = Image.new("RGB", (40, 30), (0, 0, 255))
+            first_frame.save(
+                source,
+                format="GIF",
+                save_all=True,
+                append_images=[second_frame],
+            )
+
+            with patch.object(asset_catalog, "MAX_IMPORT_GIF_FRAMES", 1):
+                result = import_sources(root / "library", [source])
+
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(
+            ImportFailureCode.GIF_FRAME_LIMIT_EXCEEDED,
+            result.failure_details[0].code,
+        )
+
+    def test_caps_processing_failure_details_without_losing_the_failure_count(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            sources = []
+            for number in range(101):
+                source = root / f"corrupt-{number}.png"
+                source.write_bytes(b"not an image")
+                sources.append(source)
+
+            result = import_sources(root / "library", sources)
+
+        self.assertEqual(101, result.failed_files)
+        self.assertEqual(101, result.failure_count)
+        self.assertEqual(100, len(result.failure_details))
+        self.assertTrue(result.failures_truncated)
+
+    def test_removes_a_final_library_copy_when_cataloging_it_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "reaction.png"
+            library_root = root / "library"
+            self._write_image(source, (255, 0, 0))
+
+            with patch.object(
+                asset_catalog.job_queue,
+                "enqueue_thumbnail",
+                side_effect=sqlite3.OperationalError("database unavailable"),
+            ):
+                result = import_sources(library_root, [source])
+            assets = list_assets(library_root)
+            originals = list((library_root / "originals").iterdir())
+
+        self.assertEqual(1, result.failed_files)
+        self.assertEqual(0, result.new_assets)
+        self.assertEqual([], assets.assets)
+        self.assertEqual([], originals)
+        self.assertEqual(
+            ImportFailureCode.DATABASE_WRITE_FAILED,
+            result.failure_details[0].code,
+        )
 
     def test_removes_overlapping_top_level_sources_before_scanning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

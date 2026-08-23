@@ -111,8 +111,9 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
             root = Path(temp_dir) / "library"
             source = Path(temp_dir) / "source"
             source.mkdir()
-            (source / "image.png").write_bytes(
-                b"\x89PNG\r\n\x1a\n" + b"test-image"
+            Image.new("RGB", (40, 30), (255, 0, 0)).save(
+                source / "image.png",
+                format="PNG",
             )
             initialize_library(root)
             imported = import_folder(root, source)

@@ -57,6 +57,9 @@ SUPPORTED_EXTENSIONS = {
 MAX_IMPORT_SOURCES = 256
 MAX_IMPORT_PATH_UTF8_BYTES = 32 * 1024
 MAX_IMPORT_DISCOVERED_FILES = 100_000
+MAX_IMPORT_SOURCE_BYTES = 30 * 1024 * 1024
+MAX_IMPORT_FRAME_PIXELS = 64_000_000
+MAX_IMPORT_GIF_FRAMES = 1_000
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +106,8 @@ class _FileImportSummary:
     source_records_added: int
     source_records_refreshed: int
     jobs_created: int
+    failed_files: int
+    failure_details: list[ImportFailure]
     active_recipe_id: str
 
 
@@ -132,6 +137,22 @@ class _DirectoryScanGuard:
             return
         _close_windows_handle(self.handle)
         self.handle = None
+
+
+class _CandidateImportError(Exception):
+    """Expected per-candidate Import Failure that does not abort its batch."""
+
+    def __init__(
+        self,
+        *,
+        stage: ImportFailureStage,
+        code: ImportFailureCode,
+        detail: str,
+    ) -> None:
+        super().__init__(detail)
+        self.stage = stage
+        self.code = code
+        self.detail = detail
 
 
 @dataclass
@@ -677,6 +698,123 @@ def compute_sha256(file_path: Path) -> str:
     return digest.hexdigest()
 
 
+def _checked_processing_metadata(file_path: Path) -> os.stat_result:
+    """Recheck a supported candidate immediately before it is processed."""
+    try:
+        metadata = os.lstat(file_path)
+    except FileNotFoundError as error:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_MISSING,
+            detail="The source file is no longer available.",
+        ) from error
+    except OSError as error:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_READ_FAILED,
+            detail="The source file could not be inspected.",
+        ) from error
+
+    if _is_reparse_point(metadata):
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_REPARSE_POINT,
+            detail="The source file became an unsafe reparse point.",
+        )
+    if not stat.S_ISREG(metadata.st_mode):
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_NOT_REGULAR_FILE,
+            detail="The source is no longer a regular file.",
+        )
+    if metadata.st_size > MAX_IMPORT_SOURCE_BYTES:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_TOO_LARGE,
+            detail="The source file exceeds the 30 MiB import limit.",
+        )
+    return metadata
+
+
+def _source_changed_since(
+    file_path: Path,
+    initial_metadata: os.stat_result,
+) -> bool:
+    current_metadata = _checked_processing_metadata(file_path)
+    return any(
+        getattr(current_metadata, attribute, None)
+        != getattr(initial_metadata, attribute, None)
+        for attribute in ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+    )
+
+
+def _strict_image_dimensions(image_bytes: bytes) -> tuple[int, int]:
+    try:
+        return asset_preprocessing.validate_import_image_bytes(
+            image_bytes,
+            max_frame_pixels=MAX_IMPORT_FRAME_PIXELS,
+            max_gif_frames=MAX_IMPORT_GIF_FRAMES,
+        )
+    except asset_preprocessing.ImportImageValidationError as error:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.VALIDATION,
+            code=ImportFailureCode(error.code),
+            detail="The image could not pass strict import validation.",
+        ) from error
+
+
+def _validate_temporary_library_copy(file_path: Path) -> tuple[int, int]:
+    try:
+        if file_path.stat().st_size > MAX_IMPORT_SOURCE_BYTES:
+            raise _CandidateImportError(
+                stage=ImportFailureStage.COPY,
+                code=ImportFailureCode.LIBRARY_COPY_TOO_LARGE,
+                detail="The temporary Library Copy exceeds the 30 MiB import limit.",
+            )
+        image_bytes = file_path.read_bytes()
+    except _CandidateImportError:
+        raise
+    except OSError as error:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.COPY,
+            code=ImportFailureCode.LIBRARY_COPY_FAILED,
+            detail="The temporary Library Copy could not be read.",
+        ) from error
+    return _strict_image_dimensions(image_bytes)
+
+
+def _validate_source_image(file_path: Path) -> None:
+    try:
+        image_bytes = file_path.read_bytes()
+    except OSError as error:
+        raise _CandidateImportError(
+            stage=ImportFailureStage.READ,
+            code=ImportFailureCode.SOURCE_READ_FAILED,
+            detail="The source file could not be read.",
+        ) from error
+    _strict_image_dimensions(image_bytes)
+
+
+def _delete_unreferenced_library_copy(file_path: Path) -> None:
+    """Remove an owned temporary or unrecorded final Library Copy.
+
+    A transient Windows lock must not abort unrelated candidates. Retrying
+    before reporting the cleanup failure covers handles that are closing at a
+    copy or database boundary.
+    """
+    for _ in range(3):
+        try:
+            file_path.unlink(missing_ok=True)
+            return
+        except OSError:
+            continue
+    raise _CandidateImportError(
+        stage=ImportFailureStage.COPY,
+        code=ImportFailureCode.LIBRARY_COPY_FAILED,
+        detail="An unreferenced Library Copy could not be removed.",
+    )
+
+
 def upsert_source_record(
     conn: sqlite3.Connection, asset_id: str, source_path: str, now: str
 ) -> str:
@@ -824,7 +962,6 @@ def _import_file_candidates(
     library_root_path: Path,
     file_paths: Sequence[Path],
     wait_for_permission: Callable[[], None] | None = None,
-    image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
 ) -> _FileImportSummary:
     """Import pre-discovered candidates through the shared catalog pipeline."""
     supported_files = 0
@@ -834,15 +971,13 @@ def _import_file_candidates(
     source_records_added = 0
     source_records_refreshed = 0
     jobs_created = 0
+    failed_files = 0
+    failure_details: list[ImportFailure] = []
 
     conn = connect(database_path(library_root_path))
     try:
         active_recipe_id = get_active_recipe_id(conn)
         ocr_recipe_id = ocr_artifacts.ensure_default_ocr_recipe(conn)
-        dimensions_fn = (
-            image_dimensions_fn
-            or asset_preprocessing.safe_image_dimensions_from_bytes
-        )
         for file_path in file_paths:
             if wait_for_permission is not None:
                 wait_for_permission()
@@ -853,111 +988,207 @@ def _import_file_candidates(
                 continue
 
             supported_files += 1
-            content_hash = compute_sha256(file_path)
-            now = utc_now()
-
-            existing_asset = conn.execute(
-                """
-                SELECT id
-                FROM asset
-                WHERE content_hash = ?
-                  AND deleted_at IS NULL
-                """,
-                (content_hash,),
-            ).fetchone()
-
-            if existing_asset is not None:
-                duplicate_assets += 1
-                with conn:
-                    source_change = upsert_source_record(
-                        conn=conn,
-                        asset_id=str(existing_asset["id"]),
-                        source_path=str(file_path),
-                        now=now,
-                    )
-                if source_change == "added":
-                    source_records_added += 1
-                else:
-                    source_records_refreshed += 1
-                continue
-
-            asset_id = str(uuid.uuid4())
-            destination_relative = (
-                Path("originals") / f"{asset_id}{file_path.suffix.lower()}"
-            )
-            destination_absolute = library_root_path / destination_relative
-
             try:
-                shutil.copy2(file_path, destination_absolute)
-            except Exception:
-                if destination_absolute.exists():
-                    destination_absolute.unlink(missing_ok=True)
-                raise
-
-            byte_size = destination_absolute.stat().st_size
-            width, height = dimensions_fn(destination_absolute.read_bytes())
-            with conn:
-                conn.execute(
-                    """
-                    INSERT INTO asset (
-                        id,
-                        library_path,
-                        media_type,
-                        content_hash,
-                        byte_size,
-                        width,
-                        height,
-                        imported_at,
-                        updated_at,
-                        deleted_at
+                initial_metadata = _checked_processing_metadata(file_path)
+                try:
+                    content_hash = compute_sha256(file_path)
+                except OSError as error:
+                    raise _CandidateImportError(
+                        stage=ImportFailureStage.READ,
+                        code=ImportFailureCode.SOURCE_READ_FAILED,
+                        detail="The source file could not be read.",
+                    ) from error
+                if _source_changed_since(file_path, initial_metadata):
+                    raise _CandidateImportError(
+                        stage=ImportFailureStage.READ,
+                        code=ImportFailureCode.SOURCE_READ_FAILED,
+                        detail="The source file changed while it was being read.",
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                _validate_source_image(file_path)
+                if _source_changed_since(file_path, initial_metadata):
+                    raise _CandidateImportError(
+                        stage=ImportFailureStage.READ,
+                        code=ImportFailureCode.SOURCE_READ_FAILED,
+                        detail="The source file changed while it was being validated.",
+                    )
+
+                now = utc_now()
+                existing_asset = conn.execute(
+                    """
+                    SELECT id
+                    FROM asset
+                    WHERE content_hash = ?
+                      AND deleted_at IS NULL
                     """,
-                    (
-                        asset_id,
-                        destination_relative.as_posix(),
-                        media_type,
-                        content_hash,
-                        byte_size,
-                        width,
-                        height,
-                        now,
-                        now,
-                        None,
-                    ),
+                    (content_hash,),
+                ).fetchone()
+
+                if existing_asset is not None:
+                    try:
+                        with conn:
+                            source_change = upsert_source_record(
+                                conn=conn,
+                                asset_id=str(existing_asset["id"]),
+                                source_path=str(file_path),
+                                now=now,
+                            )
+                    except sqlite3.Error as error:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.DATABASE,
+                            code=ImportFailureCode.DATABASE_WRITE_FAILED,
+                            detail="The duplicate Asset could not be cataloged.",
+                        ) from error
+                    duplicate_assets += 1
+                    if source_change == "added":
+                        source_records_added += 1
+                    else:
+                        source_records_refreshed += 1
+                    continue
+
+                asset_id = str(uuid.uuid4())
+                destination_relative = (
+                    Path("originals") / f"{asset_id}{file_path.suffix.lower()}"
                 )
-                source_change = upsert_source_record(
-                    conn=conn,
-                    asset_id=asset_id,
-                    source_path=str(file_path),
-                    now=now,
-                )
+                destination_absolute = library_root_path / destination_relative
+                temporary_absolute = library_root_path / "originals" / f".{asset_id}.tmp"
+                try:
+                    try:
+                        shutil.copy2(file_path, temporary_absolute)
+                    except OSError as error:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_FAILED,
+                            detail="A temporary Library Copy could not be created.",
+                        ) from error
+
+                    try:
+                        temporary_size = temporary_absolute.stat().st_size
+                    except OSError as error:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_FAILED,
+                            detail="The temporary Library Copy could not be inspected.",
+                        ) from error
+                    if temporary_size > MAX_IMPORT_SOURCE_BYTES:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_TOO_LARGE,
+                            detail="The temporary Library Copy exceeds the 30 MiB import limit.",
+                        )
+
+                    try:
+                        temporary_hash = compute_sha256(temporary_absolute)
+                    except OSError as error:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_FAILED,
+                            detail="The temporary Library Copy could not be read.",
+                        ) from error
+                    if temporary_hash != content_hash:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_HASH_MISMATCH,
+                            detail="The source changed while its Library Copy was created.",
+                        )
+
+                    width, height = _validate_temporary_library_copy(temporary_absolute)
+                    if _source_changed_since(file_path, initial_metadata):
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.READ,
+                            code=ImportFailureCode.SOURCE_READ_FAILED,
+                            detail="The source file changed while it was being copied.",
+                        )
+                    try:
+                        os.replace(temporary_absolute, destination_absolute)
+                    except OSError as error:
+                        raise _CandidateImportError(
+                            stage=ImportFailureStage.COPY,
+                            code=ImportFailureCode.LIBRARY_COPY_FAILED,
+                            detail="The verified Library Copy could not be finalized.",
+                        ) from error
+                finally:
+                    _delete_unreferenced_library_copy(temporary_absolute)
+
+                try:
+                    with conn:
+                        conn.execute(
+                            """
+                            INSERT INTO asset (
+                                id,
+                                library_path,
+                                media_type,
+                                content_hash,
+                                byte_size,
+                                width,
+                                height,
+                                imported_at,
+                                updated_at,
+                                deleted_at
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                asset_id,
+                                destination_relative.as_posix(),
+                                media_type,
+                                content_hash,
+                                destination_absolute.stat().st_size,
+                                width,
+                                height,
+                                now,
+                                now,
+                                None,
+                            ),
+                        )
+                        source_change = upsert_source_record(
+                            conn=conn,
+                            asset_id=asset_id,
+                            source_path=str(file_path),
+                            now=now,
+                        )
+                        created_jobs = job_queue.enqueue_thumbnail(
+                            conn=conn,
+                            asset_id=asset_id,
+                            now=now,
+                        )
+                        created_jobs += job_queue.enqueue_embedding(
+                            conn=conn,
+                            asset_id=asset_id,
+                            recipe_id=active_recipe_id,
+                            media_type=media_type,
+                            now=now,
+                        )
+                        created_jobs += ocr_artifacts.enqueue_ocr_asset_job(
+                            conn,
+                            asset_id=asset_id,
+                            media_type=media_type,
+                            now=now,
+                            ocr_recipe_id=ocr_recipe_id,
+                        )
+                except (OSError, sqlite3.Error) as error:
+                    _delete_unreferenced_library_copy(destination_absolute)
+                    raise _CandidateImportError(
+                        stage=ImportFailureStage.DATABASE,
+                        code=ImportFailureCode.DATABASE_WRITE_FAILED,
+                        detail="The verified Library Copy could not be cataloged.",
+                    ) from error
+
+                new_assets += 1
+                jobs_created += created_jobs
                 if source_change == "added":
                     source_records_added += 1
                 else:
                     source_records_refreshed += 1
-
-                jobs_created += job_queue.enqueue_thumbnail(
-                    conn=conn,
-                    asset_id=asset_id,
-                    now=now,
+            except _CandidateImportError as error:
+                failed_files += 1
+                failure_details.append(
+                    ImportFailure(
+                        stage=error.stage,
+                        code=error.code,
+                        source_name=file_path.name,
+                        detail=error.detail,
+                    )
                 )
-                jobs_created += job_queue.enqueue_embedding(
-                    conn=conn,
-                    asset_id=asset_id,
-                    recipe_id=active_recipe_id,
-                    media_type=media_type,
-                    now=now,
-                )
-                jobs_created += ocr_artifacts.enqueue_ocr_asset_job(
-                    conn,
-                    asset_id=asset_id,
-                    media_type=media_type,
-                    now=now,
-                    ocr_recipe_id=ocr_recipe_id,
-                )
-
-            new_assets += 1
     finally:
         conn.close()
 
@@ -970,6 +1201,8 @@ def _import_file_candidates(
         source_records_added=source_records_added,
         source_records_refreshed=source_records_refreshed,
         jobs_created=jobs_created,
+        failed_files=failed_files,
+        failure_details=failure_details,
         active_recipe_id=active_recipe_id,
     )
 
@@ -1213,7 +1446,6 @@ def import_folder(
     library_root: Path | str,
     source_folder: Path | str,
     wait_for_permission: Callable[[], None] | None = None,
-    image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> ImportFolderResult:
     """Adapt the legacy single-folder API to the multi-source import seam."""
@@ -1227,7 +1459,6 @@ def import_folder(
         library_root,
         [source_folder],
         wait_for_permission=wait_for_permission,
-        image_dimensions_fn=image_dimensions_fn,
         provider=provider,
     )
     assert batch_result.active_recipe_id is not None
@@ -1250,7 +1481,6 @@ def import_sources(
     library_root: Path | str,
     sources: Sequence[Path | str],
     wait_for_permission: Callable[[], None] | None = None,
-    image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
     provider: RuntimeRecipeProvider | None = None,
 ) -> ImportBatchResult:
     """Import files and directories as one synchronous Import Batch."""
@@ -1416,7 +1646,6 @@ def import_sources(
         library_root_path,
         file_paths,
         wait_for_permission=wait_for_permission,
-        image_dimensions_fn=image_dimensions_fn,
     )
     succeeded_files = summary.new_assets + summary.duplicate_assets
     return ImportBatchResult(
@@ -1430,13 +1659,13 @@ def import_sources(
         scan_failures=len(scan_failure_details),
         processed_files=summary.supported_files,
         succeeded_files=succeeded_files,
-        failed_files=0,
+        failed_files=summary.failed_files,
         new_assets=summary.new_assets,
         duplicate_assets=summary.duplicate_assets,
         source_records_added=summary.source_records_added,
         source_records_refreshed=summary.source_records_refreshed,
         jobs_created=summary.jobs_created,
-        failure_details=tuple(scan_failure_details),
+        failure_details=tuple(scan_failure_details + summary.failure_details),
         active_recipe_id=summary.active_recipe_id,
     )
 
