@@ -8,9 +8,12 @@ LibraryStore.
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import sqlite3
+import stat
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +22,11 @@ from typing import Callable
 from . import asset_preprocessing
 from . import job_queue
 from . import ocr_artifacts
+from .import_contracts import (
+    ImportBatchErrorCode,
+    ImportBatchPreflightError,
+    ImportBatchResult,
+)
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 
 
@@ -41,6 +49,9 @@ SUPPORTED_EXTENSIONS = {
     ".gif": "image/gif",
     ".bmp": "image/bmp",
 }
+
+MAX_IMPORT_SOURCES = 256
+MAX_IMPORT_PATH_UTF8_BYTES = 32 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +86,19 @@ class ImportFolderResult:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+@dataclass
+class _FileImportSummary:
+    discovered_files: int
+    supported_files: int
+    unsupported_files: int
+    new_assets: int
+    duplicate_assets: int
+    source_records_added: int
+    source_records_refreshed: int
+    jobs_created: int
+    active_recipe_id: str
 
 
 @dataclass
@@ -634,21 +658,13 @@ def initialize_library(
     )
 
 
-def import_folder(
-    library_root: Path | str,
-    source_folder: Path | str,
+def _import_file_candidates(
+    library_root_path: Path,
+    file_paths: Sequence[Path],
     wait_for_permission: Callable[[], None] | None = None,
     image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
-    provider: RuntimeRecipeProvider | None = None,
-) -> ImportFolderResult:
-    """Import supported files, optionally waiting at each file boundary."""
-    init_result = initialize_library(library_root, provider)
-    library_root_path = Path(init_result.library_root)
-    source_root = resolve_path(source_folder)
-    if not source_root.exists() or not source_root.is_dir():
-        raise ValueError(f"Source folder does not exist or is not a directory: {source_root}")
-
-    discovered_files = 0
+) -> _FileImportSummary:
+    """Import pre-discovered candidates through the shared catalog pipeline."""
     supported_files = 0
     unsupported_files = 0
     new_assets = 0
@@ -661,14 +677,14 @@ def import_folder(
     try:
         active_recipe_id = get_active_recipe_id(conn)
         ocr_recipe_id = ocr_artifacts.ensure_default_ocr_recipe(conn)
-        for file_path in sorted(source_root.rglob("*")):
-            if not file_path.is_file():
-                continue
-
+        dimensions_fn = (
+            image_dimensions_fn
+            or asset_preprocessing.safe_image_dimensions_from_bytes
+        )
+        for file_path in file_paths:
             if wait_for_permission is not None:
                 wait_for_permission()
 
-            discovered_files += 1
             media_type = SUPPORTED_EXTENSIONS.get(file_path.suffix.lower())
             if media_type is None:
                 unsupported_files += 1
@@ -704,7 +720,9 @@ def import_folder(
                 continue
 
             asset_id = str(uuid.uuid4())
-            destination_relative = Path("originals") / f"{asset_id}{file_path.suffix.lower()}"
+            destination_relative = (
+                Path("originals") / f"{asset_id}{file_path.suffix.lower()}"
+            )
             destination_absolute = library_root_path / destination_relative
 
             try:
@@ -715,7 +733,6 @@ def import_folder(
                 raise
 
             byte_size = destination_absolute.stat().st_size
-            dimensions_fn = image_dimensions_fn or asset_preprocessing.safe_image_dimensions_from_bytes
             width, height = dimensions_fn(destination_absolute.read_bytes())
             with conn:
                 conn.execute(
@@ -782,10 +799,8 @@ def import_folder(
     finally:
         conn.close()
 
-    return ImportFolderResult(
-        library_root=str(library_root_path),
-        source_folder=str(source_root),
-        discovered_files=discovered_files,
+    return _FileImportSummary(
+        discovered_files=len(file_paths),
         supported_files=supported_files,
         unsupported_files=unsupported_files,
         new_assets=new_assets,
@@ -794,6 +809,166 @@ def import_folder(
         source_records_refreshed=source_records_refreshed,
         jobs_created=jobs_created,
         active_recipe_id=active_recipe_id,
+    )
+
+
+def import_folder(
+    library_root: Path | str,
+    source_folder: Path | str,
+    wait_for_permission: Callable[[], None] | None = None,
+    image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
+    provider: RuntimeRecipeProvider | None = None,
+) -> ImportFolderResult:
+    """Import supported files, optionally waiting at each file boundary."""
+    init_result = initialize_library(library_root, provider)
+    library_root_path = Path(init_result.library_root)
+    source_root = resolve_path(source_folder)
+    if not source_root.exists() or not source_root.is_dir():
+        raise ValueError(
+            f"Source folder does not exist or is not a directory: {source_root}"
+        )
+
+    file_paths = [
+        file_path
+        for file_path in sorted(source_root.rglob("*"))
+        if file_path.is_file()
+    ]
+    summary = _import_file_candidates(
+        library_root_path,
+        file_paths,
+        wait_for_permission=wait_for_permission,
+        image_dimensions_fn=image_dimensions_fn,
+    )
+    return ImportFolderResult(
+        library_root=str(library_root_path),
+        source_folder=str(source_root),
+        discovered_files=summary.discovered_files,
+        supported_files=summary.supported_files,
+        unsupported_files=summary.unsupported_files,
+        new_assets=summary.new_assets,
+        duplicate_assets=summary.duplicate_assets,
+        source_records_added=summary.source_records_added,
+        source_records_refreshed=summary.source_records_refreshed,
+        jobs_created=summary.jobs_created,
+        active_recipe_id=summary.active_recipe_id,
+    )
+
+
+def import_sources(
+    library_root: Path | str,
+    sources: Sequence[Path | str],
+    wait_for_permission: Callable[[], None] | None = None,
+    image_dimensions_fn: Callable[[bytes], tuple[int | None, int | None]] | None = None,
+    provider: RuntimeRecipeProvider | None = None,
+) -> ImportBatchResult:
+    """Import explicit regular files as one synchronous Import Batch."""
+    if not isinstance(sources, Sequence) or isinstance(
+        sources,
+        (str, bytes, bytearray),
+    ):
+        raise ImportBatchPreflightError(
+            code=ImportBatchErrorCode.INVALID_SOURCE,
+            detail="Import Sources must be provided as a sequence of paths.",
+        )
+    if not sources or len(sources) > MAX_IMPORT_SOURCES:
+        raise ImportBatchPreflightError(
+            code=ImportBatchErrorCode.INVALID_SOURCE,
+            detail=f"An Import Batch requires 1 to {MAX_IMPORT_SOURCES} sources.",
+        )
+    if any(not isinstance(source, (str, Path)) for source in sources):
+        raise ImportBatchPreflightError(
+            code=ImportBatchErrorCode.INVALID_SOURCE,
+            detail="Every Import Source must be a string or Path.",
+        )
+    for source in sources:
+        source_text = str(source)
+        try:
+            encoded_source = source_text.encode("utf-8", errors="strict")
+        except UnicodeEncodeError:
+            encoded_source = b""
+        if (
+            not encoded_source
+            or len(encoded_source) > MAX_IMPORT_PATH_UTF8_BYTES
+            or any(character in source_text for character in ("\x00", "\r", "\n"))
+        ):
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="Every Import Source path must be transport-safe UTF-8.",
+            )
+    library_root_path = resolve_path(library_root)
+    source_paths_by_canonical_key: dict[str, Path] = {}
+    reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    for source in sources:
+        normalized_source = Path(
+            os.path.abspath(Path(source).expanduser())
+        )
+        try:
+            source_metadata = os.lstat(normalized_source)
+        except OSError as error:
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="An Import Source does not exist or cannot be inspected.",
+            ) from error
+        if stat.S_ISLNK(source_metadata.st_mode) or (
+            getattr(source_metadata, "st_file_attributes", 0) & reparse_attribute
+        ):
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="Top-level reparse-point Import Sources are not allowed.",
+            )
+        if not stat.S_ISREG(source_metadata.st_mode):
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="Every Import Source must be a regular file.",
+            )
+        try:
+            canonical_source = normalized_source.resolve(strict=True)
+        except OSError as error:
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="An Import Source could not be resolved.",
+            ) from error
+        if (
+            canonical_source == library_root_path
+            or canonical_source.is_relative_to(library_root_path)
+            or library_root_path.is_relative_to(canonical_source)
+        ):
+            raise ImportBatchPreflightError(
+                code=ImportBatchErrorCode.INVALID_SOURCE,
+                detail="Import Sources must be outside the Library Root.",
+            )
+        canonical_key = os.path.normcase(str(canonical_source))
+        source_paths_by_canonical_key.setdefault(canonical_key, normalized_source)
+
+    source_paths = list(source_paths_by_canonical_key.values())
+
+    init_result = initialize_library(library_root_path, provider)
+    library_root_path = Path(init_result.library_root)
+    summary = _import_file_candidates(
+        library_root_path,
+        source_paths,
+        wait_for_permission=wait_for_permission,
+        image_dimensions_fn=image_dimensions_fn,
+    )
+    succeeded_files = summary.new_assets + summary.duplicate_assets
+    return ImportBatchResult(
+        library_root=str(library_root_path),
+        selected_sources=len(sources),
+        effective_sources=len(source_paths),
+        discovered_files=summary.discovered_files,
+        supported_files=summary.supported_files,
+        unsupported_files=summary.unsupported_files,
+        reparse_points_skipped=0,
+        scan_failures=0,
+        processed_files=summary.supported_files,
+        succeeded_files=succeeded_files,
+        failed_files=0,
+        new_assets=summary.new_assets,
+        duplicate_assets=summary.duplicate_assets,
+        source_records_added=summary.source_records_added,
+        source_records_refreshed=summary.source_records_refreshed,
+        jobs_created=summary.jobs_created,
+        active_recipe_id=summary.active_recipe_id,
     )
 
 

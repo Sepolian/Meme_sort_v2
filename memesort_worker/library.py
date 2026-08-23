@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -245,6 +246,22 @@ def import_folder(
     return asset_catalog.import_folder(
         library_root,
         source_folder,
+        wait_for_permission=wait_for_permission,
+        image_dimensions_fn=_safe_image_dimensions_from_bytes,
+        provider=provider,
+    )
+
+
+def import_sources(
+    library_root: Path | str,
+    sources: Sequence[Path | str],
+    wait_for_permission: Callable[[], None] | None = None,
+    provider: RuntimeRecipeProvider | None = None,
+) -> ImportBatchResult:
+    """Import explicit regular files through the multi-source batch seam."""
+    return asset_catalog.import_sources(
+        library_root,
+        sources,
         wait_for_permission=wait_for_permission,
         image_dimensions_fn=_safe_image_dimensions_from_bytes,
         provider=provider,
