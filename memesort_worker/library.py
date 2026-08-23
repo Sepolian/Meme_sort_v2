@@ -7,6 +7,16 @@ from typing import Callable
 from . import asset_catalog
 from . import asset_preprocessing
 from . import ocr_artifacts
+from .import_contracts import (
+    ImportBatchError,
+    ImportBatchErrorCode,
+    ImportBatchPreflightError,
+    ImportBatchResult,
+    ImportFailure,
+    ImportFailureCode,
+    ImportFailureStage,
+    MAX_IMPORT_FAILURE_DETAILS,
+)
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 
 
