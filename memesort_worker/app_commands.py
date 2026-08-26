@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
 from .asset_catalog import BatchAssetActionResult, import_folder, rebuild_active_indexes
+from .import_controller import ImportTerminalOutcome
 
 
 class WorkerLoop(Protocol):
@@ -15,7 +17,11 @@ class WorkerLoop(Protocol):
 
 
 class ImportTaskController(Protocol):
-    def start(self, path: str, on_completed=None):
+    def start(
+        self,
+        sources: Sequence[Path | str],
+        on_terminal: Callable[[ImportTerminalOutcome], None] | None = None,
+    ):
         ...
 
 
@@ -51,13 +57,17 @@ def start_background_import(
     start_indexing: bool,
 ):
     """Authorize before importing; resume the worker only after a completed import."""
+    def _resume_on_completed(outcome: ImportTerminalOutcome) -> None:
+        if outcome.status == "completed":
+            worker_loop.resume()
+
     if start_indexing:
         runtime_ready, runtime_message = runtime.is_ready_for_indexing()
         if not runtime_ready:
             raise ValueError(runtime_message)
     return import_controller.start(
-        import_path,
-        on_completed=worker_loop.resume if start_indexing else None,
+        [import_path],
+        on_terminal=_resume_on_completed if start_indexing else None,
     )
 
 

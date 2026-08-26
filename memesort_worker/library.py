@@ -15,6 +15,7 @@ from .import_contracts import (
     ImportFailure,
     ImportFailureCode,
     ImportFailureStage,
+    ImportProgress,
     MAX_IMPORT_FAILURE_DETAILS,
 )
 from .recipe_provider import RuntimeRecipeProvider, default_provider
@@ -251,6 +252,7 @@ def import_sources(
     sources: Sequence[Path | str],
     wait_for_permission: Callable[[], None] | None = None,
     provider: RuntimeRecipeProvider | None = None,
+    progress_callback: Callable[[ImportProgress], None] | None = None,
 ) -> ImportBatchResult:
     """Import files and directories through the multi-source batch seam."""
     return asset_catalog.import_sources(
@@ -258,6 +260,7 @@ def import_sources(
         sources,
         wait_for_permission=wait_for_permission,
         provider=provider,
+        progress_callback=progress_callback,
     )
 
 

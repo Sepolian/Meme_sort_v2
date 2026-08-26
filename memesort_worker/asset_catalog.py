@@ -32,6 +32,7 @@ from .import_contracts import (
     ImportFailure,
     ImportFailureCode,
     ImportFailureStage,
+    ImportProgress,
 )
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 
@@ -137,6 +138,16 @@ class _DirectoryScanSummary:
     reparse_points_skipped: int
     failure_details: list[ImportFailure]
     limit_exceeded: bool
+
+
+@dataclass(frozen=True)
+class _ScanProgress:
+    source_name: str | None
+    discovered_files: int
+    scan_failures: int
+    reparse_points_skipped: int
+    supported_files: int
+    failure_details: tuple[ImportFailure, ...]
 
 
 @dataclass(frozen=True)
@@ -1231,17 +1242,53 @@ def _import_file_candidates(
     library_root_path: Path,
     file_paths: Sequence[Path],
     wait_for_permission: Callable[[], None] | None = None,
+    progress_callback: Callable[[ImportProgress], None] | None = None,
+    *,
+    selected_sources: int = 0,
+    effective_sources: int = 0,
+    scan_failures: int = 0,
+    reparse_points_skipped: int = 0,
 ) -> _FileImportSummary:
     """Import pre-discovered candidates through the shared catalog pipeline."""
-    supported_files = 0
-    unsupported_files = 0
+    supported_files = sum(
+        file_path.suffix.lower() in SUPPORTED_EXTENSIONS for file_path in file_paths
+    )
+    unsupported_files = len(file_paths) - supported_files
     new_assets = 0
     duplicate_assets = 0
     source_records_added = 0
     source_records_refreshed = 0
     jobs_created = 0
+    processed_files = 0
+    succeeded_files = 0
     failed_files = 0
     failure_details: list[ImportFailure] = []
+
+    def _emit_progress(current_source_name: str | None) -> None:
+        if progress_callback is None:
+            return
+        progress_callback(
+            ImportProgress(
+                phase="importing",
+                current_source_name=current_source_name,
+                selected_sources=selected_sources,
+                effective_sources=effective_sources,
+                discovered_files=len(file_paths),
+                supported_files=supported_files,
+                unsupported_files=unsupported_files,
+                reparse_points_skipped=reparse_points_skipped,
+                scan_failures=scan_failures,
+                processed_files=processed_files,
+                succeeded_files=succeeded_files,
+                failed_files=failed_files,
+                new_assets=new_assets,
+                duplicate_assets=duplicate_assets,
+                source_records_added=source_records_added,
+                source_records_refreshed=source_records_refreshed,
+                jobs_created=jobs_created,
+                failure_details=tuple(failure_details),
+            )
+        )
 
     conn = connect(database_path(library_root_path))
     try:
@@ -1253,10 +1300,9 @@ def _import_file_candidates(
 
             media_type = SUPPORTED_EXTENSIONS.get(file_path.suffix.lower())
             if media_type is None:
-                unsupported_files += 1
+                _emit_progress(file_path.name)
                 continue
 
-            supported_files += 1
             try:
                 initial_metadata = _checked_processing_metadata(file_path)
                 try:
@@ -1316,6 +1362,9 @@ def _import_file_candidates(
                         source_records_added += 1
                     else:
                         source_records_refreshed += 1
+                    processed_files += 1
+                    succeeded_files += 1
+                    _emit_progress(file_path.name)
                     continue
 
                 asset_id = str(uuid.uuid4())
@@ -1506,7 +1555,11 @@ def _import_file_candidates(
                     source_records_added += 1
                 else:
                     source_records_refreshed += 1
+                processed_files += 1
+                succeeded_files += 1
+                _emit_progress(file_path.name)
             except _CandidateImportError as error:
+                processed_files += 1
                 failed_files += 1
                 failure_details.append(
                     ImportFailure(
@@ -1516,6 +1569,7 @@ def _import_file_candidates(
                         detail=error.detail,
                     )
                 )
+                _emit_progress(file_path.name)
     finally:
         conn.close()
 
@@ -1566,14 +1620,29 @@ def _scan_directory_candidates(
     source_directory: Path,
     candidate_keys: set[str],
     wait_for_permission: Callable[[], None] | None = None,
+    progress_callback: Callable[[_ScanProgress], None] | None = None,
 ) -> _DirectoryScanSummary:
     """Discover regular files without following descendant reparse points."""
     candidates: list[Path] = []
+    supported_files = 0
     reparse_points_skipped = 0
     failure_details: list[ImportFailure] = []
     limit_exceeded = False
     pending_scan_work: list[Path | _DirectoryScanGuard] = [source_directory]
     directory_guards: list[_DirectoryScanGuard] = []
+
+    def _emit_scan_progress(source_name: str | None = None) -> None:
+        if progress_callback is not None:
+            progress_callback(
+                _ScanProgress(
+                    source_name=source_name,
+                    discovered_files=len(candidates),
+                    scan_failures=len(failure_details),
+                    reparse_points_skipped=reparse_points_skipped,
+                    supported_files=supported_files,
+                    failure_details=tuple(failure_details),
+                )
+            )
 
     try:
         if source_directory.parent != source_directory:
@@ -1590,6 +1659,7 @@ def _scan_directory_candidates(
                         detail="The source directory parent could not be locked.",
                     )
                 )
+                _emit_scan_progress(source_directory.name)
                 return _DirectoryScanSummary(
                     candidates=candidates,
                     reparse_points_skipped=reparse_points_skipped,
@@ -1598,6 +1668,7 @@ def _scan_directory_candidates(
                 )
             if source_parent_guard.is_reparse_point:
                 reparse_points_skipped += 1
+                _emit_scan_progress(source_directory.name)
                 return _DirectoryScanSummary(
                     candidates=candidates,
                     reparse_points_skipped=reparse_points_skipped,
@@ -1613,6 +1684,7 @@ def _scan_directory_candidates(
                         detail="The source directory parent is not a directory.",
                     )
                 )
+                _emit_scan_progress(source_directory.name)
                 return _DirectoryScanSummary(
                     candidates=candidates,
                     reparse_points_skipped=reparse_points_skipped,
@@ -1627,6 +1699,7 @@ def _scan_directory_candidates(
                 scan_work.close()
                 continue
             current_directory = scan_work
+            _emit_scan_progress(current_directory.name)
             try:
                 current_metadata = os.lstat(current_directory)
             except OSError:
@@ -1638,9 +1711,11 @@ def _scan_directory_candidates(
                         detail="The directory could not be inspected before scanning.",
                     )
                 )
+                _emit_scan_progress(current_directory.name)
                 continue
             if _is_reparse_point(current_metadata):
                 reparse_points_skipped += 1
+                _emit_scan_progress(current_directory.name)
                 continue
             if not stat.S_ISDIR(current_metadata.st_mode):
                 failure_details.append(
@@ -1651,6 +1726,7 @@ def _scan_directory_candidates(
                         detail="The directory changed before it could be scanned.",
                     )
                 )
+                _emit_scan_progress(current_directory.name)
                 continue
 
             try:
@@ -1664,9 +1740,11 @@ def _scan_directory_candidates(
                         detail="The directory could not be locked for safe scanning.",
                     )
                 )
+                _emit_scan_progress(current_directory.name)
                 continue
             if directory_guard.is_reparse_point:
                 reparse_points_skipped += 1
+                _emit_scan_progress(current_directory.name)
                 continue
             if not directory_guard.is_directory:
                 failure_details.append(
@@ -1677,6 +1755,7 @@ def _scan_directory_candidates(
                         detail="The directory changed before it could be locked.",
                     )
                 )
+                _emit_scan_progress(current_directory.name)
                 continue
             directory_guards.append(directory_guard)
 
@@ -1685,6 +1764,7 @@ def _scan_directory_candidates(
                     opened_directory_metadata = os.lstat(current_directory)
                     if _is_reparse_point(opened_directory_metadata):
                         reparse_points_skipped += 1
+                        _emit_scan_progress(current_directory.name)
                         directory_guard.close()
                         continue
                     if not _same_file_identity(
@@ -1714,6 +1794,7 @@ def _scan_directory_candidates(
                         detail="The directory could not be scanned.",
                     )
                 )
+                _emit_scan_progress(current_directory.name)
                 directory_guard.close()
                 continue
 
@@ -1733,19 +1814,28 @@ def _scan_directory_candidates(
                             detail="The directory entry could not be inspected.",
                         )
                     )
+                    _emit_scan_progress(entry.name)
                     continue
                 if _is_reparse_point(metadata):
                     reparse_points_skipped += 1
+                    _emit_scan_progress(entry.name)
                     continue
                 if stat.S_ISDIR(metadata.st_mode):
                     child_directories.append(Path(entry.path))
                 elif stat.S_ISREG(metadata.st_mode):
+                    previous_candidate_count = len(candidates)
                     limit_exceeded = _append_unique_candidate(
                         Path(entry.path),
                         candidates,
                         candidate_keys,
                         failure_details,
                     )
+                    if (
+                        len(candidates) > previous_candidate_count
+                        and Path(entry.path).suffix.lower() in SUPPORTED_EXTENSIONS
+                    ):
+                        supported_files += 1
+                    _emit_scan_progress(entry.name)
                     if limit_exceeded:
                         break
 
@@ -1809,6 +1899,7 @@ def import_sources(
     sources: Sequence[Path | str],
     wait_for_permission: Callable[[], None] | None = None,
     provider: RuntimeRecipeProvider | None = None,
+    progress_callback: Callable[[ImportProgress], None] | None = None,
 ) -> ImportBatchResult:
     """Import files and directories as one synchronous Import Batch."""
     if not isinstance(sources, Sequence) or isinstance(
@@ -1911,12 +2002,55 @@ def import_sources(
     reparse_points_skipped = 0
     scan_failure_details: list[ImportFailure] = []
     limit_exceeded = False
+
+    def _emit_scan_progress(progress: _ScanProgress) -> None:
+        if progress_callback is None:
+            return
+        progress_callback(
+            ImportProgress(
+                phase="scanning",
+                current_source_name=progress.source_name,
+                selected_sources=len(sources),
+                effective_sources=len(effective_sources),
+                discovered_files=progress.discovered_files,
+                supported_files=progress.supported_files,
+                unsupported_files=(
+                    progress.discovered_files - progress.supported_files
+                ),
+                reparse_points_skipped=progress.reparse_points_skipped,
+                scan_failures=progress.scan_failures,
+                processed_files=0,
+                succeeded_files=0,
+                failed_files=0,
+                new_assets=0,
+                duplicate_assets=0,
+                source_records_added=0,
+                source_records_refreshed=0,
+                jobs_created=0,
+                failure_details=progress.failure_details,
+            )
+        )
+
     for source in effective_sources:
+        _emit_scan_progress(
+            _ScanProgress(
+                source_name=source.normalized_path.name,
+                discovered_files=len(file_paths),
+                scan_failures=len(scan_failure_details),
+                reparse_points_skipped=reparse_points_skipped,
+                supported_files=sum(
+                    source_path.suffix.lower() in SUPPORTED_EXTENSIONS
+                    for source_path in file_paths
+                ),
+                failure_details=tuple(scan_failure_details),
+            )
+        )
         if source.is_directory:
             directory_scan = _scan_directory_candidates(
                 source.normalized_path,
                 candidate_keys,
                 wait_for_permission=wait_for_permission,
+                progress_callback=_emit_scan_progress,
             )
             file_paths.extend(directory_scan.candidates)
             reparse_points_skipped += directory_scan.reparse_points_skipped
@@ -1928,6 +2062,19 @@ def import_sources(
                 file_paths,
                 candidate_keys,
                 scan_failure_details,
+            )
+            _emit_scan_progress(
+                _ScanProgress(
+                    source_name=source.normalized_path.name,
+                    discovered_files=len(file_paths),
+                    scan_failures=len(scan_failure_details),
+                    reparse_points_skipped=reparse_points_skipped,
+                    supported_files=sum(
+                        source_path.suffix.lower() in SUPPORTED_EXTENSIONS
+                        for source_path in file_paths
+                    ),
+                    failure_details=tuple(scan_failure_details),
+                )
             )
 
         if limit_exceeded:
@@ -1974,6 +2121,11 @@ def import_sources(
         library_root_path,
         file_paths,
         wait_for_permission=wait_for_permission,
+        progress_callback=progress_callback,
+        selected_sources=len(sources),
+        effective_sources=len(effective_sources),
+        scan_failures=len(scan_failure_details),
+        reparse_points_skipped=reparse_points_skipped,
     )
     succeeded_files = summary.new_assets + summary.duplicate_assets
     return ImportBatchResult(

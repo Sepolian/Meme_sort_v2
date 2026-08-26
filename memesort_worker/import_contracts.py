@@ -288,6 +288,85 @@ class ImportBatchResult:
         }
 
 
+@dataclass(frozen=True, kw_only=True)
+class ImportProgress:
+    """Progress emitted by the synchronous Import Batch seam.
+
+    The controller uses these fields to publish a snapshot without waiting
+    for the batch to finish.  ``current_source_name`` is always a basename;
+    full filesystem paths are not part of the public progress contract.
+    """
+
+    phase: str
+    current_source_name: str | None
+    selected_sources: int = 0
+    effective_sources: int = 0
+    discovered_files: int = 0
+    supported_files: int = 0
+    unsupported_files: int = 0
+    reparse_points_skipped: int = 0
+    scan_failures: int = 0
+    processed_files: int = 0
+    succeeded_files: int = 0
+    failed_files: int = 0
+    new_assets: int = 0
+    duplicate_assets: int = 0
+    source_records_added: int = 0
+    source_records_refreshed: int = 0
+    jobs_created: int = 0
+    failure_details: tuple[ImportFailure, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.phase not in {"scanning", "importing"}:
+            raise ValueError("ImportProgress phase must be scanning or importing")
+
+        count_names = (
+            "selected_sources",
+            "effective_sources",
+            "discovered_files",
+            "supported_files",
+            "unsupported_files",
+            "reparse_points_skipped",
+            "scan_failures",
+            "processed_files",
+            "succeeded_files",
+            "failed_files",
+            "new_assets",
+            "duplicate_assets",
+            "source_records_added",
+            "source_records_refreshed",
+            "jobs_created",
+        )
+        for name in count_names:
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if self.discovered_files != self.supported_files + self.unsupported_files:
+            raise ValueError(
+                "discovered_files must equal supported_files + unsupported_files"
+            )
+        if self.processed_files != self.succeeded_files + self.failed_files:
+            raise ValueError(
+                "processed_files must equal succeeded_files + failed_files"
+            )
+        if self.succeeded_files != self.new_assets + self.duplicate_assets:
+            raise ValueError("succeeded_files must equal new_assets + duplicate_assets")
+
+        failure_details = tuple(self.failure_details)
+        if any(not isinstance(failure, ImportFailure) for failure in failure_details):
+            raise ValueError("failure_details must contain only ImportFailure values")
+        object.__setattr__(self, "failure_details", failure_details)
+
+        if self.current_source_name is not None:
+            safe_name = _display_safe_text(
+                self.current_source_name,
+                fallback="Unknown source",
+                max_length=255,
+            )
+            safe_name = ntpath.basename(safe_name.rstrip("\\/")) or "Unknown source"
+            object.__setattr__(self, "current_source_name", safe_name)
+
+
 class ImportBatchError(RuntimeError):
     """Fatal Import Batch error, optionally retaining committed partial work."""
 
