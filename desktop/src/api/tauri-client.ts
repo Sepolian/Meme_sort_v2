@@ -5,6 +5,7 @@ export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) 
 
 export interface MemeSortClient {
   getAppState(): Promise<AppState>;
+  getImportStatus(): Promise<ImportTask>;
   getAssets(): Promise<AssetListResult>;
   getAssetDetail(assetId: string): Promise<AssetDetailResult>;
   revealAsset(assetId: string, target: "managed" | "source", sourcePath?: string): Promise<void>;
@@ -38,6 +39,7 @@ export interface MemeSortClient {
 export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClient {
   return {
     getAppState: () => invokeCommand<AppState>("get_app_state"),
+    getImportStatus: () => invokeCommand<ImportTask>("get_import_status"),
     getAssets: () => invokeCommand<AssetListResult>("get_assets"),
     getAssetDetail: (assetId) => invokeCommand<AssetDetailResult>("get_asset_detail", { assetId }),
     revealAsset: (assetId, target, sourcePath) => invokeCommand("reveal_asset", sourcePath === undefined ? { assetId, target } : { assetId, target, sourcePath }),

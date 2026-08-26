@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
+import { importSnapshot } from "./features/import/import-test-fixtures";
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -100,19 +101,10 @@ const client = {
     recent_events: [{ event: "worker-loop-paused", payload: {}, timestamp: 1_754_704_800 }],
     persisted_events: [{ event: "tick-finished", payload: { processed_jobs: 1 }, timestamp: 1_754_704_700 }],
   },
-  import_task: {
-    status: "idle",
-    running: false,
-    paused: false,
-    pause_requested: false,
-    source_folder: null,
-    started_at: null,
-    finished_at: null,
-    result: null,
-    error: null,
-  },
+  import_task: importSnapshot(),
   pending_jobs: [{ job_id: "job-1" }],
   }),
+  getImportStatus: vi.fn(async () => importSnapshot()),
   getAssets: async () => assets,
   getAssetDetail: async () => ({
     library_root: "C:/Library",
@@ -158,11 +150,11 @@ const client = {
   chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
   chooseLibraryFiles: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 })),
   chooseLibraryFolder: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 })),
-  startLibraryImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: null, started_at: 1, finished_at: null, result: null, error: null })),
-  startImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
-  startImportAndIndex: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
-  pauseImport: vi.fn(async () => ({ status: "pausing", running: true, paused: false, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
-  resumeImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
+  startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174020", status: "scanning", running: true, started_at: 1 })),
+  startImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "scanning", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
+  startImportAndIndex: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174022", status: "scanning", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
+  pauseImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "pausing", running: true, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1 })),
+  resumeImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "importing", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
   searchText: vi.fn(async (query: string) => ({
     library_root: "C:/Library",
     active_recipe_id: "recipe-1",

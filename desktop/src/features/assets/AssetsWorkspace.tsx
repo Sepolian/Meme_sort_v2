@@ -7,6 +7,8 @@ import {
   subscribeNativeDrag,
   type NativeDragSubscribe,
 } from "../../api/native-drag";
+import { useImportBatch } from "../import/ImportBatchContext";
+import { importWorkIsActive } from "../import/import-status";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
@@ -155,6 +157,8 @@ function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<Me
 
 export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail, nativeDrag }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
+  const importBatch = useImportBatch();
+  const importWorkActive = importWorkIsActive(importBatch?.snapshot);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -264,7 +268,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   };
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <div className="asset-wall">

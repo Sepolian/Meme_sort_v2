@@ -102,21 +102,73 @@ export interface RetryJobsResult {
   failed_jobs_remaining: number;
 }
 
+export interface ImportFailureDetail {
+  stage: string;
+  code: string;
+  source_name: string;
+  detail: string;
+}
+
+export interface ImportBatchResultSummary {
+  library_root: string;
+  selected_sources: number;
+  effective_sources: number;
+  discovered_files: number;
+  supported_files: number;
+  unsupported_files: number;
+  reparse_points_skipped: number;
+  scan_failures: number;
+  processed_files: number;
+  succeeded_files: number;
+  failed_files: number;
+  new_assets: number;
+  duplicate_assets: number;
+  source_records_added: number;
+  source_records_refreshed: number;
+  jobs_created: number;
+  failure_details: ImportFailureDetail[];
+  active_recipe_id: string | null;
+}
+
+export type ImportBatchStatus =
+  | "idle"
+  | "scanning"
+  | "importing"
+  | "pausing"
+  | "paused"
+  | "completed"
+  | "completed_with_errors"
+  | "failed"
+  | "cancelled";
+
 export interface ImportTask {
-  status: string;
+  batch_id: string | null;
+  status: ImportBatchStatus;
   running: boolean;
   paused: boolean;
   pause_requested: boolean;
   source_folder: string | null;
+  selected_sources: number;
+  effective_sources: number;
+  discovered_files: number;
+  supported_files: number;
+  unsupported_files: number;
+  reparse_points_skipped: number;
+  scan_failures: number;
+  processed_files: number;
+  succeeded_files: number;
+  failed_files: number;
+  new_assets: number;
+  duplicate_assets: number;
+  source_records_added: number;
+  source_records_refreshed: number;
+  jobs_created: number;
+  current_source_name: string | null;
   started_at: number | null;
   finished_at: number | null;
-  result: {
-    new_assets?: number;
-    duplicate_assets?: number;
-  } | null;
-  error: {
-    detail: string;
-  } | null;
+  result: ImportBatchResultSummary | null;
+  partial_result: ImportBatchResultSummary | null;
+  error: { error: string; detail: string } | null;
 }
 
 export interface FolderSelection {

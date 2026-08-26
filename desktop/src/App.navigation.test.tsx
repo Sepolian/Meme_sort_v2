@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 import type { MemeSortClient } from "./api/tauri-client";
+import { importSnapshot } from "./features/import/import-test-fixtures";
 
 const client: MemeSortClient = {
   getAppState: async () => ({
@@ -12,19 +13,10 @@ const client: MemeSortClient = {
     setup_state: { health_check_ok: true },
     library_status: { total_assets: 1, job_counts: { pending: 0 } },
     worker_loop: { paused: false, running: true },
-    import_task: {
-      status: "idle",
-      running: false,
-      paused: false,
-      pause_requested: false,
-      source_folder: null,
-      started_at: null,
-      finished_at: null,
-      result: null,
-      error: null,
-    },
+    import_task: importSnapshot(),
     pending_jobs: [],
   }),
+  getImportStatus: async () => importSnapshot(),
   getAssets: unsupported,
   getAssetDetail: unsupported,
   revealAsset: unsupported,

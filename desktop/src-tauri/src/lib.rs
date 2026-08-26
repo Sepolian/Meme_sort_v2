@@ -33,6 +33,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             sidecar::get_app_state,
+            sidecar::get_import_status,
             sidecar::get_assets,
             sidecar::get_asset_detail,
             sidecar::delete_asset,

@@ -557,6 +557,12 @@ impl SidecarSession {
         authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::State)
     }
 
+    /// One Import Batch snapshot. Progress travels to the WebView without
+    /// filesystem paths, so polling stays safe from any page.
+    fn import_status(&self) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::ImportStatus)
+    }
+
     fn assets(&self) -> Result<serde_json::Value, SidecarError> {
         authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::Assets)
     }
@@ -889,6 +895,7 @@ impl SidecarSession {
 
 enum ApiRoute {
     State,
+    ImportStatus,
     Assets,
     AssetDetail(String),
     TextSearch { query: String, request_id: String },
@@ -1070,6 +1077,7 @@ impl ApiRoute {
     fn path(&self) -> String {
         match self {
             Self::State => "/api/state".to_owned(),
+            Self::ImportStatus => "/api/import".to_owned(),
             Self::Assets => "/api/assets".to_owned(),
             Self::AssetDetail(asset_id) => format!("/api/asset-detail?asset_id={asset_id}"),
             Self::TextSearch { query, request_id } => format!(
@@ -1207,6 +1215,11 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
 #[tauri::command]
 pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |session| session.app_state())
+}
+
+#[tauri::command]
+pub fn get_import_status(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_session(&app, |session| session.import_status())
 }
 
 #[tauri::command]
@@ -2979,6 +2992,47 @@ mod tests {
             &EmptyPayload {},
         )
         .expect("resume import should succeed");
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_import_status_only_to_the_fixed_read_route_with_the_private_cookie() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("status request should connect");
+            let mut request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = stream.read(&mut chunk).expect("status request should read");
+                request.extend_from_slice(&chunk[..size]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+            assert!(request.starts_with("GET /api/import HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            assert!(!request.contains("path"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"batch_id\":null,\"status\":\"idle\",\"running\":false}",
+                )
+                .expect("status response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        let status = authenticated_get_json(
+            &origin,
+            "memesort_session=test-token",
+            ApiRoute::ImportStatus,
+        )
+        .expect("import status should be readable");
+
+        assert_eq!(
+            status.get("status").and_then(serde_json::Value::as_str),
+            Some("idle")
+        );
         server.join().expect("test server should finish");
     }
 

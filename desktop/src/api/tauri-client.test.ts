@@ -11,6 +11,19 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenCalledWith("get_app_state");
   });
 
+  it("observes the Import Batch through one fixed path-free status command", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ batch_id: null, status: "idle", running: false });
+    const client = createMemeSortClient(invokeCommand);
+
+    await client.getImportStatus();
+    await client.pauseImport();
+    await client.resumeImport();
+
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "get_import_status");
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "pause_import");
+    expect(invokeCommand).toHaveBeenNthCalledWith(3, "resume_import");
+  });
+
   it("invokes the fixed asset commands", async () => {
     const invokeCommand = vi.fn().mockResolvedValue({ assets: [] });
     const client = createMemeSortClient(invokeCommand);

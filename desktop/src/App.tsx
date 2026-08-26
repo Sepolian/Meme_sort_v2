@@ -7,6 +7,8 @@ import type { AppState, DuplicatePair, RuntimeHealthResult, SearchAsset } from "
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
+import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import "./App.css";
 
 type Theme = "dark" | "light";
@@ -700,39 +702,42 @@ export function App({ client = tauriClient }: AppProps) {
   }, [theme]);
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <Link className="brand" to="/" aria-label="MemeSort library">
-          <span className="brand-mark">M</span>
-          <span>MemeSort</span>
-        </Link>
-        <nav>
-          {navigation.map(({ to, label, end }) => (
-            <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
-          <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
-            Use {theme === "dark" ? "light" : "dark"} theme
-          </button>
+    <ImportBatchProvider client={client}>
+      <div className="app-shell">
+        <aside className="sidebar" aria-label="Primary navigation">
+          <Link className="brand" to="/" aria-label="MemeSort library">
+            <span className="brand-mark">M</span>
+            <span>MemeSort</span>
+          </Link>
+          <nav>
+            {navigation.map(({ to, label, end }) => (
+              <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="sidebar-footer">
+            <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
+            <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
+              Use {theme === "dark" ? "light" : "dark"} theme
+            </button>
+          </div>
+        </aside>
+        <div className="workspace">
+          <header className="topbar">
+            <span className={stateQuery.isSuccess ? "connection connection-online" : "connection"}>
+              {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
+            </span>
+            <span className="topbar-detail">Authenticated desktop session</span>
+          </header>
+          <ImportBatchPanel />
+          {stateQuery.isPending ? <LoadingState /> : null}
+          {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
+          {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
         </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <span className={stateQuery.isSuccess ? "connection connection-online" : "connection"}>
-            {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
-          </span>
-          <span className="topbar-detail">Authenticated desktop session</span>
-        </header>
-        {stateQuery.isPending ? <LoadingState /> : null}
-        {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
-        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+        {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
       </div>
-      {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
-    </div>
+    </ImportBatchProvider>
   );
 }
 
