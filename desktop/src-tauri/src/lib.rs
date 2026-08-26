@@ -12,6 +12,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .on_window_event(sidecar::forward_native_drag)
         .register_asynchronous_uri_scheme_protocol(
             sidecar::MEDIA_PROTOCOL,
             |context, request, responder| {
@@ -27,6 +28,7 @@ pub fn run() {
             app.manage(sidecar::ImportSelection::new());
             app.manage(sidecar::LibraryImportSelection::new());
             app.manage(sidecar::SearchImageSelection::new());
+            app.manage(sidecar::NativeDragState::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

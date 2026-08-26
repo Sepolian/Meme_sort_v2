@@ -15,7 +15,10 @@ use std::{
 use std::os::windows::{fs::MetadataExt, process::CommandExt};
 
 use serde::{Deserialize, Serialize};
-use tauri::{http, AppHandle, Manager};
+use tauri::{
+    http, AppHandle, DragDropEvent, Emitter, LogicalPosition, Manager, PhysicalPosition,
+    WindowEvent,
+};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
@@ -27,6 +30,7 @@ const MAX_IMPORT_SOURCES: usize = 256;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
 const LIBRARY_SELECTION_LIFETIME: Duration = Duration::from_secs(60);
 const MAX_LIBRARY_SELECTIONS: usize = 16;
+pub const NATIVE_DRAG_EVENT: &str = "library-native-drag";
 const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
@@ -116,6 +120,8 @@ pub struct SearchImageSelection(Mutex<Option<PathBuf>>);
 enum LibrarySelectionOrigin {
     Files,
     Folder,
+    /// An Explorer drag-and-drop selection, which may mix files and folders.
+    Drop,
 }
 
 #[derive(Debug)]
@@ -228,6 +234,224 @@ impl SearchImageSelection {
             .map(|path| path.display().to_string())
             .ok_or_else(|| SidecarError::new("Choose an image before searching."))
     }
+}
+
+/// Counts dragged files and folders so hover previews stay informative
+/// without re-reading the dragged entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeDragContext {
+    file_count: usize,
+    folder_count: usize,
+}
+
+fn native_drag_counts(paths: &[PathBuf]) -> NativeDragContext {
+    let mut file_count = 0;
+    let mut folder_count = 0;
+    for path in paths {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.file_type().is_dir() => folder_count += 1,
+            Ok(_) => file_count += 1,
+            Err(_) => {}
+        }
+    }
+    NativeDragContext {
+        file_count,
+        folder_count,
+    }
+}
+
+/// Managed acceptance cache for one in-flight Explorer drag gesture.
+pub struct NativeDragState(Mutex<Option<NativeDragContext>>);
+
+impl NativeDragState {
+    pub fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum NativeDragPhase {
+    Enter,
+    Over,
+    Leave,
+    Drop,
+}
+
+/// A path-free summary of one native drag event. Counts and logical
+/// coordinates travel to the WebView; source paths never do.
+#[derive(Debug, Clone, Serialize)]
+pub struct NativeDragSummary {
+    phase: NativeDragPhase,
+    file_count: usize,
+    folder_count: usize,
+    x: f64,
+    y: f64,
+    accepted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drop_id: Option<String>,
+}
+
+/// A typed native drag input, decoupled from the windowing runtime for tests.
+enum NativeDragInput {
+    Enter(Vec<PathBuf>, PhysicalPosition<f64>),
+    Over(PhysicalPosition<f64>),
+    Leave,
+    Drop(Vec<PathBuf>, PhysicalPosition<f64>),
+}
+
+fn logical_drag_position(
+    position: PhysicalPosition<f64>,
+    scale_factor: f64,
+) -> LogicalPosition<f64> {
+    position.to_logical(scale_factor)
+}
+
+fn native_drag_summary(
+    phase: NativeDragPhase,
+    paths: Option<&[PathBuf]>,
+    context: Option<NativeDragContext>,
+    position: PhysicalPosition<f64>,
+    scale_factor: f64,
+) -> (NativeDragSummary, Option<NativeDragContext>) {
+    let logical = logical_drag_position(position, scale_factor);
+    let summary = |file_count: usize, folder_count: usize, accepted: bool| NativeDragSummary {
+        phase,
+        file_count,
+        folder_count,
+        x: logical.x,
+        y: logical.y,
+        accepted,
+        drop_id: None,
+    };
+    match phase {
+        NativeDragPhase::Enter => {
+            let dragged = paths.unwrap_or(&[]);
+            let accepted = validate_library_paths(LibrarySelectionOrigin::Drop, dragged).is_ok();
+            let counts = native_drag_counts(dragged);
+            let next = accepted.then_some(counts);
+            (
+                summary(counts.file_count, counts.folder_count, accepted),
+                next,
+            )
+        }
+        NativeDragPhase::Over => match context {
+            Some(context) => (
+                summary(context.file_count, context.folder_count, true),
+                Some(context),
+            ),
+            None => (summary(0, 0, false), None),
+        },
+        NativeDragPhase::Leave => (summary(0, 0, false), None),
+        NativeDragPhase::Drop => {
+            let dropped = paths.unwrap_or(&[]);
+            let accepted = validate_library_paths(LibrarySelectionOrigin::Drop, dropped).is_ok();
+            let counts = native_drag_counts(dropped);
+            (
+                summary(counts.file_count, counts.folder_count, accepted),
+                None,
+            )
+        }
+    }
+}
+
+/// Folds one native drag event into a path-free summary and a managed
+/// one-time drop selection. Setup selection state is never touched.
+fn process_native_drag_event<F>(
+    selections: &LibraryImportSelection,
+    context_slot: &Mutex<Option<NativeDragContext>>,
+    scale_factor: f64,
+    event: NativeDragInput,
+    mut emit: F,
+) where
+    F: FnMut(NativeDragSummary),
+{
+    let park_context = |context_slot: &Mutex<Option<NativeDragContext>>,
+                        next: Option<NativeDragContext>| {
+        if let Ok(mut slot) = context_slot.lock() {
+            *slot = next;
+        }
+    };
+    match event {
+        NativeDragInput::Enter(paths, position) => {
+            let (summary, next) = native_drag_summary(
+                NativeDragPhase::Enter,
+                Some(&paths),
+                None,
+                position,
+                scale_factor,
+            );
+            park_context(context_slot, next);
+            emit(summary);
+        }
+        NativeDragInput::Over(position) => {
+            let current = context_slot.lock().ok().and_then(|context| *context);
+            let (summary, next) =
+                native_drag_summary(NativeDragPhase::Over, None, current, position, scale_factor);
+            park_context(context_slot, next);
+            emit(summary);
+        }
+        NativeDragInput::Leave => {
+            let (summary, _) = native_drag_summary(
+                NativeDragPhase::Leave,
+                None,
+                None,
+                PhysicalPosition::new(0.0, 0.0),
+                scale_factor,
+            );
+            park_context(context_slot, None);
+            emit(summary);
+        }
+        NativeDragInput::Drop(paths, position) => {
+            let (mut summary, _) = native_drag_summary(
+                NativeDragPhase::Drop,
+                Some(&paths),
+                None,
+                position,
+                scale_factor,
+            );
+            if summary.accepted {
+                summary.drop_id = selections
+                    .store(LibrarySelectionOrigin::Drop, paths)
+                    .ok()
+                    .map(|entry| entry.selection_id);
+                summary.accepted = summary.drop_id.is_some();
+            }
+            park_context(context_slot, None);
+            emit(summary);
+        }
+    }
+}
+
+/// Converts raw window drag events into path-free summaries and managed
+/// one-time drop selections for the main Library window.
+pub fn forward_native_drag(window: &tauri::Window, event: &WindowEvent) {
+    let WindowEvent::DragDrop(drag) = event else {
+        return;
+    };
+    let Some(selections) = window.try_state::<LibraryImportSelection>() else {
+        return;
+    };
+    let Some(drag_state) = window.try_state::<NativeDragState>() else {
+        return;
+    };
+    let input = match drag {
+        DragDropEvent::Enter { paths, position } => {
+            NativeDragInput::Enter(paths.clone(), *position)
+        }
+        DragDropEvent::Over { position } => NativeDragInput::Over(*position),
+        DragDropEvent::Drop { paths, position } => NativeDragInput::Drop(paths.clone(), *position),
+        DragDropEvent::Leave => NativeDragInput::Leave,
+        _ => return,
+    };
+    let Ok(scale_factor) = window.scale_factor() else {
+        // Without a known display scale, logical coordinates could not be
+        // trusted; fail closed instead of accepting a mis-scaled drop.
+        return;
+    };
+    process_native_drag_event(&selections, &drag_state.0, scale_factor, input, |summary| {
+        let _ = window.emit_to("main", NATIVE_DRAG_EVENT, summary);
+    });
 }
 
 impl SidecarState {
@@ -1804,6 +2028,7 @@ fn validate_library_path(
     let valid = match origin {
         LibrarySelectionOrigin::Files => is_file,
         LibrarySelectionOrigin::Folder => is_dir,
+        LibrarySelectionOrigin::Drop => is_file || is_dir,
     };
     if !valid {
         return Err(SidecarError::new(
@@ -1904,15 +2129,19 @@ mod tests {
 
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
-        default_library_root, managed_media_path, parse_handshake, parse_json_response,
+        default_library_root, logical_drag_position, managed_media_path, native_drag_counts,
+        native_drag_summary, parse_handshake, parse_json_response, process_native_drag_event,
         validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
         validate_import_sources, validate_library_paths, validate_search_query,
         validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
         BatchAssetActionPayload, EmptyPayload, ImportSelection, IndexingPolicy,
         LibraryImportSelection, LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute,
-        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
+        NativeDragContext, NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload,
+        SearchImageSelection, SidecarSession, StartImportPayload,
     };
+    use std::sync::Mutex;
     use tauri::http::{Method, Request, StatusCode};
+    use tauri::{LogicalPosition, PhysicalPosition};
 
     #[test]
     fn derives_the_default_library_from_the_portable_root() {
@@ -2877,5 +3106,211 @@ mod tests {
                     || error.to_string().contains("Invalid")
             );
         }
+    }
+
+    fn native_drop_fixture(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        let file = root.join("drop-file.png");
+        let folder = root.join("drop folder");
+        fs::create_dir_all(&folder).expect("drop fixture folder should be created");
+        fs::write(&file, b"drop").expect("drop fixture file should be written");
+        (root, file, folder)
+    }
+
+    #[test]
+    fn converts_physical_drag_coordinates_at_windows_display_scales() {
+        let physical = PhysicalPosition::new(1600.0, 1000.0);
+        for (scale_factor, expected) in [
+            (1.0, LogicalPosition::new(1600.0, 1000.0)),
+            (1.25, LogicalPosition::new(1280.0, 800.0)),
+            (
+                1.5,
+                LogicalPosition::new(1_066.666_666_666_666_7, 666.666_666_666_666_7),
+            ),
+            (2.0, LogicalPosition::new(800.0, 500.0)),
+        ] {
+            let logical = logical_drag_position(physical, scale_factor);
+            assert!(
+                (logical.x - expected.x).abs() < 1e-9 && (logical.y - expected.y).abs() < 1e-9,
+                "scale {scale_factor} must convert {physical:?} to {expected:?}, got {logical:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn summarizes_path_free_native_drag_previews() {
+        let (root, file, folder) = native_drop_fixture("memesort-native-drag-summary");
+        let paths = vec![file.clone(), folder.clone()];
+        let position = PhysicalPosition::new(300.0, 240.0);
+
+        let (enter, context) =
+            native_drag_summary(NativeDragPhase::Enter, Some(&paths), None, position, 1.5);
+        assert_eq!(enter.phase, NativeDragPhase::Enter);
+        let counts = native_drag_counts(&paths);
+        assert_eq!(counts.file_count, 1);
+        assert_eq!(counts.folder_count, 1);
+        assert!(enter.accepted);
+        assert!(enter.drop_id.is_none());
+        assert!((enter.x - 200.0).abs() < 1e-9);
+        assert!((enter.y - 160.0).abs() < 1e-9);
+
+        let payload = serde_json::to_string(&enter).expect("summary should serialize");
+        assert!(payload.contains("\"file_count\":1"));
+        assert!(payload.contains("\"accepted\":true"));
+        assert!(!payload.contains("drop-file"));
+        assert!(!payload.contains("drop folder"));
+        assert!(!payload.to_lowercase().contains("path"));
+
+        let (over, kept) = native_drag_summary(
+            NativeDragPhase::Over,
+            None,
+            context,
+            PhysicalPosition::new(320.0, 260.0),
+            1.5,
+        );
+        assert_eq!((over.file_count, over.folder_count), (1, 1));
+        assert!(over.accepted);
+        assert_eq!(kept, context);
+
+        let (leave, cleared) = native_drag_summary(
+            NativeDragPhase::Leave,
+            None,
+            context,
+            PhysicalPosition::new(320.0, 260.0),
+            1.5,
+        );
+        assert!(!leave.accepted);
+        assert_eq!((leave.file_count, leave.folder_count), (0, 0));
+        assert!(cleared.is_none());
+
+        let (invalid_drop, no_context) = native_drag_summary(
+            NativeDragPhase::Drop,
+            Some(&[root.join("missing.png")]),
+            context,
+            position,
+            1.5,
+        );
+        assert!(!invalid_drop.accepted);
+        assert!(invalid_drop.drop_id.is_none());
+        assert!(no_context.is_none());
+
+        fs::remove_dir_all(&root).expect("drop fixture should be removed");
+    }
+
+    #[test]
+    fn processes_native_drops_into_one_time_ids_without_setup_changes() {
+        let (root, file, folder) = native_drop_fixture("memesort-native-drag-process");
+        let paths = vec![file.clone(), folder.clone()];
+        let selections = LibraryImportSelection::new();
+        let setup_selection = ImportSelection::new();
+        setup_selection
+            .replace(Some(PathBuf::from("C:/Source/Setup-folder")))
+            .expect("Setup selection should be stored");
+        let slot = Mutex::new(None::<NativeDragContext>);
+        let mut emitted: Vec<(NativeDragPhase, bool, Option<String>)> = Vec::new();
+
+        process_native_drag_event(
+            &selections,
+            &slot,
+            2.0,
+            NativeDragInput::Enter(paths.clone(), PhysicalPosition::new(400.0, 300.0)),
+            |summary| {
+                emitted.push((summary.phase, summary.accepted, summary.drop_id.clone()));
+            },
+        );
+        assert_eq!(emitted.len(), 1);
+        assert!(emitted[0].1);
+        assert!(emitted[0].2.is_none());
+        assert!(slot.lock().expect("drag context").is_some());
+
+        process_native_drag_event(
+            &selections,
+            &slot,
+            2.0,
+            NativeDragInput::Drop(paths.clone(), PhysicalPosition::new(410.0, 310.0)),
+            |summary| {
+                emitted.push((summary.phase, summary.accepted, summary.drop_id.clone()));
+            },
+        );
+        assert!(emitted[1].1, "a valid mixed drop must be accepted");
+        let drop_id = emitted[1]
+            .2
+            .clone()
+            .expect("validated drop should carry an id");
+
+        let taken = selections
+            .take(&drop_id)
+            .expect("drop selection should be consumable once");
+        assert_eq!(taken.origin, LibrarySelectionOrigin::Drop);
+        assert_eq!(taken.paths.len(), 2);
+        assert!(
+            selections.take(&drop_id).is_err(),
+            "duplicate drop events for one ID cannot start a second import"
+        );
+
+        assert_eq!(
+            setup_selection
+                .selected_path()
+                .expect("Setup selection should remain"),
+            "C:/Source/Setup-folder",
+            "native drops must not alter Setup selection"
+        );
+
+        let remaining = selections.0.lock().expect("registry").len();
+        process_native_drag_event(
+            &selections,
+            &slot,
+            1.0,
+            NativeDragInput::Drop(
+                vec![root.join("vanished.png")],
+                PhysicalPosition::new(0.0, 0.0),
+            ),
+            |summary| {
+                emitted.push((summary.phase, summary.accepted, summary.drop_id.clone()));
+            },
+        );
+        assert!(!emitted[2].1);
+        assert!(emitted[2].2.is_none());
+        assert_eq!(
+            selections.0.lock().expect("registry").len(),
+            remaining,
+            "invalid drops must not store selections"
+        );
+        assert!(slot.lock().expect("drag context").is_none());
+
+        fs::remove_dir_all(&root).expect("drop fixture should be removed");
+    }
+
+    #[test]
+    fn keeps_chooser_origins_strict_while_drop_origin_accepts_mixtures() {
+        let (root, file, folder) = native_drop_fixture("memesort-native-drop-origin");
+        let mixed = vec![file.clone(), folder.clone()];
+
+        assert!(
+            validate_library_paths(LibrarySelectionOrigin::Files, std::slice::from_ref(&file))
+                .is_ok()
+        );
+        assert!(validate_library_paths(
+            LibrarySelectionOrigin::Files,
+            std::slice::from_ref(&folder)
+        )
+        .is_err());
+        assert!(validate_library_paths(
+            LibrarySelectionOrigin::Folder,
+            std::slice::from_ref(&folder)
+        )
+        .is_ok());
+        assert!(validate_library_paths(
+            LibrarySelectionOrigin::Folder,
+            std::slice::from_ref(&file)
+        )
+        .is_err());
+        assert!(validate_library_paths(LibrarySelectionOrigin::Drop, &mixed).is_ok());
+        assert!(
+            validate_library_paths(LibrarySelectionOrigin::Drop, &[root.join("missing.png")])
+                .is_err()
+        );
+
+        fs::remove_dir_all(&root).expect("drop fixture should be removed");
     }
 }

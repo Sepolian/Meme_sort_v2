@@ -118,7 +118,23 @@ p { color: var(--muted); line-height: 1.6; }
 .asset-toolbar p { margin: 0; }
 .asset-toolbar-actions, .dialog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .asset-toolbar-actions > span { color: var(--muted); font-size: .875rem; }
+.toolbar-hint { font-size: .8125rem; font-style: italic; }
+.asset-wall { position: relative; }
 .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.asset-grid-accepting { outline: 2px dashed var(--accent); outline-offset: 6px; }
+.drop-cue { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; gap: 6px; padding: 24px; border-radius: 16px; background: color-mix(in srgb, var(--canvas) 72%, transparent); text-align: center; pointer-events: none; animation: drop-cue-pulse 1.4s ease-in-out infinite; }
+.drop-cue strong { color: var(--text); font-size: 1.35rem; letter-spacing: -.01em; }
+.drop-cue span { color: var(--muted); }
+@keyframes drop-cue-pulse { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .drop-cue { animation: none; border: 3px solid var(--accent-strong); opacity: 1; }
+}
+.import-drop-card { display: grid; place-items: center; gap: 8px; max-width: 720px; min-height: 320px; margin: 48px auto 0; padding: 40px; border: 2px dashed var(--border); border-radius: 16px; background: var(--surface); text-align: center; }
+.import-drop-card h2 { margin-bottom: 4px; }
+.import-drop-card p:last-child { margin-bottom: 0; }
+.import-drop-card p { max-width: 52ch; margin-bottom: 0; }
+.import-drop-card-hint { color: var(--muted); font-size: .875rem; }
+.import-drop-card-accepting { border-color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .asset-card { display: grid; min-width: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .asset-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .asset-card-open { display: grid; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); cursor: pointer; text-align: left; }

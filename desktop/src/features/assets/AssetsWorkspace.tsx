@@ -1,16 +1,20 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { mediaUrl } from "../../api/media-url";
 import { tauriErrorDetail } from "../../api/tauri-error";
+import {
+  subscribeNativeDrag,
+  type NativeDragSubscribe,
+} from "../../api/native-drag";
 import type { AssetDetail, AssetSummary } from "../../api/types";
-import { EmptyState } from "../../components/States";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
   selectedAssetId: string | null;
   onSelectAsset: (assetId: string) => void;
   onCloseDetail: () => void;
+  nativeDrag?: NativeDragSubscribe;
 }
 
 type MutationRequest =
@@ -149,13 +153,17 @@ function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<Me
   return "Deleted the Asset and its Library Copy and Derived Artifacts.";
 }
 
-export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail }: AssetsWorkspaceProps) {
+export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail, nativeDrag }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
   const [libraryBusy, setLibraryBusy] = useState<"files" | "folder" | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ itemCount: number } | null>(null);
+  const wallRef = useRef<HTMLDivElement | null>(null);
+  const startedDropIdRef = useRef<string | null>(null);
+  const nativeDragSubscribe = nativeDrag ?? subscribeNativeDrag;
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: () => client.getAssets() });
   const mutation = useMutation({
     mutationFn: async (request: MutationRequest) => {
@@ -179,6 +187,43 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
     onSuccess: (_result, request) => { setFeedback(request.target === "managed" ? "Opened the managed Library Copy in File Explorer." : "Opened the recorded Source Path in File Explorer."); },
     onError: () => { setFeedback("The requested file could not be opened in File Explorer. The Library was not modified."); },
   });
+
+  useEffect(() => {
+    const pointerIsOverWall = (x: number, y: number) => {
+      const rect = wallRef.current?.getBoundingClientRect();
+      return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+    };
+    const startFromDrop = async (dropId: string, itemCount: number) => {
+      const label = `${itemCount} dropped item${itemCount === 1 ? "" : "s"}`;
+      setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${label}.` });
+      try {
+        await client.startLibraryImport(dropId);
+        setLibraryNotice({ kind: "success", text: `Import Batch started for ${label}.` });
+        await queryClient.invalidateQueries({ queryKey: ["app-state"] });
+      } catch (error) {
+        setLibraryNotice({ kind: "error", text: tauriErrorDetail(error, "MemeSort could not start the Import Batch from this drop. Resolve the conflict or make a fresh native selection to retry.") });
+      }
+    };
+    return nativeDragSubscribe((summary) => {
+      if (summary.phase === "leave") {
+        setDragPreview(null);
+        return;
+      }
+      if (summary.phase === "drop") {
+        setDragPreview(null);
+        if (!summary.accepted || !summary.dropId || !pointerIsOverWall(summary.x, summary.y)) return;
+        if (startedDropIdRef.current === summary.dropId) return;
+        startedDropIdRef.current = summary.dropId;
+        void startFromDrop(summary.dropId, summary.fileCount + summary.folderCount);
+        return;
+      }
+      setDragPreview(
+        summary.accepted && pointerIsOverWall(summary.x, summary.y)
+          ? { itemCount: summary.fileCount + summary.folderCount }
+          : null,
+      );
+    });
+  }, [client, nativeDragSubscribe, queryClient]);
 
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
@@ -219,10 +264,26 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   };
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
-    {assets.length ? <section className="asset-grid" aria-label="Assets">{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section> : <EmptyState title="No Assets yet" detail="Import a folder from Setup to create managed Library Copies." />}
+    <div className="asset-wall">
+      {assets.length ? (
+        <section className={`asset-grid${dragPreview ? " asset-grid-accepting" : ""}`} aria-label="Assets" ref={wallRef}>{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section>
+      ) : (
+        <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
+          <h2>Drag image files or folders here</h2>
+          <p>Release them over this card to start an Import Batch. Sources are scanned and validated before anything is written to the Library.</p>
+          <p className="import-drop-card-hint">Keyboard alternative: use Choose files or Choose folder in the toolbar.</p>
+        </div>
+      )}
+      {dragPreview ? (
+        <div className="drop-cue" role="status" aria-live="polite" aria-label="Release to import">
+          <strong>Release to import</strong>
+          <span>{dragPreview.itemCount} item{dragPreview.itemCount === 1 ? "" : "s"} ready</span>
+        </div>
+      ) : null}
+    </div>
     {selectedAssetId ? <AssetDetailDialog assetId={selectedAssetId} client={client} onClose={onCloseDetail} onDeleteAsset={() => requestDeleteAsset(selectedAssetId)} onRevealManaged={() => revealMutation.mutate({ assetId: selectedAssetId, target: "managed" })} onRemoveSourceRecord={(sourcePath) => requestRemoveSource(selectedAssetId, sourcePath)} onRevealSource={(sourcePath) => revealMutation.mutate({ assetId: selectedAssetId, target: "source", sourcePath })} mutating={mutation.isPending} revealing={revealMutation.isPending} /> : null}
     {confirmation ? <ConfirmDialog action={confirmation} pending={mutation.isPending} onCancel={() => setConfirmation(null)} onConfirm={() => mutation.mutate(confirmation.request)} /> : null}
   </>;
