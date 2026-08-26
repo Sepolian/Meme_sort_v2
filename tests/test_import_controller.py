@@ -15,7 +15,11 @@ from memesort_worker.import_contracts import (
     ImportFailureStage,
     ImportProgress,
 )
-from memesort_worker.import_controller import ImportController, ImportSnapshot
+from memesort_worker.import_controller import (
+    ImportBatchConflictError,
+    ImportController,
+    ImportSnapshot,
+)
 
 
 def make_result(**overrides: object) -> ImportBatchResult:
@@ -192,7 +196,7 @@ class ImportControllerTests(unittest.TestCase):
             lambda snapshot: snapshot.running,
         )
 
-        with self.assertRaisesRegex(RuntimeError, "already running or paused"):
+        with self.assertRaisesRegex(ImportBatchConflictError, "already running or paused"):
             controller.start([Path("C:/Memes/second.png")])
 
         release.set()
@@ -215,7 +219,7 @@ class ImportControllerTests(unittest.TestCase):
         )
         self.assertEqual("paused", paused.status)
 
-        with self.assertRaisesRegex(RuntimeError, "already running or paused"):
+        with self.assertRaisesRegex(ImportBatchConflictError, "already running or paused"):
             controller.start([Path("C:/Memes/second.png")])
 
         controller.resume()

@@ -4,8 +4,15 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
-from .asset_catalog import BatchAssetActionResult, import_folder, rebuild_active_indexes
-from .import_controller import ImportTerminalOutcome
+from .asset_catalog import (
+    MAX_IMPORT_PATH_UTF8_BYTES,
+    MAX_IMPORT_SOURCES,
+    BatchAssetActionResult,
+    import_folder,
+    rebuild_active_indexes,
+)
+from .import_contracts import IndexingPolicy
+from .import_controller import ImportBatchConflictError, ImportTerminalOutcome
 
 
 class WorkerLoop(Protocol):
@@ -17,6 +24,9 @@ class WorkerLoop(Protocol):
 
 
 class ImportTaskController(Protocol):
+    def snapshot(self):
+        ...
+
     def start(
         self,
         sources: Sequence[Path | str],
@@ -28,6 +38,76 @@ class ImportTaskController(Protocol):
 class RuntimeGate(Protocol):
     def is_ready_for_indexing(self) -> tuple[bool, str]:
         ...
+
+
+class ImportRequestError(ValueError):
+    """A malformed or ambiguous Import Batch start request."""
+
+
+def parse_import_start_request(
+    payload: object,
+) -> tuple[list[str], IndexingPolicy]:
+    """Parse canonical or legacy Import Batch start payloads strictly.
+
+    The canonical payload is ``{"sources": [...], "indexing_policy": "..."}``.
+    The legacy single-path payload is ``{"path": "...", "start_indexing": bool}``
+    and maps ``false`` to ``never`` and ``true`` to ``required``.
+    """
+    if not isinstance(payload, dict):
+        raise ImportRequestError("Import start request must be a JSON object.")
+
+    has_sources = "sources" in payload
+    has_path = "path" in payload
+    if has_sources == has_path:
+        raise ImportRequestError(
+            "Import start request must provide exactly one of sources or path."
+        )
+
+    if has_sources:
+        unknown_keys = set(payload) - {"sources", "indexing_policy"}
+        if unknown_keys:
+            raise ImportRequestError(
+                "Canonical Import start requests accept only sources and "
+                "indexing_policy."
+            )
+        sources = payload["sources"]
+        if not isinstance(sources, list):
+            raise ImportRequestError("Import sources must be a JSON array.")
+        if not 1 <= len(sources) <= MAX_IMPORT_SOURCES:
+            raise ImportRequestError(
+                f"An Import Batch requires 1 to {MAX_IMPORT_SOURCES} sources."
+            )
+        if any(not isinstance(source, str) for source in sources):
+            raise ImportRequestError("Every Import Source must be a string.")
+        validated_sources = [
+            _validate_import_source_path(source) for source in sources
+        ]
+        if "indexing_policy" not in payload:
+            raise ImportRequestError(
+                "An Import Batch start request requires indexing_policy."
+            )
+        return validated_sources, _parse_indexing_policy(payload["indexing_policy"])
+
+    unknown_keys = set(payload) - {"path", "start_indexing"}
+    if unknown_keys:
+        raise ImportRequestError(
+            "Legacy Import start requests accept only path and start_indexing."
+        )
+    path = payload["path"]
+    if not isinstance(path, str):
+        raise ImportRequestError("Import path must be a string.")
+    source = _validate_import_source_path(path)
+    if "start_indexing" in payload:
+        start_indexing = payload["start_indexing"]
+        if not isinstance(start_indexing, bool):
+            raise ImportRequestError(
+                "start_indexing must be a real JSON boolean."
+            )
+    else:
+        start_indexing = False
+    return [source], (
+        IndexingPolicy.REQUIRED if start_indexing else IndexingPolicy.NEVER
+    )
 
 
 def import_and_start_indexing(
@@ -48,6 +128,53 @@ def import_and_start_indexing(
     }
 
 
+def start_import_batch(
+    library_root: Path | str,
+    sources: Sequence[str],
+    import_controller: ImportTaskController,
+    worker_loop: WorkerLoop,
+    runtime: RuntimeGate,
+    indexing_policy: IndexingPolicy,
+):
+    """Start one background Import Batch with the requested Indexing Policy.
+
+    Required rejects before the batch when the Pinned Runtime is not
+    authorized. If-ready always imports but records authorization at batch
+    start and wakes the Worker only when jobs were created under an authorized
+    runtime. Cancelled batches never wake the Worker.
+    """
+    if not isinstance(indexing_policy, IndexingPolicy):
+        raise ValueError("indexing_policy must be one of never, required, if-ready.")
+
+    if import_controller.snapshot().running:
+        raise ImportBatchConflictError(
+            "An Import Batch is already running or paused."
+        )
+
+    authorized = False
+    if indexing_policy in {IndexingPolicy.REQUIRED, IndexingPolicy.IF_READY}:
+        runtime_ready, runtime_message = runtime.is_ready_for_indexing()
+        if indexing_policy is IndexingPolicy.REQUIRED and not runtime_ready:
+            raise ValueError(runtime_message)
+        authorized = runtime_ready
+
+    if not authorized:
+        return import_controller.start(list(sources))
+
+    def _resume_after_import(outcome: ImportTerminalOutcome) -> None:
+        if outcome.status in {
+            "completed",
+            "completed_with_errors",
+            "failed",
+        } and outcome.jobs_created > 0:
+            worker_loop.resume()
+
+    return import_controller.start(
+        list(sources),
+        on_terminal=_resume_after_import,
+    )
+
+
 def start_background_import(
     library_root: Path | str,
     import_path: str,
@@ -56,19 +183,43 @@ def start_background_import(
     runtime: RuntimeGate,
     start_indexing: bool,
 ):
-    """Authorize before importing; resume the worker only after a completed import."""
-    def _resume_on_completed(outcome: ImportTerminalOutcome) -> None:
-        if outcome.status == "completed":
-            worker_loop.resume()
-
-    if start_indexing:
-        runtime_ready, runtime_message = runtime.is_ready_for_indexing()
-        if not runtime_ready:
-            raise ValueError(runtime_message)
-    return import_controller.start(
+    """Legacy single-path wrapper mapping a boolean to an Indexing Policy."""
+    return start_import_batch(
+        library_root,
         [import_path],
-        on_terminal=_resume_on_completed if start_indexing else None,
+        import_controller,
+        worker_loop,
+        runtime,
+        IndexingPolicy.REQUIRED if start_indexing else IndexingPolicy.NEVER,
     )
+
+
+def _parse_indexing_policy(raw: object) -> IndexingPolicy:
+    if not isinstance(raw, str):
+        raise ImportRequestError("indexing_policy must be a string.")
+    try:
+        return IndexingPolicy(raw)
+    except ValueError:
+        raise ImportRequestError(
+            "indexing_policy must be one of never, required, if-ready."
+        ) from None
+
+
+def _validate_import_source_path(source: str) -> str:
+    try:
+        encoded_source = source.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        encoded_source = b""
+    if (
+        not source
+        or not encoded_source
+        or len(encoded_source) > MAX_IMPORT_PATH_UTF8_BYTES
+        or any(character in source for character in ("\x00", "\r", "\n"))
+    ):
+        raise ImportRequestError(
+            "Every Import Source path must be transport-safe UTF-8."
+        )
+    return source
 
 
 def rebuild_assets_and_resume(

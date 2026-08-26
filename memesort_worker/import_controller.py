@@ -20,6 +20,10 @@ class ImportCancelledError(RuntimeError):
     """Raised internally when the application shuts down an active batch."""
 
 
+class ImportBatchConflictError(RuntimeError):
+    """Raised when a second Import Batch starts while one is active or paused."""
+
+
 @dataclass(frozen=True)
 class ImportTerminalOutcome:
     """One immutable terminal result delivered to an exactly-once callback."""
@@ -153,7 +157,9 @@ class ImportController:
             if self._shutdown:
                 raise RuntimeError("The Import Controller has shut down.")
             if self._active:
-                raise RuntimeError("An Import Batch is already running or paused.")
+                raise ImportBatchConflictError(
+                    "An Import Batch is already running or paused."
+                )
 
             self._active = True
             self._status = "scanning"

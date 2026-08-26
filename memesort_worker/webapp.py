@@ -10,15 +10,16 @@ from urllib.parse import parse_qs, urlparse
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 from .app_runtime import WorkerLoopController
-from .import_controller import ImportController
+from .import_controller import ImportBatchConflictError, ImportController
 from .inference_service import InferenceCancelledError
 from .app_state import build_app_state
 from .app_commands import (
     import_and_start_indexing,
+    parse_import_start_request,
     rebuild_assets_and_resume,
     resolve_asset_reveal_path,
     resolve_log_directory,
-    start_background_import,
+    start_import_batch,
 )
 from .asset_catalog import (
     delete_asset,
@@ -318,13 +319,14 @@ def create_app(
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.snapshot().to_dict())
             elif path == "/api/import/start" and method == "POST":
                 payload = _read_json_body(environ, max_body_bytes)
-                snapshot = start_background_import(
+                sources, indexing_policy = parse_import_start_request(payload)
+                snapshot = start_import_batch(
                     library_root_path,
-                    str(payload["path"]),
+                    sources,
                     import_controller,
                     worker_loop,
                     runtime,
-                    start_indexing=bool(payload.get("start_indexing", False)),
+                    indexing_policy=indexing_policy,
                 )
                 status_line, headers, body = _json_response(HTTPStatus.ACCEPTED, snapshot.to_dict())
             elif path == "/api/import/pause" and method == "POST":
@@ -534,6 +536,11 @@ def create_app(
             else:
                 status_line, headers, body = _serve_static(static_dir, path)
         except InferenceCancelledError as exc:
+            status_line, headers, body = _json_response(
+                HTTPStatus.CONFLICT,
+                {"error": type(exc).__name__, "detail": str(exc)},
+            )
+        except ImportBatchConflictError as exc:
             status_line, headers, body = _json_response(
                 HTTPStatus.CONFLICT,
                 {"error": type(exc).__name__, "detail": str(exc)},

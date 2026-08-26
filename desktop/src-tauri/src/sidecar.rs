@@ -22,6 +22,7 @@ const PROTOCOL_VERSION: u32 = 1;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BATCH_ASSETS: usize = 1_000;
+const MAX_IMPORT_SOURCES: usize = 256;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
 const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
@@ -314,18 +315,18 @@ impl SidecarSession {
         )
     }
 
-    fn start_import(
+    fn start_import_batch(
         &self,
-        source_folder: String,
-        start_indexing: bool,
+        sources: Vec<String>,
+        indexing_policy: IndexingPolicy,
     ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
             &self.origin,
             &self.session_cookie,
             MutationRoute::StartImport,
             &StartImportPayload {
-                path: source_folder,
-                start_indexing,
+                sources: validate_import_sources(&sources)?,
+                indexing_policy: indexing_policy.as_api_value(),
             },
         )
     }
@@ -622,6 +623,24 @@ impl BatchAssetAction {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+enum IndexingPolicy {
+    Never,
+    Required,
+    IfReady,
+}
+
+impl IndexingPolicy {
+    fn as_api_value(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+            Self::Required => "required",
+            Self::IfReady => "if-ready",
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum MutationRoute {
     RemoveSourceRecord,
@@ -707,8 +726,8 @@ struct BatchAssetActionPayload {
 
 #[derive(Serialize)]
 struct StartImportPayload {
-    path: String,
-    start_indexing: bool,
+    sources: Vec<String>,
+    indexing_policy: &'static str,
 }
 
 #[derive(Serialize)]
@@ -1140,7 +1159,12 @@ fn start_selected_import(
         .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
     let source_folder = selection.selected_path()?;
     with_sidecar_session(app, |session| {
-        session.start_import(source_folder, start_indexing)
+        let indexing_policy = if start_indexing {
+            IndexingPolicy::Required
+        } else {
+            IndexingPolicy::Never
+        };
+        session.start_import_batch(vec![source_folder], indexing_policy)
     })
 }
 
@@ -1582,6 +1606,18 @@ fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
     Ok(source_path.to_owned())
 }
 
+fn validate_import_sources(sources: &[String]) -> Result<Vec<String>, SidecarError> {
+    if sources.is_empty() || sources.len() > MAX_IMPORT_SOURCES {
+        return Err(SidecarError::new(
+            "An Import Batch requires 1 to 256 sources.",
+        ));
+    }
+    sources
+        .iter()
+        .map(|source| validate_source_path(source))
+        .collect()
+}
+
 fn validate_search_query(query: &str) -> Result<String, SidecarError> {
     if query.trim().is_empty()
         || query.len() > MAX_SEARCH_QUERY_BYTES
@@ -1650,10 +1686,11 @@ mod tests {
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         default_library_root, managed_media_path, parse_handshake, parse_json_response,
-        validate_asset_id, validate_asset_ids, validate_duplicate_threshold, validate_search_query,
-        validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
-        BatchAssetActionPayload, EmptyPayload, ImportSelection, MutationRoute,
-        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
+        validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
+        validate_import_sources, validate_search_query, validate_source_path, ApiRoute,
+        AssetIdPayload, AssetRevealTarget, BatchAssetAction, BatchAssetActionPayload, EmptyPayload,
+        ImportSelection, IndexingPolicy, MutationRoute, RemoveSourceRecordPayload,
+        SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -1953,6 +1990,10 @@ mod tests {
     fn rejects_invalid_batch_selection_and_source_record_inputs() {
         assert!(validate_asset_ids(&[]).is_err());
         assert!(validate_asset_ids(&["not-an-asset".to_owned()]).is_err());
+        assert!(validate_import_sources(&[]).is_err());
+        assert!(validate_import_sources(&[String::new()]).is_err());
+        assert!(validate_import_sources(&["C:/Source/unsafe\npath.gif".to_owned()]).is_err());
+        assert!(validate_import_sources(&["C:/Source/Memes".to_owned()]).is_ok());
         assert!(validate_source_path("").is_err());
         assert!(validate_source_path("C:/Source/unsafe\npath.gif").is_err());
         assert!(BatchAssetAction::parse("arbitrary-request").is_err());
@@ -2304,10 +2345,10 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener.local_addr().expect("listener address").port();
         let server = thread::spawn(move || {
-            for (path, expected_payload) in [
-                ("/api/import/start", "\"start_indexing\":true"),
-                ("/api/import/pause", "{}"),
-                ("/api/import/resume", "{}"),
+            for path in [
+                "/api/import/start",
+                "/api/import/pause",
+                "/api/import/resume",
             ] {
                 let (mut stream, _) = listener.accept().expect("import request should connect");
                 let mut request = Vec::new();
@@ -2334,7 +2375,12 @@ mod tests {
                 let request = std::str::from_utf8(&request).expect("request must be UTF-8");
                 assert!(request.starts_with(&format!("POST {path} HTTP/1.1")));
                 assert!(request.contains("Cookie: memesort_session=test-token"));
-                assert!(request.contains(expected_payload));
+                if path == "/api/import/start" {
+                    assert!(request.contains("\"sources\":[\"C:/Source/Memes\"]"));
+                    assert!(request.contains("\"indexing_policy\":\"required\""));
+                } else {
+                    assert!(request.contains("{}"));
+                }
                 let response: &[u8] = if path == "/api/import/start" {
                     b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}"
                 } else {
@@ -2352,8 +2398,8 @@ mod tests {
             "memesort_session=test-token",
             MutationRoute::StartImport,
             &StartImportPayload {
-                path: "C:/Source/Memes".to_owned(),
-                start_indexing: true,
+                sources: vec!["C:/Source/Memes".to_owned()],
+                indexing_policy: IndexingPolicy::Required.as_api_value(),
             },
         )
         .expect("start import should succeed");

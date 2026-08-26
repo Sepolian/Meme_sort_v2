@@ -21,6 +21,14 @@ def _display_safe_text(value: object, *, fallback: str, max_length: int) -> str:
     return f"{text[: max_length - 1].rstrip()}…"
 
 
+class IndexingPolicy(StrEnum):
+    """The policy an Import Batch uses to schedule indexing work."""
+
+    NEVER = "never"
+    REQUIRED = "required"
+    IF_READY = "if-ready"
+
+
 class ImportFailureStage(StrEnum):
     """Stable stage names for a reportable Import Failure."""
 
