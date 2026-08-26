@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
+import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -14,6 +14,9 @@ export interface MemeSortClient {
   batchAssetAction(action: "delete" | "rebuild-active-index", assetIds: string[]): Promise<BatchAssetActionResult>;
   chooseImportFolder(): Promise<FolderSelection>;
   chooseSearchImage(): Promise<FolderSelection>;
+  chooseLibraryFiles(): Promise<LibrarySelectionSummary | null>;
+  chooseLibraryFolder(): Promise<LibrarySelectionSummary | null>;
+  startLibraryImport(selectionId: string): Promise<ImportTask>;
   startImport(): Promise<ImportTask>;
   startImportAndIndex(): Promise<ImportTask>;
   pauseImport(): Promise<ImportTask>;
@@ -44,6 +47,9 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     batchAssetAction: (action, assetIds) => invokeCommand<BatchAssetActionResult>("batch_asset_action", { action, assetIds }),
     chooseImportFolder: () => invokeCommand<FolderSelection>("choose_import_folder"),
     chooseSearchImage: () => invokeCommand<FolderSelection>("choose_search_image"),
+    chooseLibraryFiles: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_files"),
+    chooseLibraryFolder: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_folder"),
+    startLibraryImport: (selectionId) => invokeCommand<ImportTask>("start_library_import", { selectionId }),
     startImport: () => invokeCommand<ImportTask>("start_import"),
     startImportAndIndex: () => invokeCommand<ImportTask>("start_import_and_index"),
     pauseImport: () => invokeCommand<ImportTask>("pause_import"),

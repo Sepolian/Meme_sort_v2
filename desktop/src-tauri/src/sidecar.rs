@@ -12,11 +12,12 @@ use std::{
 };
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use std::os::windows::{fs::MetadataExt, process::CommandExt};
 
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
+use uuid::Uuid;
 
 const PROTOCOL_VERSION: u32 = 1;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -24,10 +25,14 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BATCH_ASSETS: usize = 1_000;
 const MAX_IMPORT_SOURCES: usize = 256;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
+const LIBRARY_SELECTION_LIFETIME: Duration = Duration::from_secs(60);
+const MAX_LIBRARY_SELECTIONS: usize = 16;
 const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
+#[cfg(windows)]
+const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 
 #[derive(Debug, Serialize)]
 pub struct SidecarError {
@@ -107,6 +112,24 @@ pub struct ImportSelection(Mutex<Option<PathBuf>>);
 /// The WebView never supplies this path to an image-search command.
 pub struct SearchImageSelection(Mutex<Option<PathBuf>>);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LibrarySelectionOrigin {
+    Files,
+    Folder,
+}
+
+#[derive(Debug)]
+struct LibrarySelectionEntry {
+    id: String,
+    origin: LibrarySelectionOrigin,
+    paths: Vec<PathBuf>,
+    created_at: Instant,
+}
+
+/// Temporary native Library selections. Each entry is origin-tagged, one-time,
+/// time-bounded, and never exposed to the WebView as filesystem paths.
+pub struct LibraryImportSelection(Mutex<Vec<LibrarySelectionEntry>>);
+
 impl ImportSelection {
     pub fn new() -> Self {
         Self(Mutex::new(None))
@@ -129,6 +152,56 @@ impl ImportSelection {
             .as_ref()
             .map(|path| path.display().to_string())
             .ok_or_else(|| SidecarError::new("Choose a source folder before importing."))
+    }
+}
+
+impl LibraryImportSelection {
+    pub fn new() -> Self {
+        Self(Mutex::new(Vec::new()))
+    }
+
+    fn store(
+        &self,
+        origin: LibrarySelectionOrigin,
+        paths: Vec<PathBuf>,
+    ) -> Result<LibrarySelectionSummary, SidecarError> {
+        validate_library_paths(origin, &paths)?;
+        let id = Uuid::new_v4().to_string();
+        let count = paths.len();
+        let created_at = Instant::now();
+        let mut entries = self
+            .0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort Library selection is unavailable."))?;
+        entries.retain(|entry| entry.created_at.elapsed() < LIBRARY_SELECTION_LIFETIME);
+        entries.push(LibrarySelectionEntry {
+            id: id.clone(),
+            origin,
+            paths,
+            created_at,
+        });
+        while entries.len() > MAX_LIBRARY_SELECTIONS {
+            entries.remove(0);
+        }
+        Ok(LibrarySelectionSummary {
+            selection_id: id,
+            count,
+        })
+    }
+
+    fn take(&self, selection_id: &str) -> Result<LibrarySelectionEntry, SidecarError> {
+        let mut entries = self
+            .0
+            .lock()
+            .map_err(|_| SidecarError::new("MemeSort Library selection is unavailable."))?;
+        entries.retain(|entry| entry.created_at.elapsed() < LIBRARY_SELECTION_LIFETIME);
+        let index = entries
+            .iter()
+            .position(|entry| entry.id == selection_id)
+            .ok_or_else(|| {
+                SidecarError::new("Library Import selection has expired or was already consumed.")
+            })?;
+        Ok(entries.remove(index))
     }
 }
 
@@ -763,6 +836,12 @@ pub struct FolderSelection {
     selected_path: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct LibrarySelectionSummary {
+    selection_id: String,
+    count: usize,
+}
+
 impl ApiRoute {
     fn path(&self) -> String {
         match self {
@@ -986,6 +1065,78 @@ pub fn choose_search_image(app: AppHandle) -> Result<FolderSelection, SidecarErr
         .ok_or_else(|| SidecarError::new("MemeSort image selection is unavailable."))?;
     let selected_path = selection.replace(path)?;
     Ok(FolderSelection { selected_path })
+}
+
+#[tauri::command]
+pub fn choose_library_files(
+    app: AppHandle,
+) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
+    let paths = app
+        .dialog()
+        .file()
+        .set_title("Choose image files to import into MemeSort")
+        .add_filter("Image files", &["jpg", "jpeg", "png", "webp", "gif", "bmp"])
+        .blocking_pick_files();
+    let paths = paths
+        .map(|paths| {
+            paths
+                .into_iter()
+                .map(|path| {
+                    path.into_path()
+                        .map_err(|error| SidecarError::new(error.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    let Some(paths) = paths else {
+        return Ok(None);
+    };
+    let selection = app
+        .try_state::<LibraryImportSelection>()
+        .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
+    Ok(Some(selection.store(LibrarySelectionOrigin::Files, paths)?))
+}
+
+#[tauri::command]
+pub fn choose_library_folder(
+    app: AppHandle,
+) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Choose a folder to import into MemeSort Library")
+        .blocking_pick_folder();
+    let path = path
+        .map(|path| {
+            path.into_path()
+                .map_err(|error| SidecarError::new(error.to_string()))
+        })
+        .transpose()?;
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let selection = app
+        .try_state::<LibraryImportSelection>()
+        .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
+    Ok(Some(
+        selection.store(LibrarySelectionOrigin::Folder, vec![path])?,
+    ))
+}
+
+#[tauri::command]
+pub fn start_library_import(
+    app: AppHandle,
+    selection_id: String,
+) -> Result<serde_json::Value, SidecarError> {
+    let selection_id = validate_library_selection_id(&selection_id)?;
+    let selection = app
+        .try_state::<LibraryImportSelection>()
+        .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
+    let entry = selection.take(&selection_id)?;
+    let sources = validate_library_paths(entry.origin, &entry.paths)?;
+    with_sidecar_session(&app, |session| {
+        session.start_import_batch(sources, IndexingPolicy::IfReady)
+    })
 }
 
 #[tauri::command]
@@ -1606,6 +1757,72 @@ fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
     Ok(source_path.to_owned())
 }
 
+fn validate_library_selection_id(selection_id: &str) -> Result<String, SidecarError> {
+    validate_asset_id(selection_id)
+        .map_err(|_| SidecarError::new("Invalid MemeSort Library Import selection."))
+}
+
+fn validate_library_paths(
+    origin: LibrarySelectionOrigin,
+    paths: &[PathBuf],
+) -> Result<Vec<String>, SidecarError> {
+    if paths.is_empty() || paths.len() > MAX_IMPORT_SOURCES {
+        return Err(SidecarError::new(
+            "A Library Import Batch requires 1 to 256 sources.",
+        ));
+    }
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        sources.push(validate_library_path(path, origin)?);
+    }
+    Ok(sources)
+}
+
+fn validate_library_path(
+    path: &Path,
+    origin: LibrarySelectionOrigin,
+) -> Result<String, SidecarError> {
+    if !path.is_absolute() {
+        return Err(SidecarError::new(
+            "Library Import sources must use absolute paths.",
+        ));
+    }
+    let source = path
+        .to_str()
+        .ok_or_else(|| SidecarError::new("Library Import source paths must be valid Unicode."))?;
+    let source = validate_source_path(source)?;
+    let metadata = fs::symlink_metadata(path).map_err(|_| {
+        SidecarError::new("A Library Import source is missing or cannot be accessed.")
+    })?;
+    if is_reparse_point(&metadata) {
+        return Err(SidecarError::new(
+            "Library Import sources cannot be symlinks, junctions, or reparse points.",
+        ));
+    }
+    let is_file = metadata.file_type().is_file();
+    let is_dir = metadata.file_type().is_dir();
+    let valid = match origin {
+        LibrarySelectionOrigin::Files => is_file,
+        LibrarySelectionOrigin::Folder => is_dir,
+    };
+    if !valid {
+        return Err(SidecarError::new(
+            "A Library Import source has an irregular file type.",
+        ));
+    }
+    Ok(source)
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
 fn validate_import_sources(sources: &[String]) -> Result<Vec<String>, SidecarError> {
     if sources.is_empty() || sources.len() > MAX_IMPORT_SOURCES {
         return Err(SidecarError::new(
@@ -1677,20 +1894,23 @@ fn terminate_child(child: &mut Child) {
 #[cfg(test)]
 mod tests {
     use std::{
+        fs,
         io::{Read, Write},
         net::TcpListener,
         path::{Path, PathBuf},
         thread,
+        time::{Duration, Instant},
     };
 
     use super::{
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         default_library_root, managed_media_path, parse_handshake, parse_json_response,
         validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
-        validate_import_sources, validate_search_query, validate_source_path, ApiRoute,
-        AssetIdPayload, AssetRevealTarget, BatchAssetAction, BatchAssetActionPayload, EmptyPayload,
-        ImportSelection, IndexingPolicy, MutationRoute, RemoveSourceRecordPayload,
-        SearchImageSelection, SidecarSession, StartImportPayload,
+        validate_import_sources, validate_library_paths, validate_search_query,
+        validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
+        BatchAssetActionPayload, EmptyPayload, ImportSelection, IndexingPolicy,
+        LibraryImportSelection, LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute,
+        RemoveSourceRecordPayload, SearchImageSelection, SidecarSession, StartImportPayload,
     };
     use tauri::http::{Method, Request, StatusCode};
 
@@ -2341,6 +2561,119 @@ mod tests {
     }
 
     #[test]
+    fn validates_library_native_selections_against_existing_regular_entries() {
+        let root = std::env::temp_dir().join(format!(
+            "memesort-library-selection-validation-{}",
+            std::process::id()
+        ));
+        let file = root.join("sample.png");
+        let folder = root.join("folder");
+        fs::create_dir_all(&folder).expect("test folder should be created");
+        fs::write(&file, b"test").expect("test file should be written");
+
+        assert!(validate_library_paths(LibrarySelectionOrigin::Files, &[file]).is_ok());
+        assert!(validate_library_paths(
+            LibrarySelectionOrigin::Folder,
+            std::slice::from_ref(&folder)
+        )
+        .is_ok());
+        assert!(validate_library_paths(LibrarySelectionOrigin::Files, &[folder]).is_err());
+        assert!(validate_library_paths(
+            LibrarySelectionOrigin::Folder,
+            &[root.join("missing-folder")]
+        )
+        .is_err());
+        assert!(validate_library_paths(LibrarySelectionOrigin::Files, &[]).is_err());
+
+        fs::remove_dir_all(&root).expect("test root should be removed");
+    }
+
+    #[test]
+    fn stores_library_selections_as_distinct_consumed_entries() {
+        let selection = LibraryImportSelection::new();
+        let root = std::env::temp_dir().join(format!(
+            "memesort-library-selection-registry-{}",
+            std::process::id()
+        ));
+        let first = root.join("first.png");
+        let second = root.join("second.gif");
+        let folder = root.join("folder");
+        fs::create_dir_all(&folder).expect("test folder should be created");
+        fs::write(&first, b"first").expect("first test file should be written");
+        fs::write(&second, b"second").expect("second test file should be written");
+
+        let files = selection
+            .store(
+                LibrarySelectionOrigin::Files,
+                vec![first.clone(), second.clone()],
+            )
+            .expect("file selection should be stored");
+        let folder = selection
+            .store(LibrarySelectionOrigin::Folder, vec![folder])
+            .expect("folder selection should be stored");
+
+        assert_ne!(files.selection_id, folder.selection_id);
+        assert_eq!(files.count, 2);
+        assert_eq!(folder.count, 1);
+
+        let taken = selection
+            .take(&files.selection_id)
+            .expect("file selection should be consumed");
+        assert_eq!(taken.origin, LibrarySelectionOrigin::Files);
+        assert_eq!(taken.paths.len(), 2);
+        assert!(selection.take(&files.selection_id).is_err());
+
+        fs::remove_dir_all(&root).expect("test root should be removed");
+    }
+
+    #[test]
+    fn expires_and_evicts_old_library_selections() {
+        let selection = LibraryImportSelection::new();
+        {
+            let mut entries = selection
+                .0
+                .lock()
+                .expect("Library selection should be lockable");
+            for index in 0..17 {
+                entries.push(LibrarySelectionEntry {
+                    id: format!("selection-{index}"),
+                    origin: LibrarySelectionOrigin::Files,
+                    paths: Vec::new(),
+                    created_at: Instant::now(),
+                });
+            }
+            entries.push(LibrarySelectionEntry {
+                id: "expired-selection".to_owned(),
+                origin: LibrarySelectionOrigin::Folder,
+                paths: Vec::new(),
+                created_at: Instant::now() - Duration::from_secs(61),
+            });
+        }
+
+        assert!(selection.take("expired-selection").is_err());
+
+        let root = std::env::temp_dir().join(format!(
+            "memesort-library-selection-cap-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("test root should be created");
+        let file = root.join("sample.png");
+        fs::write(&file, b"sample").expect("test file should be written");
+        let summary = selection
+            .store(LibrarySelectionOrigin::Files, vec![file])
+            .expect("new selection should be stored");
+
+        let entries = selection
+            .0
+            .lock()
+            .expect("Library selection should be lockable");
+        assert_eq!(entries.len(), 16);
+        assert!(entries.iter().any(|entry| entry.id == summary.selection_id));
+        drop(entries);
+        fs::remove_dir_all(&root).expect("test root should be removed");
+    }
+
+    #[test]
     fn forwards_import_controls_only_to_fixed_routes_with_the_private_cookie() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener.local_addr().expect("listener address").port();
@@ -2417,6 +2750,58 @@ mod tests {
             &EmptyPayload {},
         )
         .expect("resume import should succeed");
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_library_imports_only_to_the_fixed_if_ready_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("library import should connect");
+            let mut request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = stream.read(&mut chunk).expect("library import should read");
+                request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers =
+                    std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("library import should include a body length");
+                if request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = std::str::from_utf8(&request).expect("request must be UTF-8");
+            assert!(request.starts_with("POST /api/import/start HTTP/1.1"));
+            assert!(request.contains("Cookie: memesort_session=test-token"));
+            assert!(request.contains("\"sources\":[\"C:/Source/Memes\"]"));
+            assert!(request.contains("\"indexing_policy\":\"if-ready\""));
+            stream
+                .write_all(
+                    b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}",
+                )
+                .expect("library import response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        authenticated_post_json(
+            &origin,
+            "memesort_session=test-token",
+            MutationRoute::StartImport,
+            &StartImportPayload {
+                sources: vec!["C:/Source/Memes".to_owned()],
+                indexing_policy: IndexingPolicy::IfReady.as_api_value(),
+            },
+        )
+        .expect("library import should start");
         server.join().expect("test server should finish");
     }
 

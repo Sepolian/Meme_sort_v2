@@ -123,6 +123,11 @@ export interface FolderSelection {
   selected_path: string | null;
 }
 
+export interface LibrarySelectionSummary {
+  selection_id: string;
+  count: number;
+}
+
 export interface SearchResult {
   library_root: string;
   active_recipe_id: string;

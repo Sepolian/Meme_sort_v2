@@ -59,6 +59,27 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(6, "resume_import");
   });
 
+  it("uses only ID and count commands for Library choosers", async () => {
+    const invokeCommand = vi
+      .fn()
+      .mockResolvedValueOnce({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 })
+      .mockResolvedValueOnce({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 })
+      .mockResolvedValueOnce({ status: "running" });
+    const client = createMemeSortClient(invokeCommand);
+
+    const files = await client.chooseLibraryFiles();
+    const folder = await client.chooseLibraryFolder();
+    await client.startLibraryImport(files!.selection_id);
+
+    expect(files).toEqual({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 });
+    expect(folder).toEqual({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 });
+    expect(invokeCommand).toHaveBeenNthCalledWith(1, "choose_library_files");
+    expect(invokeCommand).toHaveBeenNthCalledWith(2, "choose_library_folder");
+    expect(invokeCommand).toHaveBeenNthCalledWith(3, "start_library_import", {
+      selectionId: "123e4567-e89b-12d3-a456-426614174010",
+    });
+  });
+
   it("uses a UUID-scoped command pair for text Search Requests", async () => {
     const invokeCommand = vi.fn().mockResolvedValue({ results: [] });
     const client = createMemeSortClient(invokeCommand);

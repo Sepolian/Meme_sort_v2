@@ -20,6 +20,8 @@ type MutationRequest =
 
 type RevealRequest = { assetId: string; target: "managed" | "source"; sourcePath?: string };
 
+type LibraryNotice = { kind: "error" | "success"; text: string };
+
 interface ConfirmAction {
   title: string;
   detail: string;
@@ -152,6 +154,8 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
+  const [libraryBusy, setLibraryBusy] = useState<"files" | "folder" | null>(null);
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: () => client.getAssets() });
   const mutation = useMutation({
     mutationFn: async (request: MutationRequest) => {
@@ -195,10 +199,29 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   };
   const requestDeleteAsset = (assetId: string) => setConfirmation({ title: "Delete this Asset?", detail: "This deletes its Library Copy, Source Records, and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete Asset", request: { kind: "delete-asset", assetId } });
   const requestRemoveSource = (assetId: string, sourcePath: string) => setConfirmation({ title: "Remove this Source Record?", detail: "If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts.", confirmLabel: "Remove Source Record", request: { kind: "remove-source", assetId, sourcePath } });
+  const startLibrarySelection = async (kind: "files" | "folder") => {
+    setLibraryBusy(kind);
+    setLibraryNotice(null);
+    try {
+      const selection = kind === "files" ? await client.chooseLibraryFiles() : await client.chooseLibraryFolder();
+      if (!selection) return;
+      const label = kind === "files" ? "file" : "folder";
+      const count = selection.count;
+      setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${count} ${label}${count === 1 ? "" : "s"}.` });
+      await client.startLibraryImport(selection.selection_id);
+      setLibraryNotice({ kind: "success", text: `Import Batch started for ${count} ${label}${count === 1 ? "" : "s"}.` });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
+    } catch (error) {
+      setLibraryNotice({ kind: "error", text: tauriErrorDetail(error, "MemeSort could not start the Library Import Batch. Make a fresh native selection to retry.") });
+    } finally {
+      setLibraryBusy(null);
+    }
+  };
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
+    {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     {assets.length ? <section className="asset-grid" aria-label="Assets">{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section> : <EmptyState title="No Assets yet" detail="Import a folder from Setup to create managed Library Copies." />}
     {selectedAssetId ? <AssetDetailDialog assetId={selectedAssetId} client={client} onClose={onCloseDetail} onDeleteAsset={() => requestDeleteAsset(selectedAssetId)} onRevealManaged={() => revealMutation.mutate({ assetId: selectedAssetId, target: "managed" })} onRemoveSourceRecord={(sourcePath) => requestRemoveSource(selectedAssetId, sourcePath)} onRevealSource={(sourcePath) => revealMutation.mutate({ assetId: selectedAssetId, target: "source", sourcePath })} mutating={mutation.isPending} revealing={revealMutation.isPending} /> : null}
     {confirmation ? <ConfirmDialog action={confirmation} pending={mutation.isPending} onCancel={() => setConfirmation(null)} onConfirm={() => mutation.mutate(confirmation.request)} /> : null}

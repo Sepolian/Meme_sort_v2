@@ -156,6 +156,9 @@ const client = {
   })),
   chooseImportFolder: vi.fn(async () => ({ selected_path: "C:/Source/Memes" })),
   chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
+  chooseLibraryFiles: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 })),
+  chooseLibraryFolder: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 })),
+  startLibraryImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: null, started_at: 1, finished_at: null, result: null, error: null })),
   startImport: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   startImportAndIndex: vi.fn(async () => ({ status: "running", running: true, paused: false, pause_requested: false, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
   pauseImport: vi.fn(async () => ({ status: "pausing", running: true, paused: false, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1, finished_at: null, result: null, error: null })),
@@ -460,6 +463,30 @@ describe("App", () => {
     expect(client.chooseImportFolder).toHaveBeenCalledTimes(1);
     expect(client.startImport).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Import started in the background.")).toBeInTheDocument();
+  });
+
+  it("chooses Library files and starts the Import Batch from the selection ID", async () => {
+    renderApp();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Choose files" }));
+
+    expect(await screen.findByText(/Import Batch started for 2 files/)).toBeInTheDocument();
+    expect(client.chooseLibraryFiles).toHaveBeenCalledTimes(1);
+    expect(client.startLibraryImport).toHaveBeenCalledWith(
+      "123e4567-e89b-12d3-a456-426614174010",
+    );
+  });
+
+  it("chooses a Library folder and starts the Import Batch from the selection ID", async () => {
+    renderApp();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Choose folder" }));
+
+    expect(await screen.findByText(/Import Batch started for 1 folder/)).toBeInTheDocument();
+    expect(client.chooseLibraryFolder).toHaveBeenCalledTimes(1);
+    expect(client.startLibraryImport).toHaveBeenCalledWith(
+      "123e4567-e89b-12d3-a456-426614174011",
+    );
   });
 
   it("closes the keyboard help dialog with Escape", async () => {

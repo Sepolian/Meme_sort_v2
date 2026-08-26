@@ -25,6 +25,7 @@ pub fn run() {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
             app.manage(sidecar::ImportSelection::new());
+            app.manage(sidecar::LibraryImportSelection::new());
             app.manage(sidecar::SearchImageSelection::new());
             Ok(())
         })
@@ -37,6 +38,9 @@ pub fn run() {
             sidecar::batch_asset_action,
             sidecar::choose_import_folder,
             sidecar::choose_search_image,
+            sidecar::choose_library_files,
+            sidecar::choose_library_folder,
+            sidecar::start_library_import,
             sidecar::start_import,
             sidecar::start_import_and_index,
             sidecar::pause_import,
