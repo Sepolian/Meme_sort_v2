@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -9,6 +9,7 @@ import type {
   AssetDetail,
   AssetDetailResult,
   AssetListResult,
+  ImportFailureDetail,
   ImportTask,
 } from "../../api/types";
 import { importResultSummary, importSnapshot } from "./import-test-fixtures";
@@ -206,7 +207,7 @@ describe("application-level Import Batch observer", () => {
       status: "completed",
       result: importResultSummary({ new_assets: 2, duplicate_assets: 1 }),
     });
-    await waitFor(() => expect(screen.getByText(/Import Batch result/i)).toBeInTheDocument(), { timeout: 6_000 });
+    await waitFor(() => expect(screen.getByText("Import Batch completed")).toBeInTheDocument(), { timeout: 6_000 });
     await waitFor(
       () => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(statusCallsBeforeFinish + 4),
       { timeout: 8_000 },
@@ -242,7 +243,7 @@ describe("application-level Import Batch observer", () => {
       processed_files: 3,
       result: importResultSummary({ processed_files: 3, succeeded_files: 2, failed_files: 1, new_assets: 2 }),
     });
-    await waitFor(() => expect(screen.getByText(/Import Batch finished with errors/i)).toBeInTheDocument(), { timeout: 6_000 });
+    await waitFor(() => expect(screen.getByText(/Import Batch finished with errors: 2 of 3/i)).toBeInTheDocument(), { timeout: 6_000 });
     expect(assetsMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("link", { name: "Library" }));
@@ -421,8 +422,14 @@ describe("Import Batch controls", () => {
 });
 
 describe("terminal Import Batch results", () => {
-  it("summarizes completed, completed-with-errors, failed, and cancelled outcomes without cancel or failed-only retry actions", async () => {
-    const cases: Array<{ snapshot: ImportTask; expected: string[] }> = [
+  it("summarizes completed, completed-with-errors, failed, and cancelled outcomes with distinct headings and alert semantics, without cancel or failed-only retry actions", async () => {
+    const cases: Array<{
+      snapshot: ImportTask;
+      heading: string;
+      role: "status" | "alert";
+      noticeClass: string;
+      expected: string[];
+    }> = [
       {
         snapshot: importSnapshot({
           batch_id: "b1",
@@ -434,6 +441,9 @@ describe("terminal Import Batch results", () => {
             jobs_created: 0,
           }),
         }),
+        heading: "Import Batch completed",
+        role: "status",
+        noticeClass: "notice-success",
         expected: ["3 new Asset(s) and 2 duplicate Asset(s)", "4 file(s) were skipped"],
       },
       {
@@ -442,6 +452,9 @@ describe("terminal Import Batch results", () => {
           status: "completed_with_errors",
           result: importResultSummary({ processed_files: 9, succeeded_files: 7, failed_files: 2, new_assets: 7 }),
         }),
+        heading: "Import Batch finished with errors",
+        role: "alert",
+        noticeClass: "notice-warning",
         expected: ["7 of 9 file(s) imported", "2 failed"],
       },
       {
@@ -450,7 +463,10 @@ describe("terminal Import Batch results", () => {
           status: "failed",
           partial_result: importResultSummary({ effective_sources: 1, new_assets: 1, duplicate_assets: 0 }),
         }),
-        expected: ["Committed before stopping", ""],
+        heading: "Import Batch failed",
+        role: "alert",
+        noticeClass: "notice-danger",
+        expected: ["Committed before stopping"],
       },
       {
         snapshot: importSnapshot({
@@ -458,7 +474,10 @@ describe("terminal Import Batch results", () => {
           status: "failed",
           partial_result: importResultSummary({ effective_sources: 1, new_assets: 0, duplicate_assets: 0 }),
         }),
-        expected: ["failed before any file was committed", ""],
+        heading: "Import Batch failed",
+        role: "alert",
+        noticeClass: "notice-danger",
+        expected: ["failed before any file was committed"],
       },
       {
         snapshot: importSnapshot({
@@ -466,11 +485,17 @@ describe("terminal Import Batch results", () => {
           status: "cancelled",
           partial_result: importResultSummary({ effective_sources: 1, new_assets: 4 }),
         }),
-        expected: ["Committed Assets remain in the Library", ""],
+        heading: "Import Batch cancelled",
+        role: "status",
+        noticeClass: "notice-warning",
+        expected: ["Committed Assets remain in the Library", "Make a fresh selection to import again after restart."],
       },
       {
         snapshot: importSnapshot({ batch_id: "b5", status: "failed" }),
-        expected: ["failed before any file was committed", ""],
+        heading: "Import Batch failed",
+        role: "alert",
+        noticeClass: "notice-danger",
+        expected: ["failed before any file was committed"],
       },
     ];
 
@@ -478,7 +503,9 @@ describe("terminal Import Batch results", () => {
       currentImportStatus = testCase.snapshot;
       const { unmount } = renderApp(createClient());
 
-      const region = await screen.findByRole("status", { name: "Import Batch progress" });
+      const notice = await screen.findByRole("region", { name: testCase.heading });
+      const region = await within(notice).findByRole(testCase.role, { name: "Import Batch result" });
+      expect(notice.className).toContain(testCase.noticeClass);
       for (const expected of testCase.expected) {
         if (expected) expect(region.textContent).toContain(expected);
       }
@@ -490,3 +517,200 @@ describe("terminal Import Batch results", () => {
     }
   });
 });
+
+function importFailure(overrides: Partial<ImportFailureDetail> = {}): ImportFailureDetail {
+  return {
+    stage: "processing",
+    code: "decode_failed",
+    source_name: "broken.gif",
+    detail: "The image could not be decoded.",
+    ...overrides,
+  };
+}
+
+describe("global Import Batch result notice", () => {
+  it("auto-dismisses the successful terminal notice once per batch and never re-creates it on later polls, while a new batch shows a fresh notice", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    try {
+      currentImportStatus = importSnapshot({ batch_id: "batch-1", status: "importing", running: true });
+      renderApp(createClient());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole("status", { name: "Import Batch progress" })).toBeInTheDocument();
+
+      currentImportStatus = importSnapshot({
+        batch_id: "batch-1",
+        status: "completed",
+        result: importResultSummary({ new_assets: 2, duplicate_assets: 1 }),
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      const noticeRegion = screen.getByRole("region", { name: "Import Batch completed" });
+      expect(noticeRegion).toBeInTheDocument();
+      expect(screen.getAllByRole("region", { name: /Import Batch/ })).toHaveLength(1);
+      expect(screen.getByRole("status", { name: "Import Batch result" }).textContent)
+        .toContain("2 new Asset(s) and 1 duplicate Asset");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8_000);
+      });
+      expect(screen.queryByRole("region", { name: "Import Batch completed" })).not.toBeInTheDocument();
+
+      currentImportStatus = importSnapshot({
+        batch_id: "batch-1",
+        status: "completed",
+        result: importResultSummary({ new_assets: 2, duplicate_assets: 1 }),
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(screen.queryByRole("region", { name: "Import Batch completed" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "Import Batch result" })).not.toBeInTheDocument();
+
+      currentImportStatus = importSnapshot({
+        batch_id: "batch-2",
+        status: "scanning",
+        running: true,
+        selected_sources: 2,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      expect(screen.getByRole("status", { name: "Import Batch progress" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 20_000);
+
+  it("keeps warning results visible across navigation and links back to Library Import Failure details", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-warn",
+      status: "completed_with_errors",
+      failed_files: 2,
+      succeeded_files: 5,
+      processed_files: 7,
+      result: importResultSummary({
+        processed_files: 7,
+        succeeded_files: 5,
+        failed_files: 2,
+        new_assets: 5,
+        failure_count: 2,
+        failures_truncated: false,
+        failure_details: [importFailure(), importFailure({ source_name: "second.jpg" })],
+      }),
+    });
+    renderApp(createClient());
+    await screen.findByRole("alert", { name: "Import Batch result" });
+
+    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    expect(await screen.findByText("Runtime ready in this app session.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Import Batch finished with errors" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("link", { name: "View Import Failure details in the Library" }));
+    expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
+    const details = screen.getByRole("region", { name: "Import Failure details" });
+    const items = within(details).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0].textContent).toContain("broken.gif");
+  });
+
+  it("caps Library Import Failure details at 100 entries and states how many were omitted", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-cap",
+      status: "failed",
+      scan_failures: 30,
+      failed_files: 100,
+      processed_files: 100,
+      supported_files: 100,
+      discovered_files: 110,
+      unsupported_files: 10,
+      partial_result: importResultSummary({
+        scan_failures: 30,
+        failed_files: 100,
+        processed_files: 100,
+        succeeded_files: 0,
+        supported_files: 100,
+        discovered_files: 110,
+        unsupported_files: 10,
+        failure_count: 130,
+        failures_truncated: true,
+        failure_details: Array.from({ length: 100 }, (_, index) =>
+          importFailure({ source_name: `bad-${index}.jpg` })),
+      }),
+    });
+    renderApp(createClient());
+
+    const details = await screen.findByRole("region", { name: "Import Failure details" });
+    expect(within(details).getAllByRole("listitem")).toHaveLength(100);
+    expect(details.textContent).toContain("130 Import Failure(s)");
+    expect(details.textContent).toContain("30 more were omitted");
+
+    const notice = screen.getByRole("region", { name: "Import Batch failed" });
+    expect(within(notice).getByRole("alert", { name: "Import Batch result" }).textContent)
+      .toContain("130 Import Failure(s) were recorded; the first 100 are listed in the Library");
+  });
+
+  it("reports skipped unsupported files without failure styling or a details section", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-skip",
+      status: "completed",
+      result: importResultSummary({
+        new_assets: 3,
+        duplicate_assets: 1,
+        unsupported_files: 4,
+        discovered_files: 8,
+        supported_files: 4,
+      }),
+    });
+    renderApp(createClient());
+
+    const notice = await screen.findByRole("region", { name: "Import Batch completed" });
+    expect(notice.className).toContain("notice-success");
+    expect(notice.className).not.toContain("notice-warning");
+    expect(notice.className).not.toContain("notice-danger");
+    expect(screen.getByRole("status", { name: "Import Batch result" }).textContent)
+      .toContain("4 file(s) were skipped");
+    expect(screen.queryByRole("region", { name: "Import Failure details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Import Failure details in the Library" })).not.toBeInTheDocument();
+  });
+
+  it("announces a failing terminal result once through alert semantics without repeated announcements", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-alert",
+      status: "completed_with_errors",
+      failed_files: 3,
+      succeeded_files: 4,
+      processed_files: 7,
+      result: importResultSummary({
+        processed_files: 7,
+        succeeded_files: 4,
+        failed_files: 3,
+        new_assets: 4,
+        failure_count: 3,
+        failure_details: [
+          importFailure(),
+          importFailure({ source_name: "two.png" }),
+          importFailure({ source_name: "three.png" }),
+        ],
+      }),
+    });
+    renderApp(createClient());
+
+    const alertRegion = await screen.findByRole("alert", { name: "Import Batch result" });
+    const initialTextNode = alertRegion.firstChild;
+    expect(initialTextNode).not.toBeNull();
+
+    await waitFor(() => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(3), {
+      timeout: 12_000,
+    });
+    expect(screen.getByRole("alert", { name: "Import Batch result" })).toBe(alertRegion);
+    expect(alertRegion.firstChild).toBe(initialTextNode);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    for (const name of ["broken.gif", "two.png", "three.png"]) {
+      expect(within(alertRegion).queryByText(name)).not.toBeInTheDocument();
+    }
+  }, 20_000);
+});
+

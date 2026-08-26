@@ -9,6 +9,7 @@ import {
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { importWorkIsActive } from "../import/import-status";
+import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
@@ -271,6 +272,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
     <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
+    <ImportFailureDetails />
     <div className="asset-wall">
       {assets.length ? (
         <section className={`asset-grid${dragPreview ? " asset-grid-accepting" : ""}`} aria-label="Assets" ref={wallRef}>{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section>

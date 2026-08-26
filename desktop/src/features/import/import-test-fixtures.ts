@@ -20,7 +20,9 @@ export function importResultSummary(
     source_records_added: 0,
     source_records_refreshed: 0,
     jobs_created: 0,
+    failure_count: 0,
     failure_details: [],
+    failures_truncated: false,
     active_recipe_id: null,
     ...overrides,
   };

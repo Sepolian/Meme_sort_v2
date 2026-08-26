@@ -126,7 +126,9 @@ export interface ImportBatchResultSummary {
   source_records_added: number;
   source_records_refreshed: number;
   jobs_created: number;
+  failure_count: number;
   failure_details: ImportFailureDetail[];
+  failures_truncated: boolean;
   active_recipe_id: string | null;
 }
 
