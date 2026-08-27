@@ -9,6 +9,7 @@ import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
+import { useImportBatch } from "./features/import/ImportBatchContext";
 import "./App.css";
 
 type Theme = "dark" | "light";
@@ -75,6 +76,8 @@ function Dashboard({ state, client }: { state: AppState; client: MemeSortClient 
 }
 
 function SetupPage({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
+  const importBatch = useImportBatch();
+  const startBatch = importBatch.startBatch;
   const detail = state.setup_state.runtime_readiness?.ready_detail;
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -180,7 +183,10 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
             className="button"
             type="button"
             disabled={isWorking || importRunning || !selectedFolder}
-            onClick={() => void runImportAction(client.startImport, "Import started in the background.")}
+            onClick={() => void runImportAction(
+              () => startBatch(() => client.startImport()),
+              "Import started in the background.",
+            )}
           >
             Import folder
           </button>
@@ -188,7 +194,10 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
             className="button button-secondary"
             type="button"
             disabled={isWorking || importRunning || !selectedFolder || !canStartIndexing}
-            onClick={() => void runImportAction(client.startImportAndIndex, "Import and indexing started in the background.")}
+            onClick={() => void runImportAction(
+              () => startBatch(() => client.startImportAndIndex()),
+              "Import and indexing started in the background.",
+            )}
           >
             Import and index
           </button>

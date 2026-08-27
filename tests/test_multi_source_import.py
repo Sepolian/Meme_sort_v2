@@ -125,6 +125,35 @@ class MultiSourceImportTests(unittest.TestCase):
         self.assertEqual(3, result.new_assets)
         self.assertEqual(3, len(assets.assets))
 
+    def test_multi_directory_scan_progress_is_batch_cumulative(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_directory = root / "first"
+            second_directory = root / "second"
+            first_directory.mkdir()
+            second_directory.mkdir()
+            self._write_image(first_directory / "one.png", (255, 0, 0))
+            self._write_image(first_directory / "two.png", (0, 255, 0))
+            self._write_image(second_directory / "three.png", (0, 0, 255))
+            scan_progress = []
+
+            result = import_sources(
+                root / "library",
+                [first_directory, second_directory],
+                progress_callback=lambda progress: (
+                    scan_progress.append(progress)
+                    if progress.phase == "scanning"
+                    else None
+                ),
+            )
+
+        discovered_counts = [progress.discovered_files for progress in scan_progress]
+        supported_counts = [progress.supported_files for progress in scan_progress]
+        self.assertEqual(sorted(discovered_counts), discovered_counts)
+        self.assertEqual(sorted(supported_counts), supported_counts)
+        self.assertEqual(result.discovered_files, discovered_counts[-1])
+        self.assertEqual(result.supported_files, supported_counts[-1])
+
     def test_continues_after_a_corrupt_image_and_removes_its_library_copy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -32,6 +32,7 @@ from .import_contracts import (
     ImportFailure,
     ImportFailureCode,
     ImportFailureStage,
+    ImportPhase,
     ImportProgress,
 )
 from .recipe_provider import RuntimeRecipeProvider, default_provider
@@ -1269,7 +1270,7 @@ def _import_file_candidates(
             return
         progress_callback(
             ImportProgress(
-                phase="importing",
+                phase=ImportPhase.IMPORTING,
                 current_source_name=current_source_name,
                 selected_sources=selected_sources,
                 effective_sources=effective_sources,
@@ -2008,7 +2009,7 @@ def import_sources(
             return
         progress_callback(
             ImportProgress(
-                phase="scanning",
+                phase=ImportPhase.SCANNING,
                 current_source_name=progress.source_name,
                 selected_sources=len(sources),
                 effective_sources=len(effective_sources),
@@ -2046,11 +2047,42 @@ def import_sources(
             )
         )
         if source.is_directory:
+            prior_discovered_files = len(file_paths)
+            prior_supported_files = sum(
+                source_path.suffix.lower() in SUPPORTED_EXTENSIONS
+                for source_path in file_paths
+            )
+            prior_reparse_points_skipped = reparse_points_skipped
+            prior_failure_details = tuple(scan_failure_details)
+
+            def _emit_directory_scan_progress(progress: _ScanProgress) -> None:
+                _emit_scan_progress(
+                    _ScanProgress(
+                        source_name=progress.source_name,
+                        discovered_files=(
+                            prior_discovered_files + progress.discovered_files
+                        ),
+                        scan_failures=(
+                            len(prior_failure_details) + progress.scan_failures
+                        ),
+                        reparse_points_skipped=(
+                            prior_reparse_points_skipped
+                            + progress.reparse_points_skipped
+                        ),
+                        supported_files=(
+                            prior_supported_files + progress.supported_files
+                        ),
+                        failure_details=(
+                            prior_failure_details + progress.failure_details
+                        ),
+                    )
+                )
+
             directory_scan = _scan_directory_candidates(
                 source.normalized_path,
                 candidate_keys,
                 wait_for_permission=wait_for_permission,
-                progress_callback=_emit_scan_progress,
+                progress_callback=_emit_directory_scan_progress,
             )
             file_paths.extend(directory_scan.candidates)
             reparse_points_skipped += directory_scan.reparse_points_skipped

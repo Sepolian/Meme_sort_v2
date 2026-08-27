@@ -467,6 +467,9 @@ describe("App", () => {
     expect(client.startLibraryImport).toHaveBeenCalledWith(
       "123e4567-e89b-12d3-a456-426614174010",
     );
+    expect(screen.getByRole("status", { name: "Import Batch progress" })).toHaveTextContent(
+      "Scanning 0 selected sources · 0 files discovered · 0 supported so far.",
+    );
   });
 
   it("chooses a Library folder and starts the Import Batch from the selection ID", async () => {

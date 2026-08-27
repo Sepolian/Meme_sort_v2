@@ -3,12 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { AssetsWorkspace } from "./AssetsWorkspace";
 import type { MemeSortClient } from "../../api/tauri-client";
+import { ImportBatchContext } from "../import/ImportBatchContext";
 import type {
   NativeDragListener,
   NativeDragSubscribe,
   NativeDragSummary,
 } from "../../api/native-drag";
-import type { AssetListResult } from "../../api/types";
+import type { AssetListResult, ImportTask } from "../../api/types";
 
 function dragSummary(partial: Partial<NativeDragSummary>): NativeDragSummary {
   return {
@@ -105,15 +106,28 @@ function renderWorkspace(options: {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const startBatch = async (start: () => Promise<ImportTask>) => {
+    const snapshot = await start();
+    queryClient.setQueryData(["import-batch"], snapshot);
+    return snapshot;
+  };
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <AssetsWorkspace
-        client={client}
-        selectedAssetId={null}
-        onSelectAsset={() => undefined}
-        onCloseDetail={() => undefined}
-        nativeDrag={options.nativeDrag}
-      />
+      <ImportBatchContext.Provider value={{
+        snapshot: null,
+        startBatch,
+        requestPause: async () => undefined,
+        requestResume: async () => undefined,
+        controlsPending: false,
+      }}>
+        <AssetsWorkspace
+          client={client}
+          selectedAssetId={null}
+          onSelectAsset={() => undefined}
+          onCloseDetail={() => undefined}
+          nativeDrag={options.nativeDrag}
+        />
+      </ImportBatchContext.Provider>
     </QueryClientProvider>,
   );
   return { client, ...view };

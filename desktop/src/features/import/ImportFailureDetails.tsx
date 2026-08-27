@@ -7,7 +7,7 @@ import {
 
 export function ImportFailureDetails() {
   const batch = useImportBatch();
-  const snapshot = batch?.snapshot ?? null;
+  const snapshot = batch.snapshot;
   if (!snapshot || !importBatchIsTerminal(snapshot)) return null;
   const summary = snapshot.result ?? snapshot.partial_result;
   if (!summary || summary.failure_count === 0) return null;

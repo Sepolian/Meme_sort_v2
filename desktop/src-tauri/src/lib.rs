@@ -1,3 +1,5 @@
+mod native_drag;
+mod native_selection;
 mod sidecar;
 
 use tauri::Manager;
@@ -12,7 +14,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .on_window_event(sidecar::forward_native_drag)
+        .on_window_event(native_drag::forward_native_drag)
         .register_asynchronous_uri_scheme_protocol(
             sidecar::MEDIA_PROTOCOL,
             |context, request, responder| {
@@ -25,10 +27,10 @@ pub fn run() {
         .setup(|app| {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
-            app.manage(sidecar::ImportSelection::new());
-            app.manage(sidecar::LibraryImportSelection::new());
-            app.manage(sidecar::SearchImageSelection::new());
-            app.manage(sidecar::NativeDragState::new());
+            app.manage(native_selection::ImportSelection::new());
+            app.manage(native_selection::LibraryImportSelection::new());
+            app.manage(native_selection::SearchImageSelection::new());
+            app.manage(native_drag::NativeDragState::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -39,10 +41,10 @@ pub fn run() {
             sidecar::delete_asset,
             sidecar::remove_source_record,
             sidecar::batch_asset_action,
-            sidecar::choose_import_folder,
-            sidecar::choose_search_image,
-            sidecar::choose_library_files,
-            sidecar::choose_library_folder,
+            native_selection::choose_import_folder,
+            native_selection::choose_search_image,
+            native_selection::choose_library_files,
+            native_selection::choose_library_folder,
             sidecar::start_library_import,
             sidecar::start_import,
             sidecar::start_import_and_index,

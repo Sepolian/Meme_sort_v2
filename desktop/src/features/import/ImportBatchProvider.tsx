@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import {
@@ -17,7 +17,6 @@ interface ImportBatchProviderProps {
 
 export function ImportBatchProvider({ client, children }: ImportBatchProviderProps) {
   const queryClient = useQueryClient();
-  const wasRunningRef = useRef(false);
   const settledBatchIdRef = useRef<string | null>(null);
 
   const statusQuery = useQuery({
@@ -28,15 +27,17 @@ export function ImportBatchProvider({ client, children }: ImportBatchProviderPro
         ? ACTIVE_POLL_INTERVAL_MS
         : IDLE_POLL_INTERVAL_MS,
   });
+  const startBatch = useCallback(async (start: () => Promise<Awaited<ReturnType<MemeSortClient["getImportStatus"]>>>) => {
+    const snapshot = await start();
+    queryClient.setQueryData(["import-batch"], snapshot);
+    return snapshot;
+  }, [queryClient]);
 
   useEffect(() => {
     const snapshot = statusQuery.data;
     if (!snapshot) return;
-    const previouslyRunning = wasRunningRef.current;
-    wasRunningRef.current = snapshot.running;
     if (
-      !previouslyRunning
-      || snapshot.running
+      snapshot.running
       || !IMPORT_TERMINAL_STATUSES.has(snapshot.status)
       || snapshot.batch_id === null
     ) {
@@ -61,6 +62,7 @@ export function ImportBatchProvider({ client, children }: ImportBatchProviderPro
   const value = useMemo(
     () => ({
       snapshot: statusQuery.data ?? null,
+      startBatch,
       requestPause: async () => {
         await pauseMutation.mutateAsync();
       },
@@ -69,7 +71,7 @@ export function ImportBatchProvider({ client, children }: ImportBatchProviderPro
       },
       controlsPending: pauseMutation.isPending || resumeMutation.isPending,
     }),
-    [statusQuery.data, pauseMutation, resumeMutation],
+    [statusQuery.data, startBatch, pauseMutation, resumeMutation],
   );
 
   return (

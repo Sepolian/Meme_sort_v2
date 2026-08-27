@@ -19,7 +19,7 @@ export function ImportBatchPanel() {
   const [, setDismissTick] = useState(0);
   const dismissedNoticesRef = useRef(new Set<string>());
 
-  const snapshot = batch?.snapshot ?? null;
+  const snapshot = batch.snapshot;
   const hasBatch = snapshot !== null && snapshot.batch_id !== null;
   const noticeKey = hasBatch && snapshot ? `${snapshot.batch_id}:${snapshot.status}` : null;
   const terminal = snapshot !== null && hasBatch && importBatchIsTerminal(snapshot);
@@ -35,7 +35,7 @@ export function ImportBatchPanel() {
     return () => window.clearTimeout(timer);
   }, [noticeKey, dismissed, autoDismisses]);
 
-  if (!batch || !snapshot || !hasBatch || dismissed) return null;
+  if (!snapshot || !hasBatch || dismissed) return null;
 
   const message = terminal
     ? importResultMessage(snapshot)

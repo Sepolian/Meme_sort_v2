@@ -159,7 +159,8 @@ function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<Me
 export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail, nativeDrag }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
-  const importWorkActive = importWorkIsActive(importBatch?.snapshot);
+  const startBatch = importBatch.startBatch;
+  const importWorkActive = importWorkIsActive(importBatch.snapshot);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -202,7 +203,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
       const label = `${itemCount} dropped item${itemCount === 1 ? "" : "s"}`;
       setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${label}.` });
       try {
-        await client.startLibraryImport(dropId);
+        await startBatch(() => client.startLibraryImport(dropId));
         setLibraryNotice({ kind: "success", text: `Import Batch started for ${label}.` });
         await queryClient.invalidateQueries({ queryKey: ["app-state"] });
       } catch (error) {
@@ -228,7 +229,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
           : null,
       );
     });
-  }, [client, nativeDragSubscribe, queryClient]);
+  }, [client, nativeDragSubscribe, queryClient, startBatch]);
 
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
@@ -258,7 +259,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
       const label = kind === "files" ? "file" : "folder";
       const count = selection.count;
       setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${count} ${label}${count === 1 ? "" : "s"}.` });
-      await client.startLibraryImport(selection.selection_id);
+      await startBatch(() => client.startLibraryImport(selection.selection_id));
       setLibraryNotice({ kind: "success", text: `Import Batch started for ${count} ${label}${count === 1 ? "" : "s"}.` });
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
     } catch (error) {

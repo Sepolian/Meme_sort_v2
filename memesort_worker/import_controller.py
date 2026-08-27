@@ -4,13 +4,14 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from .import_contracts import (
     ImportBatchError,
     ImportBatchResult,
-    ImportFailure,
+    ImportBatchStatus,
+    ImportPhase,
     ImportProgress,
 )
 from .library import import_sources
@@ -28,12 +29,15 @@ class ImportBatchConflictError(RuntimeError):
 class ImportTerminalOutcome:
     """One immutable terminal result delivered to an exactly-once callback."""
 
-    status: str
+    status: ImportBatchStatus
     batch_id: str
     result: ImportBatchResult | None
     partial_result: ImportBatchResult | None
     error: dict[str, object] | None
     jobs_created: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", ImportBatchStatus(self.status))
 
 
 @dataclass
@@ -48,7 +52,7 @@ class ImportSnapshot:
     """
 
     batch_id: str | None
-    status: str
+    status: ImportBatchStatus
     running: bool
     paused: bool
     pause_requested: bool
@@ -109,27 +113,14 @@ class ImportController:
         self._condition = threading.Condition()
         self._active = False
         self._shutdown = False
-        self._status = "idle"
-        self._phase = "scanning"
+        self._status = ImportBatchStatus.IDLE
+        self._phase = ImportPhase.SCANNING
         self._batch_id: str | None = None
-        self._source_folder: str | None = None
-        self._selected_sources = 0
-        self._effective_sources = 0
-        self._discovered_files = 0
-        self._supported_files = 0
-        self._unsupported_files = 0
-        self._reparse_points_skipped = 0
-        self._scan_failures = 0
-        self._processed_files = 0
-        self._succeeded_files = 0
-        self._failed_files = 0
-        self._new_assets = 0
-        self._duplicate_assets = 0
-        self._source_records_added = 0
-        self._source_records_refreshed = 0
-        self._jobs_created = 0
-        self._current_source_name: str | None = None
-        self._progress_failure_details: tuple[ImportFailure, ...] = ()
+        self._setup_source_folder: str | None = None
+        self._progress = ImportProgress(
+            phase=ImportPhase.SCANNING,
+            current_source_name=None,
+        )
         self._paused = False
         self._waiting_for_permission = False
         self._started_at: float | None = None
@@ -143,6 +134,8 @@ class ImportController:
         self,
         sources: Sequence[Path | str],
         on_terminal: Callable[[ImportTerminalOutcome], None] | None = None,
+        *,
+        source_folder: str | None = None,
     ) -> ImportSnapshot:
         if not isinstance(sources, Sequence) or isinstance(
             sources,
@@ -162,27 +155,15 @@ class ImportController:
                 )
 
             self._active = True
-            self._status = "scanning"
-            self._phase = "scanning"
+            self._status = ImportBatchStatus.SCANNING
+            self._phase = ImportPhase.SCANNING
             self._batch_id = str(uuid.uuid4())
-            self._source_folder = str(source_paths[0])
-            self._selected_sources = len(source_paths)
-            self._effective_sources = 0
-            self._discovered_files = 0
-            self._supported_files = 0
-            self._unsupported_files = 0
-            self._reparse_points_skipped = 0
-            self._scan_failures = 0
-            self._processed_files = 0
-            self._succeeded_files = 0
-            self._failed_files = 0
-            self._new_assets = 0
-            self._duplicate_assets = 0
-            self._source_records_added = 0
-            self._source_records_refreshed = 0
-            self._jobs_created = 0
-            self._current_source_name = None
-            self._progress_failure_details = ()
+            self._setup_source_folder = source_folder
+            self._progress = ImportProgress(
+                phase=ImportPhase.SCANNING,
+                current_source_name=None,
+                selected_sources=len(source_paths),
+            )
             self._paused = False
             self._waiting_for_permission = False
             self._started_at = time.time()
@@ -203,7 +184,7 @@ class ImportController:
         with self._condition:
             if self._active and not self._paused:
                 self._paused = True
-                self._status = "pausing"
+                self._status = ImportBatchStatus.PAUSING
             return self._snapshot_locked()
 
     def resume(self) -> ImportSnapshot:
@@ -211,7 +192,7 @@ class ImportController:
             if self._active:
                 self._paused = False
                 self._waiting_for_permission = False
-                self._status = self._phase
+                self._status = ImportBatchStatus(self._phase)
                 self._condition.notify_all()
             return self._snapshot_locked()
 
@@ -241,9 +222,9 @@ class ImportController:
                 self._on_progress,
             )
             status = (
-                "completed"
+                ImportBatchStatus.COMPLETED
                 if result.failure_count == 0
-                else "completed_with_errors"
+                else ImportBatchStatus.COMPLETED_WITH_ERRORS
             )
             self._settle_terminal(
                 status,
@@ -254,7 +235,7 @@ class ImportController:
             )
         except ImportCancelledError as exc:
             self._settle_terminal(
-                "cancelled",
+                ImportBatchStatus.CANCELLED,
                 on_terminal,
                 result=None,
                 partial_result=self._build_partial_result_from_progress(),
@@ -265,7 +246,7 @@ class ImportController:
             )
         except ImportBatchError as exc:
             self._settle_terminal(
-                "failed",
+                ImportBatchStatus.FAILED,
                 on_terminal,
                 result=None,
                 partial_result=(
@@ -276,7 +257,7 @@ class ImportController:
             )
         except Exception as exc:
             self._settle_terminal(
-                "failed",
+                ImportBatchStatus.FAILED,
                 on_terminal,
                 result=None,
                 partial_result=self._build_partial_result_from_progress(),
@@ -288,7 +269,7 @@ class ImportController:
 
     def _settle_terminal(
         self,
-        status: str,
+        status: ImportBatchStatus,
         on_terminal: Callable[[ImportTerminalOutcome], None] | None,
         *,
         result: ImportBatchResult | None,
@@ -331,34 +312,27 @@ class ImportController:
         with self._condition:
             if not self._active:
                 return
-            self._phase = progress.phase
-            if self._status not in {"pausing", "paused"}:
-                self._status = progress.phase
-            if progress.selected_sources:
-                self._selected_sources = progress.selected_sources
-            if progress.effective_sources:
-                self._effective_sources = progress.effective_sources
-            self._discovered_files = progress.discovered_files
-            self._supported_files = progress.supported_files
-            self._unsupported_files = progress.unsupported_files
-            self._reparse_points_skipped = progress.reparse_points_skipped
-            self._scan_failures = progress.scan_failures
-            self._processed_files = progress.processed_files
-            self._succeeded_files = progress.succeeded_files
-            self._failed_files = progress.failed_files
-            self._new_assets = progress.new_assets
-            self._duplicate_assets = progress.duplicate_assets
-            self._source_records_added = progress.source_records_added
-            self._source_records_refreshed = progress.source_records_refreshed
-            self._jobs_created = progress.jobs_created
-            self._current_source_name = progress.current_source_name
-            self._progress_failure_details = progress.failure_details
+            self._progress = replace(
+                progress,
+                selected_sources=(
+                    progress.selected_sources or self._progress.selected_sources
+                ),
+                effective_sources=(
+                    progress.effective_sources or self._progress.effective_sources
+                ),
+            )
+            self._phase = self._progress.phase
+            if self._status not in {
+                ImportBatchStatus.PAUSING,
+                ImportBatchStatus.PAUSED,
+            }:
+                self._status = ImportBatchStatus(self._phase)
 
     def _wait_for_permission(self) -> None:
         with self._condition:
             while self._paused and not self._shutdown:
                 self._waiting_for_permission = True
-                self._status = "paused"
+                self._status = ImportBatchStatus.PAUSED
                 self._condition.notify_all()
                 self._condition.wait()
             self._waiting_for_permission = False
@@ -369,57 +343,41 @@ class ImportController:
 
     def _build_partial_result_from_progress(self) -> ImportBatchResult | None:
         with self._condition:
-            if self._effective_sources == 0:
+            if self._progress.effective_sources == 0:
                 return None
             try:
-                return ImportBatchResult(
+                return self._progress.as_batch_result(
                     library_root=str(self._library_root),
-                    selected_sources=self._selected_sources,
-                    effective_sources=self._effective_sources,
-                    discovered_files=self._discovered_files,
-                    supported_files=self._supported_files,
-                    unsupported_files=self._unsupported_files,
-                    reparse_points_skipped=self._reparse_points_skipped,
-                    scan_failures=self._scan_failures,
-                    processed_files=self._processed_files,
-                    succeeded_files=self._succeeded_files,
-                    failed_files=self._failed_files,
-                    new_assets=self._new_assets,
-                    duplicate_assets=self._duplicate_assets,
-                    source_records_added=self._source_records_added,
-                    source_records_refreshed=self._source_records_refreshed,
-                    jobs_created=self._jobs_created,
-                    failure_details=self._progress_failure_details,
-                    active_recipe_id=None,
                 )
             except ValueError:
                 return None
 
     def _snapshot_locked(self) -> ImportSnapshot:
         running = self._active
+        progress = self._progress
         return ImportSnapshot(
             batch_id=self._batch_id,
             status=self._status,
             running=running,
             paused=self._waiting_for_permission and running,
             pause_requested=self._paused and running,
-            source_folder=self._source_folder,
-            selected_sources=self._selected_sources,
-            effective_sources=self._effective_sources,
-            discovered_files=self._discovered_files,
-            supported_files=self._supported_files,
-            unsupported_files=self._unsupported_files,
-            reparse_points_skipped=self._reparse_points_skipped,
-            scan_failures=self._scan_failures,
-            processed_files=self._processed_files,
-            succeeded_files=self._succeeded_files,
-            failed_files=self._failed_files,
-            new_assets=self._new_assets,
-            duplicate_assets=self._duplicate_assets,
-            source_records_added=self._source_records_added,
-            source_records_refreshed=self._source_records_refreshed,
-            jobs_created=self._jobs_created,
-            current_source_name=self._current_source_name,
+            source_folder=self._setup_source_folder,
+            selected_sources=progress.selected_sources,
+            effective_sources=progress.effective_sources,
+            discovered_files=progress.discovered_files,
+            supported_files=progress.supported_files,
+            unsupported_files=progress.unsupported_files,
+            reparse_points_skipped=progress.reparse_points_skipped,
+            scan_failures=progress.scan_failures,
+            processed_files=progress.processed_files,
+            succeeded_files=progress.succeeded_files,
+            failed_files=progress.failed_files,
+            new_assets=progress.new_assets,
+            duplicate_assets=progress.duplicate_assets,
+            source_records_added=progress.source_records_added,
+            source_records_refreshed=progress.source_records_refreshed,
+            jobs_created=progress.jobs_created,
+            current_source_name=progress.current_source_name,
             started_at=self._started_at,
             finished_at=self._finished_at,
             result=self._result,

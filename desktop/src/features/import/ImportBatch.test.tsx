@@ -218,6 +218,29 @@ describe("application-level Import Batch observer", () => {
     expect(invalidateCalls(invalidateSpy, "asset-detail")).toBe(1);
   }, 20_000);
 
+  it("invalidates affected data when a fast batch is first observed after completion", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "fast-batch",
+      status: "completed",
+      result: importResultSummary({ new_assets: 1 }),
+    });
+    const { invalidateSpy } = renderApp(createClient());
+
+    expect(await screen.findByText("Import Batch completed")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(invalidateCalls(invalidateSpy, "assets")).toBe(1);
+      expect(invalidateCalls(invalidateSpy, "app-state")).toBe(1);
+      expect(invalidateCalls(invalidateSpy, "asset-detail")).toBe(1);
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+    });
+    expect(invalidateCalls(invalidateSpy, "assets")).toBe(1);
+    expect(invalidateCalls(invalidateSpy, "app-state")).toBe(1);
+    expect(invalidateCalls(invalidateSpy, "asset-detail")).toBe(1);
+  });
+
   it("refetches the Library Asset list once when navigating back after a terminal transition", async () => {
     currentImportStatus = importSnapshot();
     const client = createClient();

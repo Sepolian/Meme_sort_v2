@@ -11,7 +11,7 @@ from .asset_catalog import (
     import_folder,
     rebuild_active_indexes,
 )
-from .import_contracts import IndexingPolicy
+from .import_contracts import ImportBatchStatus, IndexingPolicy
 from .import_controller import ImportBatchConflictError, ImportTerminalOutcome
 
 
@@ -31,6 +31,8 @@ class ImportTaskController(Protocol):
         self,
         sources: Sequence[Path | str],
         on_terminal: Callable[[ImportTerminalOutcome], None] | None = None,
+        *,
+        source_folder: str | None = None,
     ):
         ...
 
@@ -158,20 +160,25 @@ def start_import_batch(
             raise ValueError(runtime_message)
         authorized = runtime_ready
 
+    source_folder = (
+        sources[0] if indexing_policy in {IndexingPolicy.NEVER, IndexingPolicy.REQUIRED} else None
+    )
+
     if not authorized:
-        return import_controller.start(list(sources))
+        return import_controller.start(list(sources), source_folder=source_folder)
 
     def _resume_after_import(outcome: ImportTerminalOutcome) -> None:
         if outcome.status in {
-            "completed",
-            "completed_with_errors",
-            "failed",
+            ImportBatchStatus.COMPLETED,
+            ImportBatchStatus.COMPLETED_WITH_ERRORS,
+            ImportBatchStatus.FAILED,
         } and outcome.jobs_created > 0:
             worker_loop.resume()
 
     return import_controller.start(
         list(sources),
         on_terminal=_resume_after_import,
+        source_folder=source_folder,
     )
 
 

@@ -67,7 +67,7 @@ class RecordingWorkerLoop:
 class StubImportController:
     def __init__(self) -> None:
         self.running = False
-        self.starts: list[tuple[list[str], object]] = []
+        self.starts: list[tuple[list[str], object, str | None]] = []
 
     def snapshot(self):
         return type(
@@ -76,8 +76,8 @@ class StubImportController:
             {"running": self.running},
         )()
 
-    def start(self, sources, on_terminal=None):
-        self.starts.append((list(sources), on_terminal))
+    def start(self, sources, on_terminal=None, *, source_folder=None):
+        self.starts.append((list(sources), on_terminal, source_folder))
         return {"status": "scanning", "sources": list(sources)}
 
 
@@ -234,6 +234,27 @@ class StartImportBatchPolicyTests(unittest.TestCase):
         self.assertEqual([["C:/Memes"]], [start[0] for start in controller.starts])
         self.assertIsNone(controller.starts[0][1])
         self.assertEqual(0, worker.resume_calls)
+
+    def test_library_policy_redacts_source_path_while_setup_policies_retain_it(
+        self,
+    ) -> None:
+        for policy, expected_source_folder in (
+            (IndexingPolicy.IF_READY, None),
+            (IndexingPolicy.NEVER, "C:/Private/Memes"),
+            (IndexingPolicy.REQUIRED, "C:/Private/Memes"),
+        ):
+            with self.subTest(policy=policy):
+                controller = StubImportController()
+                start_import_batch(
+                    Path("C:/Library"),
+                    ["C:/Private/Memes"],
+                    controller,
+                    RecordingWorkerLoop(),
+                    StubRuntimeGate(True, "ready"),
+                    policy,
+                )
+
+                self.assertEqual(expected_source_folder, controller.starts[0][2])
 
     def test_authorized_required_wakes_only_when_jobs_were_created(self) -> None:
         controller = StubImportController()

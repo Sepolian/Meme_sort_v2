@@ -29,6 +29,26 @@ class IndexingPolicy(StrEnum):
     IF_READY = "if-ready"
 
 
+class ImportPhase(StrEnum):
+    """The active phase of an Import Batch."""
+
+    SCANNING = "scanning"
+    IMPORTING = "importing"
+
+
+class ImportBatchStatus(StrEnum):
+    """The lifecycle state published for an Import Batch."""
+
+    IDLE = "idle"
+    SCANNING = "scanning"
+    IMPORTING = "importing"
+    PAUSING = "pausing"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    COMPLETED_WITH_ERRORS = "completed_with_errors"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
 class ImportFailureStage(StrEnum):
     """Stable stage names for a reportable Import Failure."""
 
@@ -305,7 +325,7 @@ class ImportProgress:
     full filesystem paths are not part of the public progress contract.
     """
 
-    phase: str
+    phase: ImportPhase
     current_source_name: str | None
     selected_sources: int = 0
     effective_sources: int = 0
@@ -325,8 +345,7 @@ class ImportProgress:
     failure_details: tuple[ImportFailure, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.phase not in {"scanning", "importing"}:
-            raise ValueError("ImportProgress phase must be scanning or importing")
+        object.__setattr__(self, "phase", ImportPhase(self.phase))
 
         count_names = (
             "selected_sources",
@@ -373,6 +392,35 @@ class ImportProgress:
             )
             safe_name = ntpath.basename(safe_name.rstrip("\\/")) or "Unknown source"
             object.__setattr__(self, "current_source_name", safe_name)
+
+    def as_batch_result(
+        self,
+        *,
+        library_root: str,
+        active_recipe_id: str | None = None,
+    ) -> ImportBatchResult:
+        """Build a validated batch result from the latest cumulative progress."""
+
+        return ImportBatchResult(
+            library_root=library_root,
+            selected_sources=self.selected_sources,
+            effective_sources=self.effective_sources,
+            discovered_files=self.discovered_files,
+            supported_files=self.supported_files,
+            unsupported_files=self.unsupported_files,
+            reparse_points_skipped=self.reparse_points_skipped,
+            scan_failures=self.scan_failures,
+            processed_files=self.processed_files,
+            succeeded_files=self.succeeded_files,
+            failed_files=self.failed_files,
+            new_assets=self.new_assets,
+            duplicate_assets=self.duplicate_assets,
+            source_records_added=self.source_records_added,
+            source_records_refreshed=self.source_records_refreshed,
+            jobs_created=self.jobs_created,
+            failure_details=self.failure_details,
+            active_recipe_id=active_recipe_id,
+        )
 
 
 class ImportBatchError(RuntimeError):

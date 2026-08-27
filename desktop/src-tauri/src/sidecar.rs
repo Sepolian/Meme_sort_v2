@@ -12,15 +12,22 @@ use std::{
 };
 
 #[cfg(windows)]
-use std::os::windows::{fs::MetadataExt, process::CommandExt};
+use std::os::windows::process::CommandExt;
 
 use serde::{Deserialize, Serialize};
-use tauri::{
-    http, AppHandle, DragDropEvent, Emitter, LogicalPosition, Manager, PhysicalPosition,
-    WindowEvent,
+use tauri::{http, AppHandle, Manager};
+
+use crate::native_selection::{
+    validate_library_paths, ImportSelection, LibraryImportSelection, SearchImageSelection,
 };
-use tauri_plugin_dialog::DialogExt;
-use uuid::Uuid;
+
+#[cfg(test)]
+use crate::native_drag::{
+    logical_drag_position, native_drag_counts, native_drag_summary, process_native_drag_event,
+    NativeDragContext, NativeDragInput, NativeDragPhase,
+};
+#[cfg(test)]
+use crate::native_selection::{LibrarySelectionEntry, LibrarySelectionOrigin};
 
 const PROTOCOL_VERSION: u32 = 1;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -28,15 +35,10 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BATCH_ASSETS: usize = 1_000;
 const MAX_IMPORT_SOURCES: usize = 256;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
-const LIBRARY_SELECTION_LIFETIME: Duration = Duration::from_secs(60);
-const MAX_LIBRARY_SELECTIONS: usize = 16;
-pub const NATIVE_DRAG_EVENT: &str = "library-native-drag";
 const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
 #[cfg(not(debug_assertions))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
-#[cfg(windows)]
-const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 
 #[derive(Debug, Serialize)]
 pub struct SidecarError {
@@ -47,7 +49,7 @@ pub struct SidecarError {
 }
 
 impl SidecarError {
-    fn new(message: impl Into<String>) -> Self {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
             status: None,
             error: "SidecarError".to_owned(),
@@ -107,352 +109,6 @@ pub struct SidecarSession {
 }
 
 pub struct SidecarState(Mutex<Option<SidecarSession>>);
-
-/// A source folder selected through the native dialog for this desktop session.
-/// The WebView never supplies this path to an import command.
-pub struct ImportSelection(Mutex<Option<PathBuf>>);
-
-/// An image file selected through the native dialog for one later Search Request.
-/// The WebView never supplies this path to an image-search command.
-pub struct SearchImageSelection(Mutex<Option<PathBuf>>);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LibrarySelectionOrigin {
-    Files,
-    Folder,
-    /// An Explorer drag-and-drop selection, which may mix files and folders.
-    Drop,
-}
-
-#[derive(Debug)]
-struct LibrarySelectionEntry {
-    id: String,
-    origin: LibrarySelectionOrigin,
-    paths: Vec<PathBuf>,
-    created_at: Instant,
-}
-
-/// Temporary native Library selections. Each entry is origin-tagged, one-time,
-/// time-bounded, and never exposed to the WebView as filesystem paths.
-pub struct LibraryImportSelection(Mutex<Vec<LibrarySelectionEntry>>);
-
-impl ImportSelection {
-    pub fn new() -> Self {
-        Self(Mutex::new(None))
-    }
-
-    fn replace(&self, path: Option<PathBuf>) -> Result<Option<String>, SidecarError> {
-        let selected_path = path.as_ref().map(|path| path.display().to_string());
-        let mut selection = self
-            .0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?;
-        *selection = path;
-        Ok(selected_path)
-    }
-
-    fn selected_path(&self) -> Result<String, SidecarError> {
-        self.0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .ok_or_else(|| SidecarError::new("Choose a source folder before importing."))
-    }
-}
-
-impl LibraryImportSelection {
-    pub fn new() -> Self {
-        Self(Mutex::new(Vec::new()))
-    }
-
-    fn store(
-        &self,
-        origin: LibrarySelectionOrigin,
-        paths: Vec<PathBuf>,
-    ) -> Result<LibrarySelectionSummary, SidecarError> {
-        validate_library_paths(origin, &paths)?;
-        let id = Uuid::new_v4().to_string();
-        let count = paths.len();
-        let created_at = Instant::now();
-        let mut entries = self
-            .0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort Library selection is unavailable."))?;
-        entries.retain(|entry| entry.created_at.elapsed() < LIBRARY_SELECTION_LIFETIME);
-        entries.push(LibrarySelectionEntry {
-            id: id.clone(),
-            origin,
-            paths,
-            created_at,
-        });
-        while entries.len() > MAX_LIBRARY_SELECTIONS {
-            entries.remove(0);
-        }
-        Ok(LibrarySelectionSummary {
-            selection_id: id,
-            count,
-        })
-    }
-
-    fn take(&self, selection_id: &str) -> Result<LibrarySelectionEntry, SidecarError> {
-        let mut entries = self
-            .0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort Library selection is unavailable."))?;
-        entries.retain(|entry| entry.created_at.elapsed() < LIBRARY_SELECTION_LIFETIME);
-        let index = entries
-            .iter()
-            .position(|entry| entry.id == selection_id)
-            .ok_or_else(|| {
-                SidecarError::new("Library Import selection has expired or was already consumed.")
-            })?;
-        Ok(entries.remove(index))
-    }
-}
-
-impl SearchImageSelection {
-    pub fn new() -> Self {
-        Self(Mutex::new(None))
-    }
-
-    fn replace(&self, path: Option<PathBuf>) -> Result<Option<String>, SidecarError> {
-        let selected_path = path.as_ref().map(|path| path.display().to_string());
-        let mut selection = self
-            .0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort image selection is unavailable."))?;
-        *selection = path;
-        Ok(selected_path)
-    }
-
-    fn selected_path(&self) -> Result<String, SidecarError> {
-        self.0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort image selection is unavailable."))?
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .ok_or_else(|| SidecarError::new("Choose an image before searching."))
-    }
-}
-
-/// Counts dragged files and folders so hover previews stay informative
-/// without re-reading the dragged entries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NativeDragContext {
-    file_count: usize,
-    folder_count: usize,
-}
-
-fn native_drag_counts(paths: &[PathBuf]) -> NativeDragContext {
-    let mut file_count = 0;
-    let mut folder_count = 0;
-    for path in paths {
-        match fs::symlink_metadata(path) {
-            Ok(metadata) if metadata.file_type().is_dir() => folder_count += 1,
-            Ok(_) => file_count += 1,
-            Err(_) => {}
-        }
-    }
-    NativeDragContext {
-        file_count,
-        folder_count,
-    }
-}
-
-/// Managed acceptance cache for one in-flight Explorer drag gesture.
-pub struct NativeDragState(Mutex<Option<NativeDragContext>>);
-
-impl NativeDragState {
-    pub fn new() -> Self {
-        Self(Mutex::new(None))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum NativeDragPhase {
-    Enter,
-    Over,
-    Leave,
-    Drop,
-}
-
-/// A path-free summary of one native drag event. Counts and logical
-/// coordinates travel to the WebView; source paths never do.
-#[derive(Debug, Clone, Serialize)]
-pub struct NativeDragSummary {
-    phase: NativeDragPhase,
-    file_count: usize,
-    folder_count: usize,
-    x: f64,
-    y: f64,
-    accepted: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    drop_id: Option<String>,
-}
-
-/// A typed native drag input, decoupled from the windowing runtime for tests.
-enum NativeDragInput {
-    Enter(Vec<PathBuf>, PhysicalPosition<f64>),
-    Over(PhysicalPosition<f64>),
-    Leave,
-    Drop(Vec<PathBuf>, PhysicalPosition<f64>),
-}
-
-fn logical_drag_position(
-    position: PhysicalPosition<f64>,
-    scale_factor: f64,
-) -> LogicalPosition<f64> {
-    position.to_logical(scale_factor)
-}
-
-fn native_drag_summary(
-    phase: NativeDragPhase,
-    paths: Option<&[PathBuf]>,
-    context: Option<NativeDragContext>,
-    position: PhysicalPosition<f64>,
-    scale_factor: f64,
-) -> (NativeDragSummary, Option<NativeDragContext>) {
-    let logical = logical_drag_position(position, scale_factor);
-    let summary = |file_count: usize, folder_count: usize, accepted: bool| NativeDragSummary {
-        phase,
-        file_count,
-        folder_count,
-        x: logical.x,
-        y: logical.y,
-        accepted,
-        drop_id: None,
-    };
-    match phase {
-        NativeDragPhase::Enter => {
-            let dragged = paths.unwrap_or(&[]);
-            let accepted = validate_library_paths(LibrarySelectionOrigin::Drop, dragged).is_ok();
-            let counts = native_drag_counts(dragged);
-            let next = accepted.then_some(counts);
-            (
-                summary(counts.file_count, counts.folder_count, accepted),
-                next,
-            )
-        }
-        NativeDragPhase::Over => match context {
-            Some(context) => (
-                summary(context.file_count, context.folder_count, true),
-                Some(context),
-            ),
-            None => (summary(0, 0, false), None),
-        },
-        NativeDragPhase::Leave => (summary(0, 0, false), None),
-        NativeDragPhase::Drop => {
-            let dropped = paths.unwrap_or(&[]);
-            let accepted = validate_library_paths(LibrarySelectionOrigin::Drop, dropped).is_ok();
-            let counts = native_drag_counts(dropped);
-            (
-                summary(counts.file_count, counts.folder_count, accepted),
-                None,
-            )
-        }
-    }
-}
-
-/// Folds one native drag event into a path-free summary and a managed
-/// one-time drop selection. Setup selection state is never touched.
-fn process_native_drag_event<F>(
-    selections: &LibraryImportSelection,
-    context_slot: &Mutex<Option<NativeDragContext>>,
-    scale_factor: f64,
-    event: NativeDragInput,
-    mut emit: F,
-) where
-    F: FnMut(NativeDragSummary),
-{
-    let park_context = |context_slot: &Mutex<Option<NativeDragContext>>,
-                        next: Option<NativeDragContext>| {
-        if let Ok(mut slot) = context_slot.lock() {
-            *slot = next;
-        }
-    };
-    match event {
-        NativeDragInput::Enter(paths, position) => {
-            let (summary, next) = native_drag_summary(
-                NativeDragPhase::Enter,
-                Some(&paths),
-                None,
-                position,
-                scale_factor,
-            );
-            park_context(context_slot, next);
-            emit(summary);
-        }
-        NativeDragInput::Over(position) => {
-            let current = context_slot.lock().ok().and_then(|context| *context);
-            let (summary, next) =
-                native_drag_summary(NativeDragPhase::Over, None, current, position, scale_factor);
-            park_context(context_slot, next);
-            emit(summary);
-        }
-        NativeDragInput::Leave => {
-            let (summary, _) = native_drag_summary(
-                NativeDragPhase::Leave,
-                None,
-                None,
-                PhysicalPosition::new(0.0, 0.0),
-                scale_factor,
-            );
-            park_context(context_slot, None);
-            emit(summary);
-        }
-        NativeDragInput::Drop(paths, position) => {
-            let (mut summary, _) = native_drag_summary(
-                NativeDragPhase::Drop,
-                Some(&paths),
-                None,
-                position,
-                scale_factor,
-            );
-            if summary.accepted {
-                summary.drop_id = selections
-                    .store(LibrarySelectionOrigin::Drop, paths)
-                    .ok()
-                    .map(|entry| entry.selection_id);
-                summary.accepted = summary.drop_id.is_some();
-            }
-            park_context(context_slot, None);
-            emit(summary);
-        }
-    }
-}
-
-/// Converts raw window drag events into path-free summaries and managed
-/// one-time drop selections for the main Library window.
-pub fn forward_native_drag(window: &tauri::Window, event: &WindowEvent) {
-    let WindowEvent::DragDrop(drag) = event else {
-        return;
-    };
-    let Some(selections) = window.try_state::<LibraryImportSelection>() else {
-        return;
-    };
-    let Some(drag_state) = window.try_state::<NativeDragState>() else {
-        return;
-    };
-    let input = match drag {
-        DragDropEvent::Enter { paths, position } => {
-            NativeDragInput::Enter(paths.clone(), *position)
-        }
-        DragDropEvent::Over { position } => NativeDragInput::Over(*position),
-        DragDropEvent::Drop { paths, position } => NativeDragInput::Drop(paths.clone(), *position),
-        DragDropEvent::Leave => NativeDragInput::Leave,
-        _ => return,
-    };
-    let Ok(scale_factor) = window.scale_factor() else {
-        // Without a known display scale, logical coordinates could not be
-        // trusted; fail closed instead of accepting a mis-scaled drop.
-        return;
-    };
-    process_native_drag_event(&selections, &drag_state.0, scale_factor, input, |summary| {
-        let _ = window.emit_to("main", NATIVE_DRAG_EVENT, summary);
-    });
-}
 
 impl SidecarState {
     pub fn new(session: SidecarSession) -> Self {
@@ -1062,17 +718,6 @@ struct AssetRevealTargetPayload {
     source_path: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct FolderSelection {
-    selected_path: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct LibrarySelectionSummary {
-    selection_id: String,
-    count: usize,
-}
-
 impl ApiRoute {
     fn path(&self) -> String {
         match self {
@@ -1261,103 +906,6 @@ pub fn batch_asset_action(
     with_sidecar_session(&app, |session| {
         session.batch_asset_action(action, &asset_ids)
     })
-}
-
-#[tauri::command]
-pub fn choose_import_folder(app: AppHandle) -> Result<FolderSelection, SidecarError> {
-    let path = app
-        .dialog()
-        .file()
-        .set_title("Choose a folder to import into MemeSort")
-        .blocking_pick_folder();
-    let path = path
-        .map(|path| {
-            path.into_path()
-                .map_err(|error| SidecarError::new(error.to_string()))
-        })
-        .transpose()?;
-    let selection = app
-        .try_state::<ImportSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
-    let selected_path = selection.replace(path)?;
-    Ok(FolderSelection { selected_path })
-}
-
-#[tauri::command]
-pub fn choose_search_image(app: AppHandle) -> Result<FolderSelection, SidecarError> {
-    let path = app
-        .dialog()
-        .file()
-        .set_title("Choose an image to search with MemeSort")
-        .add_filter("Image files", &["jpg", "jpeg", "png", "webp", "gif", "bmp"])
-        .blocking_pick_file();
-    let path = path
-        .map(|path| {
-            path.into_path()
-                .map_err(|error| SidecarError::new(error.to_string()))
-        })
-        .transpose()?;
-    let selection = app
-        .try_state::<SearchImageSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort image selection is unavailable."))?;
-    let selected_path = selection.replace(path)?;
-    Ok(FolderSelection { selected_path })
-}
-
-#[tauri::command]
-pub fn choose_library_files(
-    app: AppHandle,
-) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
-    let paths = app
-        .dialog()
-        .file()
-        .set_title("Choose image files to import into MemeSort")
-        .add_filter("Image files", &["jpg", "jpeg", "png", "webp", "gif", "bmp"])
-        .blocking_pick_files();
-    let paths = paths
-        .map(|paths| {
-            paths
-                .into_iter()
-                .map(|path| {
-                    path.into_path()
-                        .map_err(|error| SidecarError::new(error.to_string()))
-                })
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .transpose()?;
-    let Some(paths) = paths else {
-        return Ok(None);
-    };
-    let selection = app
-        .try_state::<LibraryImportSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
-    Ok(Some(selection.store(LibrarySelectionOrigin::Files, paths)?))
-}
-
-#[tauri::command]
-pub fn choose_library_folder(
-    app: AppHandle,
-) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
-    let path = app
-        .dialog()
-        .file()
-        .set_title("Choose a folder to import into MemeSort Library")
-        .blocking_pick_folder();
-    let path = path
-        .map(|path| {
-            path.into_path()
-                .map_err(|error| SidecarError::new(error.to_string()))
-        })
-        .transpose()?;
-    let Some(path) = path else {
-        return Ok(None);
-    };
-    let selection = app
-        .try_state::<LibraryImportSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
-    Ok(Some(
-        selection.store(LibrarySelectionOrigin::Folder, vec![path])?,
-    ))
 }
 
 #[tauri::command]
@@ -1982,7 +1530,7 @@ fn validate_job_ids(job_ids: &[String]) -> Result<Vec<String>, SidecarError> {
     Ok(validated)
 }
 
-fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
+pub(crate) fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
     if source_path.is_empty()
         || source_path.len() > MAX_SOURCE_PATH_BYTES
         || source_path.contains('\0')
@@ -1997,68 +1545,6 @@ fn validate_source_path(source_path: &str) -> Result<String, SidecarError> {
 fn validate_library_selection_id(selection_id: &str) -> Result<String, SidecarError> {
     validate_asset_id(selection_id)
         .map_err(|_| SidecarError::new("Invalid MemeSort Library Import selection."))
-}
-
-fn validate_library_paths(
-    origin: LibrarySelectionOrigin,
-    paths: &[PathBuf],
-) -> Result<Vec<String>, SidecarError> {
-    if paths.is_empty() || paths.len() > MAX_IMPORT_SOURCES {
-        return Err(SidecarError::new(
-            "A Library Import Batch requires 1 to 256 sources.",
-        ));
-    }
-    let mut sources = Vec::with_capacity(paths.len());
-    for path in paths {
-        sources.push(validate_library_path(path, origin)?);
-    }
-    Ok(sources)
-}
-
-fn validate_library_path(
-    path: &Path,
-    origin: LibrarySelectionOrigin,
-) -> Result<String, SidecarError> {
-    if !path.is_absolute() {
-        return Err(SidecarError::new(
-            "Library Import sources must use absolute paths.",
-        ));
-    }
-    let source = path
-        .to_str()
-        .ok_or_else(|| SidecarError::new("Library Import source paths must be valid Unicode."))?;
-    let source = validate_source_path(source)?;
-    let metadata = fs::symlink_metadata(path).map_err(|_| {
-        SidecarError::new("A Library Import source is missing or cannot be accessed.")
-    })?;
-    if is_reparse_point(&metadata) {
-        return Err(SidecarError::new(
-            "Library Import sources cannot be symlinks, junctions, or reparse points.",
-        ));
-    }
-    let is_file = metadata.file_type().is_file();
-    let is_dir = metadata.file_type().is_dir();
-    let valid = match origin {
-        LibrarySelectionOrigin::Files => is_file,
-        LibrarySelectionOrigin::Folder => is_dir,
-        LibrarySelectionOrigin::Drop => is_file || is_dir,
-    };
-    if !valid {
-        return Err(SidecarError::new(
-            "A Library Import source has an irregular file type.",
-        ));
-    }
-    Ok(source)
-}
-
-#[cfg(windows)]
-fn is_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
 }
 
 fn validate_import_sources(sources: &[String]) -> Result<Vec<String>, SidecarError> {
