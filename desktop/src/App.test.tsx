@@ -315,6 +315,17 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
   });
 
+  it("makes the Search route actionable without showing the migration placeholder", async () => {
+    renderApp("/search");
+
+    expect(await screen.findByRole("link", { name: /Text search/ })).toHaveAttribute("href", "/search/text");
+    expect(screen.getByRole("link", { name: /Image search/ })).toHaveAttribute("href", "/search/image");
+    expect(screen.getByRole("link", { name: /Find similar Assets/ })).toHaveAttribute("href", "/search/similar");
+    expect(screen.getByText("Only Indexed Assets participate in semantic retrieval.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Set up and index Assets" })).toHaveAttribute("href", "/setup");
+    expect(screen.queryByText("Search is being migrated")).not.toBeInTheDocument();
+  });
+
   it("shows a runtime-not-ready state on setup", async () => {
     renderApp("/setup");
 

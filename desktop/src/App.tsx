@@ -225,10 +225,32 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
   );
 }
 
-function SearchPage({ title, detail }: { title: string; detail: string }) {
+function SearchLandingPage() {
   return (
-    <Page title={title} eyebrow="Search">
-      <EmptyState title="Search is being migrated" detail={detail} />
+    <Page title="Search MemeSort" eyebrow="Search">
+      <section className="surface search-landing-intro">
+        <h2>Choose a Search Request</h2>
+        <p>Start with text, an image, or an Asset already in your Library.</p>
+      </section>
+      <section className="search-options" aria-label="Search options">
+        <Link className="search-option" to="/search/text">
+          <h2>Text search</h2>
+          <p>Describe a reaction, meme, or visual idea to find matching Assets.</p>
+        </Link>
+        <Link className="search-option" to="/search/image">
+          <h2>Image search</h2>
+          <p>Choose an image with the native dialog to find related Assets.</p>
+        </Link>
+        <Link className="search-option" to="/search/similar">
+          <h2>Find similar Assets</h2>
+          <p>Choose an Indexed Asset from your Library to retrieve related Assets.</p>
+        </Link>
+      </section>
+      <section className="surface search-landing-help">
+        <h2>No Indexed Assets yet?</h2>
+        <p>Only Indexed Assets participate in semantic retrieval.</p>
+        <p><Link to="/setup">Set up and index Assets</Link> to make them available for search.</p>
+      </section>
     </Page>
   );
 }
@@ -686,7 +708,7 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
     <Routes>
       <Route path="/" element={<Dashboard state={state} client={client} />} />
       <Route path="/setup" element={<SetupPage state={state} client={client} onStateChanged={onStateChanged} />} />
-      <Route path="/search" element={<SearchPage title="Search MemeSort" detail="Text, image, and similar-Asset retrieval will arrive as separate cancellable Search Request slices." />} />
+      <Route path="/search" element={<SearchLandingPage />} />
       <Route path="/search/text" element={<TextSearchPage client={client} />} />
       <Route path="/search/image" element={<ImageSearchPage client={client} />} />
       <Route path="/search/similar" element={<SimilarSearchPage client={client} />} />
