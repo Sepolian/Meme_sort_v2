@@ -792,6 +792,7 @@ class MultiSourceImportTests(unittest.TestCase):
             library_root = root / "library"
             self._write_image(source, (255, 0, 0))
             original_open = asset_catalog.Path.open
+            originals_root = (library_root / "originals").resolve()
 
             def open_with_unusable_originals(
                 path: Path,
@@ -799,7 +800,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 **kwargs: object,
             ) -> object:
                 if (
-                    path.parent == library_root / "originals"
+                    path.parent.resolve() == originals_root
                     and path.name.startswith(".library-location-check-")
                 ):
                     raise PermissionError("originals is not writable")

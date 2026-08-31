@@ -431,7 +431,7 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
         )
         literals = [(label, "{recipe_label}"), (str(recipe_id), "{recipe}")]
         literals.extend((asset_id, "{asset}") for asset_id in asset_ids)
-        literals.append((str(library_root), "{library_root}"))
+        literals.append((str(library_root.resolve()), "{library_root}"))
         literals.append((str(root / "source" / "reaction.png"), "{source_png}"))
         return literals
 

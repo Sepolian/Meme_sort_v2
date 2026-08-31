@@ -206,13 +206,21 @@ class ImportControllerTests(unittest.TestCase):
         )
 
     def test_second_start_is_rejected_while_paused(self) -> None:
+        ready_to_wait = threading.Event()
+        allow_wait = threading.Event()
+
         def runner(_root, _sources, wait, _progress):
+            ready_to_wait.set()
+            if not allow_wait.wait(timeout=3):
+                raise AssertionError("Timed out waiting to enter pause test")
             wait()
             return make_result()
 
         controller = ImportController(Path(tempfile.gettempdir()), runner)
         controller.start([Path("C:/Memes/paused.png")])
+        self.assertTrue(ready_to_wait.wait(timeout=3))
         controller.pause()
+        allow_wait.set()
         paused = self._wait_for_snapshot(
             controller,
             lambda snapshot: snapshot.paused,

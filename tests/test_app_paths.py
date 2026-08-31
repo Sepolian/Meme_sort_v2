@@ -79,7 +79,7 @@ class AppPathsDiscoveryTests(unittest.TestCase):
 
     def test_frozen_layout_matches_the_bundled_data_locations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            bundle_root = Path(temp_dir) / "_internal"
+            bundle_root = (Path(temp_dir) / "_internal").resolve()
             (bundle_root / "memesort_worker" / "web_static").mkdir(parents=True)
             (bundle_root / "runtime-manifest.json").write_text("{}", encoding="utf-8")
             exe_dir = Path(temp_dir)

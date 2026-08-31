@@ -296,38 +296,79 @@ class LlamaCppBackendTests(unittest.TestCase):
 
     def test_vulkan_health_check_validates_text_and_image_embeddings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            bundle = Path(temp_dir)
-            self._write_bundle(bundle)
+            portable_root = Path(temp_dir) / "MemeSortData"
+            manifest = load_runtime_manifest(portable_data_root=portable_root)
+            server = manifest.llama_server_path
+            main_model = manifest.main_model_path
+            projector = manifest.projector_path
+            main_payload = b"gguf-main"
+            projector_payload = b"gguf-mmproj"
+            for path, payload in (
+                (server, b"llama-server"),
+                (main_model, main_payload),
+                (projector, projector_payload),
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+
+            manifest = replace(
+                manifest,
+                model=replace(
+                    manifest.model,
+                    main=replace(
+                        manifest.model.main,
+                        size_bytes=len(main_payload),
+                    ),
+                    projector=replace(
+                        manifest.model.projector,
+                        size_bytes=len(projector_payload),
+                    ),
+                ),
+            )
             with patch(
-                "memesort_worker.llama_cpp_backend.discover_llama_server",
-                return_value=Path("llama-server.exe"),
+                "memesort_worker.runtime_service.load_runtime_manifest",
+                return_value=manifest,
             ):
                 with patch(
-                    "memesort_worker.llama_cpp_backend.probe_llama_devices",
-                    return_value="Vulkan0: Test GPU",
+                    "memesort_worker.llama_cpp_backend.discover_llama_server",
+                    return_value=server,
                 ):
                     with patch(
-                        "memesort_worker.runtime_service.probe_vulkan0",
-                        return_value=VulkanDeviceInfo(
-                            index=0,
-                            vendor_id=0x1002,
-                            vendor_name="amd",
-                            device_id=1,
-                            device_name="Test GPU",
-                        ),
+                        "memesort_worker.llama_cpp_backend.probe_llama_devices",
+                        return_value="Vulkan0: Test GPU",
                     ):
                         with patch(
-                            "memesort_worker.runtime_service.validate_runtime_activation"
+                            "memesort_worker.runtime_service.probe_vulkan0",
+                            return_value=VulkanDeviceInfo(
+                                index=0,
+                                vendor_id=0x1002,
+                                vendor_name="amd",
+                                device_id=1,
+                                device_name="Test GPU",
+                            ),
                         ):
                             with patch(
-                                "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
+                                "memesort_worker.runtime_service.validate_runtime_activation"
                             ):
-                                backend = Mock()
-                                backend.embed_text.return_value = np.ones(2048, dtype=np.float32)
-                                backend.embed_image_bytes.return_value = np.ones(2048, dtype=np.float32)
-                                result = run_runtime_health_check(
-                                    embedding_backend_factory=lambda: backend
-                                )
+                                with patch(
+                                    "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
+                                ) as verify_bundle:
+                                    backend = Mock()
+                                    backend.embed_text.return_value = np.ones(
+                                        2048, dtype=np.float32
+                                    )
+                                    backend.embed_image_bytes.return_value = np.ones(
+                                        2048, dtype=np.float32
+                                    )
+                                    result = run_runtime_health_check(
+                                        embedding_backend_factory=lambda: backend
+                                    )
+
+            verify_bundle.assert_called_once_with(
+                main_model,
+                projector,
+                manifest,
+            )
 
         self.assertTrue(result.smoke_test_ok)
         self.assertEqual("Vulkan0: Test GPU", result.gpu_name)

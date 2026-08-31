@@ -84,7 +84,9 @@ class SidecarEntryTests(unittest.TestCase):
                 host_factory=lambda _config: self.fail("activation must not start host"),
             )
             manifest = load_runtime_manifest(portable_data_root=portable_root / "MemeSortData")
-            activation_path = portable_root / "MemeSortData" / "runtime" / "active-runtime.json"
+            activation_path = (
+                portable_root / "MemeSortData" / "runtime" / "active-runtime.json"
+            ).resolve()
 
             self.assertEqual(0, result)
             self.assertEqual(f"{activation_path}\n", stdout.getvalue())

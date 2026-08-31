@@ -39,7 +39,7 @@ class RuntimeManifestTests(unittest.TestCase):
 
     def test_portable_data_root_rehomes_only_runtime_and_model_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            portable_data_root = Path(temp_dir) / "MemeSortData"
+            portable_data_root = (Path(temp_dir) / "MemeSortData").resolve()
             manifest = load_runtime_manifest(portable_data_root=portable_data_root)
 
             self.assertEqual(
