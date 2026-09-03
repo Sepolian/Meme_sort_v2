@@ -302,17 +302,48 @@ describe("App", () => {
 
   it.each([
     ["/", "Your library"],
+    ["/duplicates", "Duplicate assets"],
+    ["/settings", "Settings"],
     ["/setup", "Setup & runtime"],
     ["/search", "Search MemeSort"],
     ["/search/text", "Text search"],
     ["/search/image", "Image search"],
     ["/search/similar", "Find similar Assets"],
-    ["/duplicates", "Duplicate assets"],
     ["/status", "Application status"],
   ])("renders the %s route when it is opened directly", async (route, heading) => {
     renderApp(route);
 
     expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+  });
+
+  it("renders the Settings skeleton inside the final shell", async () => {
+    renderApp("/settings");
+
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Accepted Duplicate Pairs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Runtime" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Installation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Advanced Diagnostics" })).toBeInTheDocument();
+  });
+
+  it("keeps Library browsing inside the shell with toolbar, content, and inspector zones", async () => {
+    const { container } = renderApp();
+
+    expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
+    const shell = container.querySelector(".library-shell");
+    expect(shell).not.toBeNull();
+    expect(shell?.querySelector(".library-toolbar")).not.toBeNull();
+    expect(shell?.querySelector(".library-content")).not.toBeNull();
+    expect(shell?.querySelector(".library-body")).not.toBeNull();
+    // Existing browsing behavior still works inside the shell.
+    expect(await screen.findByText("Pending Asset")).toBeInTheDocument();
+  });
+
+  it("renders NotFoundPage for unknown routes", async () => {
+    renderApp("/no-such-surface");
+
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
   it("makes the Search route actionable without showing the migration placeholder", async () => {

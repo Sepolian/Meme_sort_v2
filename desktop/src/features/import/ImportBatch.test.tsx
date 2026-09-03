@@ -193,8 +193,8 @@ describe("application-level Import Batch observer", () => {
     const { invalidateSpy } = renderApp(client);
     await waitFor(() => expect(screen.getByText("Importing 0 of 0 supported files")).toBeInTheDocument(), { timeout: 6_000 });
 
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
-    expect(await screen.findByText("Runtime ready in this app session.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Duplicates" }));
+    expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
 
     const statusCallsBeforeFinish = getImportStatus.mock.calls.length;
     await waitFor(
@@ -249,8 +249,8 @@ describe("application-level Import Batch observer", () => {
     const assetsMock = client.getAssets as ReturnType<typeof vi.fn>;
     expect(assetsMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
-    expect(await screen.findByText("Runtime ready in this app session.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Duplicates" }));
+    expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
 
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
@@ -627,8 +627,8 @@ describe("global Import Batch result notice", () => {
     renderApp(createClient());
     await screen.findByRole("alert", { name: "Import Batch result" });
 
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
-    expect(await screen.findByText("Runtime ready in this app session.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Duplicates" }));
+    expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Import Batch finished with errors" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("link", { name: "View Import Failure details in the Library" }));

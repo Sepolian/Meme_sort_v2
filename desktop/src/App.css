@@ -49,7 +49,16 @@ button:focus-visible, a:focus-visible {
 .nav-link:hover, .nav-link-active { background: var(--surface-raised); color: var(--text); }
 .nav-link-active { box-shadow: inset 3px 0 var(--accent); }
 .sidebar-footer { display: grid; gap: 4px; margin-top: auto; }
+.sidebar-footer nav { display: grid; gap: 4px; }
 .text-button { padding: 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; text-align: left; }
+.library-shell { display: grid; gap: 16px; min-width: 0; }
+.library-toolbar { min-width: 0; }
+.library-toolbar .metric-grid { margin-bottom: 0; }
+.library-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: start; }
+.library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
+.library-content { min-width: 0; min-height: 0; overflow-y: auto; }
+.library-inspector { min-width: 0; border-left: 1px solid var(--border); padding-left: 16px; }
+.settings-section { margin-bottom: 16px; }
 .text-button:hover { color: var(--text); }
 
 .workspace { min-width: 0; }
@@ -183,10 +192,12 @@ p { color: var(--muted); line-height: 1.6; }
   .sidebar { position: sticky; z-index: 2; top: 0; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
   .sidebar nav { display: flex; gap: 2px; }
   .nav-link { padding: 8px 10px; white-space: nowrap; }
-  .sidebar-footer { display: flex; margin: 0 0 0 auto; }
+  .sidebar-footer { display: flex; align-items: center; margin: 0 0 0 auto; }
   .sidebar-footer .text-button { white-space: nowrap; }
   .brand { padding: 0; }
-  .brand > span:last-child, .sidebar-footer { display: none; }
+  .brand > span:last-child, .sidebar-footer .text-button { display: none; }
+  .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr); }
+  .library-inspector { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 16px; }
   .topbar { min-height: 52px; padding: 0 18px; }
   .topbar-detail { display: none; }
   .page, .state-panel { padding: 32px 18px; }

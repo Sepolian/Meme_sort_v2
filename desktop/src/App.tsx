@@ -7,6 +7,8 @@ import type { AppState, DuplicatePair, RuntimeHealthResult, SearchAsset } from "
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { LibraryShell } from "./features/library/LibraryShell";
+import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { useImportBatch } from "./features/import/ImportBatchContext";
@@ -24,13 +26,12 @@ interface PageProps {
   children: ReactNode;
 }
 
-const navigation = [
+const primaryNavigation = [
   { to: "/", label: "Library", end: true },
-  { to: "/setup", label: "Setup" },
-  { to: "/search", label: "Search" },
   { to: "/duplicates", label: "Duplicates" },
-  { to: "/status", label: "Status" },
 ];
+
+const settingsNavigation = [{ to: "/settings", label: "Settings" }];
 
 function Page({ title, eyebrow, children }: PageProps) {
   return (
@@ -53,24 +54,38 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function Dashboard({ state, client }: { state: AppState; client: MemeSortClient }) {
+function LibraryPage({ state, client }: { state: AppState; client: MemeSortClient }) {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
 
   return (
     <Page title="Your library" eyebrow="MemeSort desktop">
-      <section className="metric-grid" aria-label="Library summary">
-        <Metric label="Assets" value={state.library_status.total_assets} />
-        <Metric label="Pending jobs" value={pendingJobs} />
-        <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
-        <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
-      </section>
-      <AssetsWorkspace
-        client={client}
-        selectedAssetId={selectedAssetId}
-        onSelectAsset={setSelectedAssetId}
-        onCloseDetail={() => setSelectedAssetId(null)}
+      <LibraryShell
+        toolbar={
+          <section className="metric-grid" aria-label="Library summary">
+            <Metric label="Assets" value={state.library_status.total_assets} />
+            <Metric label="Pending jobs" value={pendingJobs} />
+            <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
+            <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
+          </section>
+        }
+        content={
+          <AssetsWorkspace
+            client={client}
+            selectedAssetId={selectedAssetId}
+            onSelectAsset={setSelectedAssetId}
+            onCloseDetail={() => setSelectedAssetId(null)}
+          />
+        }
       />
+    </Page>
+  );
+}
+
+function SettingsRoute() {
+  return (
+    <Page title="Settings" eyebrow="Configuration">
+      <SettingsPage />
     </Page>
   );
 }
@@ -706,13 +721,14 @@ function NotFoundPage() {
 function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   return (
     <Routes>
-      <Route path="/" element={<Dashboard state={state} client={client} />} />
+      <Route path="/" element={<LibraryPage state={state} client={client} />} />
+      <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
+      <Route path="/settings" element={<SettingsRoute />} />
       <Route path="/setup" element={<SetupPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="/search" element={<SearchLandingPage />} />
       <Route path="/search/text" element={<TextSearchPage client={client} />} />
       <Route path="/search/image" element={<ImageSearchPage client={client} />} />
       <Route path="/search/similar" element={<SimilarSearchPage client={client} />} />
-      <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
       <Route path="/status" element={<StatusPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
@@ -740,14 +756,21 @@ export function App({ client = tauriClient }: AppProps) {
             <span className="brand-mark">M</span>
             <span>MemeSort</span>
           </Link>
-          <nav>
-            {navigation.map(({ to, label, end }) => (
+          <nav aria-label="Primary">
+            {primaryNavigation.map(({ to, label, end }) => (
               <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
                 {label}
               </NavLink>
             ))}
           </nav>
           <div className="sidebar-footer">
+            <nav aria-label="Settings">
+              {settingsNavigation.map(({ to, label }) => (
+                <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
             <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
             <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
               Use {theme === "dark" ? "light" : "dark"} theme
