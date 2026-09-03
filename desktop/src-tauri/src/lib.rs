@@ -62,6 +62,8 @@ pub fn run() {
             sidecar::retry_failed_jobs,
             sidecar::get_pending_jobs,
             sidecar::delete_pending_jobs,
+            sidecar::accept_duplicate_pair,
+            sidecar::clear_accepted_pairs,
             sidecar::reveal_asset,
             sidecar::open_log_directory,
             sidecar::copy_asset_to_clipboard,

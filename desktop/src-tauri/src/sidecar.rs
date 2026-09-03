@@ -471,6 +471,35 @@ impl SidecarSession {
         )
     }
 
+    fn accept_duplicate_pair_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_a_id: &str,
+        asset_b_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::AcceptDuplicatePair,
+            &AcceptDuplicatePairPayload {
+                asset_a_id: validate_asset_id(asset_a_id)?,
+                asset_b_id: validate_asset_id(asset_b_id)?,
+            },
+        )
+    }
+
+    fn clear_accepted_pairs_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ClearAcceptedPairs,
+            &EmptyPayload {},
+        )
+    }
+
     fn resolve_asset_reveal_target_for_connection(
         origin: &str,
         session_cookie: &str,
@@ -759,6 +788,8 @@ enum MutationRoute {
     RunRuntimeHealthCheck,
     RetryFailedJobs,
     DeletePendingJobs,
+    AcceptDuplicatePair,
+    ClearAcceptedPairs,
     ResolveAssetRevealTarget,
     ResolveLogDirectory,
 }
@@ -780,6 +811,8 @@ impl MutationRoute {
             Self::RunRuntimeHealthCheck => "/api/health",
             Self::RetryFailedJobs => "/api/retry-failed-jobs",
             Self::DeletePendingJobs => "/api/pending-jobs/delete",
+            Self::AcceptDuplicatePair => "/api/accept-duplicate-pair",
+            Self::ClearAcceptedPairs => "/api/clear-accepted-pairs",
             Self::ResolveAssetRevealTarget => "/api/resolve-asset-reveal-target",
             Self::ResolveLogDirectory => "/api/resolve-log-directory",
         }
@@ -850,6 +883,12 @@ struct SearchImagePayload {
 #[derive(Serialize)]
 struct PendingJobIdsPayload {
     job_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct AcceptDuplicatePairPayload {
+    asset_a_id: String,
+    asset_b_id: String,
 }
 
 #[derive(Serialize)]
@@ -1197,6 +1236,34 @@ pub fn delete_pending_jobs(
 ) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::delete_pending_jobs_for_connection(origin, session_cookie, &job_ids)
+    })
+}
+
+/// Persist one Keep Both decision as an unordered Accepted Duplicate Pair.
+/// The WebView supplies Asset IDs only; Rust validates both IDs before
+/// connecting and forwards the canonical body to the fixed route.
+#[tauri::command]
+pub fn accept_duplicate_pair(
+    app: AppHandle,
+    asset_a_id: String,
+    asset_b_id: String,
+) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::accept_duplicate_pair_for_connection(
+            origin,
+            session_cookie,
+            &asset_a_id,
+            &asset_b_id,
+        )
+    })
+}
+
+/// Clear all Accepted Duplicate Pairs without deleting Assets.
+/// Forwards only to the fixed clear route with an empty body.
+#[tauri::command]
+pub fn clear_accepted_pairs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::clear_accepted_pairs_for_connection(origin, session_cookie)
     })
 }
 
@@ -2459,6 +2526,160 @@ mod tests {
         )
         .expect("pending delete should succeed");
         server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn forwards_accepted_pair_mutations_only_to_fixed_routes() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut accept_stream, _) = listener.accept().expect("accept request should connect");
+            let mut accept_request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = accept_stream
+                    .read(&mut chunk)
+                    .expect("accept request should read");
+                accept_request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = accept_request
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers = std::str::from_utf8(&accept_request[..header_end])
+                    .expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("accept request should include a body length");
+                if accept_request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let accept_request =
+                std::str::from_utf8(&accept_request).expect("request must be UTF-8");
+            assert!(accept_request.starts_with("POST /api/accept-duplicate-pair HTTP/1.1"));
+            assert!(accept_request.contains("Cookie: memesort_session=test-token"));
+            assert!(
+                accept_request.contains("\"asset_a_id\":\"123e4567-e89b-12d3-a456-426614174000\"")
+            );
+            assert!(
+                accept_request.contains("\"asset_b_id\":\"123e4567-e89b-12d3-a456-426614174001\"")
+            );
+            assert!(!accept_request.contains("asset_id\""));
+            accept_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"already_accepted\":false}")
+                .expect("accept response should write");
+            drop(accept_stream);
+
+            let (mut clear_stream, _) = listener.accept().expect("clear request should connect");
+            let mut clear_request = Vec::new();
+            loop {
+                let mut chunk = [0_u8; 1024];
+                let size = clear_stream
+                    .read(&mut chunk)
+                    .expect("clear request should read");
+                clear_request.extend_from_slice(&chunk[..size]);
+                let Some(header_end) = clear_request
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers = std::str::from_utf8(&clear_request[..header_end])
+                    .expect("headers must be UTF-8");
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .expect("clear request should include a body length");
+                if clear_request.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let clear_request =
+                std::str::from_utf8(&clear_request).expect("request must be UTF-8");
+            assert!(clear_request.starts_with("POST /api/clear-accepted-pairs HTTP/1.1"));
+            assert!(clear_request.contains("Cookie: memesort_session=test-token"));
+            assert!(clear_request.contains("{}"));
+            assert!(!clear_request.contains("asset"));
+            clear_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"cleared_pairs\":1}")
+                .expect("clear response should write");
+        });
+        let origin = format!("http://127.0.0.1:{port}");
+
+        let accepted = SidecarSession::accept_duplicate_pair_for_connection(
+            &origin,
+            "memesort_session=test-token",
+            "123e4567-e89b-12d3-a456-426614174000",
+            "123e4567-e89b-12d3-a456-426614174001",
+        )
+        .expect("accept should succeed");
+        assert_eq!(accepted["already_accepted"], false);
+        let cleared = SidecarSession::clear_accepted_pairs_for_connection(
+            &origin,
+            "memesort_session=test-token",
+        )
+        .expect("clear should succeed");
+        assert_eq!(cleared["cleared_pairs"], 1);
+        server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn rejects_malformed_accepted_pair_ids_before_connecting() {
+        // Port 1 is unconnectable in tests; a validation error (not a
+        // connection error) proves IDs are checked before any connection.
+        let unconnectable = "http://127.0.0.1:1";
+        let valid_a = "123e4567-e89b-12d3-a456-426614174000";
+        let valid_b = "123e4567-e89b-12d3-a456-426614174001";
+        for (asset_a_id, asset_b_id) in [
+            ("", valid_b),
+            (valid_a, ""),
+            ("not-a-uuid", valid_b),
+            (valid_a, "../library.sqlite"),
+            ("123e4567-e89b-12d3-a456-426614174000?x=1", valid_b),
+            (valid_a, "123e4567ee9b12d3a456426614174000abcd"),
+        ] {
+            let error = SidecarSession::accept_duplicate_pair_for_connection(
+                unconnectable,
+                "memesort_session=test-token",
+                asset_a_id,
+                asset_b_id,
+            )
+            .expect_err("malformed pair IDs must be rejected before connecting");
+            assert!(
+                error.to_string().contains("Invalid MemeSort Asset identifier"),
+                "unexpected error for ({asset_a_id}, {asset_b_id}): {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepted_pair_bridge_uses_only_fixed_routes_and_registered_commands() {
+        assert_eq!(
+            MutationRoute::AcceptDuplicatePair.path(),
+            "/api/accept-duplicate-pair"
+        );
+        assert_eq!(
+            MutationRoute::ClearAcceptedPairs.path(),
+            "/api/clear-accepted-pairs"
+        );
+        let lib_rs = std::fs::read_to_string(format!(
+            "{}/src/lib.rs",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("Tauri builder should be readable");
+        assert!(
+            lib_rs.contains("sidecar::accept_duplicate_pair"),
+            "accept_duplicate_pair must be registered in the Tauri builder"
+        );
+        assert!(
+            lib_rs.contains("sidecar::clear_accepted_pairs"),
+            "clear_accepted_pairs must be registered in the Tauri builder"
+        );
     }
 
     #[test]
