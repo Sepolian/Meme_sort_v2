@@ -8,6 +8,7 @@ import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
 import { LibraryShell } from "./features/library/LibraryShell";
+import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
@@ -55,7 +56,10 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function LibraryPage({ state, client }: { state: AppState; client: MemeSortClient }) {
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  // Ticket 07: inspector target is URL-backed (`asset=<asset-id>`) so the
+  // waterfall stays mounted, back/forward restores it, and closing removes
+  // only `asset` while preserving q/sort/media/status.
+  const { assetId: selectedAssetId, setAssetId, clearAssetId } = useLibraryUrlState();
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
 
   return (
@@ -73,8 +77,8 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
           <AssetsWorkspace
             client={client}
             selectedAssetId={selectedAssetId}
-            onSelectAsset={setSelectedAssetId}
-            onCloseDetail={() => setSelectedAssetId(null)}
+            onSelectAsset={setAssetId}
+            onCloseDetail={clearAssetId}
           />
         }
       />
