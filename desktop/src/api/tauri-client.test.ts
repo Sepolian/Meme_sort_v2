@@ -183,4 +183,92 @@ describe("createMemeSortClient", () => {
 
     expect(invokeCommand).toHaveBeenCalledWith("open_log_directory");
   });
+
+  it("copies one Asset to the clipboard through the fixed native command", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue(undefined);
+    const client = createMemeSortClient(invokeCommand);
+    const assetId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.copyAssetToClipboard(assetId);
+
+    expect(invokeCommand).toHaveBeenCalledWith("copy_asset_to_clipboard", { assetId });
+  });
+
+  it("copies one original Library Copy file reference through the fixed native command", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue(undefined);
+    const client = createMemeSortClient(invokeCommand);
+    const assetId = "123e4567-e89b-12d3-a456-426614174000";
+
+    await client.copyOriginalFile(assetId);
+
+    expect(invokeCommand).toHaveBeenCalledWith("copy_original_file", { assetId });
+  });
+
+  it("copies many original Library Copy file references as one multi-file payload", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue(undefined);
+    const client = createMemeSortClient(invokeCommand);
+    const assetIds = [
+      "123e4567-e89b-12d3-a456-426614174000",
+      "123e4567-e89b-12d3-a456-426614174001",
+    ];
+
+    await client.copyOriginalFiles(assetIds);
+
+    expect(invokeCommand).toHaveBeenCalledWith("copy_original_files", { assetIds });
+  });
+
+  it("persists one Accepted Duplicate Pair through the fixed bridge command", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({
+      library_root: "C:/Library",
+      asset_a_id: "123e4567-e89b-12d3-a456-426614174000",
+      asset_b_id: "123e4567-e89b-12d3-a456-426614174001",
+      already_accepted: false,
+    });
+    const client = createMemeSortClient(invokeCommand);
+    const assetAId = "123e4567-e89b-12d3-a456-426614174000";
+    const assetBId = "123e4567-e89b-12d3-a456-426614174001";
+
+    const result = await client.acceptDuplicatePair(assetAId, assetBId);
+
+    expect(invokeCommand).toHaveBeenCalledWith("accept_duplicate_pair", { assetAId, assetBId });
+    expect(result).toEqual({
+      library_root: "C:/Library",
+      asset_a_id: assetAId,
+      asset_b_id: assetBId,
+      already_accepted: false,
+    });
+  });
+
+  it("clears Accepted Duplicate Pairs through the fixed bridge command", async () => {
+    const invokeCommand = vi.fn().mockResolvedValue({ library_root: "C:/Library", cleared_pairs: 2 });
+    const client = createMemeSortClient(invokeCommand);
+
+    const result = await client.clearAcceptedPairs();
+
+    expect(invokeCommand).toHaveBeenCalledWith("clear_accepted_pairs");
+    expect(result).toEqual({ library_root: "C:/Library", cleared_pairs: 2 });
+  });
+
+  it("rejects clipboard and pair errors through the existing Tauri error path", async () => {
+    const failure = { error: "SidecarError", detail: "Could not access the Asset Library Copy.", retryable: false };
+    const invokeCommand = vi.fn().mockRejectedValue(failure);
+    const client = createMemeSortClient(invokeCommand);
+
+    await expect(
+      client.copyAssetToClipboard("123e4567-e89b-12d3-a456-426614174000"),
+    ).rejects.toEqual(failure);
+    await expect(
+      client.copyOriginalFile("123e4567-e89b-12d3-a456-426614174000"),
+    ).rejects.toEqual(failure);
+    await expect(
+      client.copyOriginalFiles(["123e4567-e89b-12d3-a456-426614174000"]),
+    ).rejects.toEqual(failure);
+    await expect(
+      client.acceptDuplicatePair(
+        "123e4567-e89b-12d3-a456-426614174000",
+        "123e4567-e89b-12d3-a456-426614174001",
+      ),
+    ).rejects.toEqual(failure);
+    await expect(client.clearAcceptedPairs()).rejects.toEqual(failure);
+  });
 });

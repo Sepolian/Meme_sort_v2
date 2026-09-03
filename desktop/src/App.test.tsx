@@ -232,6 +232,16 @@ const client = {
   })),
   deletePendingJobs: vi.fn(async (jobIds: string[]) => ({ requested_job_ids: jobIds, deleted_job_ids: jobIds, skipped_job_ids: [] })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
+  copyAssetToClipboard: vi.fn(async () => undefined),
+  copyOriginalFile: vi.fn(async () => undefined),
+  copyOriginalFiles: vi.fn(async () => undefined),
+  acceptDuplicatePair: vi.fn(async (assetAId: string, assetBId: string) => ({
+    library_root: "C:/Library",
+    asset_a_id: assetAId,
+    asset_b_id: assetBId,
+    already_accepted: false,
+  })),
+  clearAcceptedPairs: vi.fn(async () => ({ library_root: "C:/Library", cleared_pairs: 0 })),
 };
 
 describe("App", () => {

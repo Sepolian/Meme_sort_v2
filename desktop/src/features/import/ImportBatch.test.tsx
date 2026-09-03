@@ -100,6 +100,11 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
     getPendingJobs: unsupported,
     deletePendingJobs: unsupported,
     cancelSearch: unsupported,
+    copyAssetToClipboard: unsupported,
+    copyOriginalFile: unsupported,
+    copyOriginalFiles: unsupported,
+    acceptDuplicatePair: unsupported,
+    clearAcceptedPairs: unsupported,
     ...overrides,
   } as MemeSortClient;
 }

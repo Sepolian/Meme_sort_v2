@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
+import type { AcceptDuplicatePairResult, AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, ClearAcceptedPairsResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -34,6 +34,11 @@ export interface MemeSortClient {
   getPendingJobs(): Promise<PendingJobsResult>;
   deletePendingJobs(jobIds: string[]): Promise<DeletePendingJobsResult>;
   cancelSearch(requestId: string): Promise<{ request_id: string; cancelled: boolean; was_active: boolean }>;
+  copyAssetToClipboard(assetId: string): Promise<void>;
+  copyOriginalFile(assetId: string): Promise<void>;
+  copyOriginalFiles(assetIds: string[]): Promise<void>;
+  acceptDuplicatePair(assetAId: string, assetBId: string): Promise<AcceptDuplicatePairResult>;
+  clearAcceptedPairs(): Promise<ClearAcceptedPairsResult>;
 }
 
 export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClient {
@@ -68,6 +73,12 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     getPendingJobs: () => invokeCommand<PendingJobsResult>("get_pending_jobs"),
     deletePendingJobs: (jobIds) => invokeCommand<DeletePendingJobsResult>("delete_pending_jobs", { jobIds }),
     cancelSearch: (requestId) => invokeCommand("cancel_search", { requestId }),
+    copyAssetToClipboard: (assetId) => invokeCommand<void>("copy_asset_to_clipboard", { assetId }),
+    copyOriginalFile: (assetId) => invokeCommand<void>("copy_original_file", { assetId }),
+    copyOriginalFiles: (assetIds) => invokeCommand<void>("copy_original_files", { assetIds }),
+    acceptDuplicatePair: (assetAId, assetBId) =>
+      invokeCommand<AcceptDuplicatePairResult>("accept_duplicate_pair", { assetAId, assetBId }),
+    clearAcceptedPairs: () => invokeCommand<ClearAcceptedPairsResult>("clear_accepted_pairs"),
   };
 }
 

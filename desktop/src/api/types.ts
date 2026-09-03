@@ -230,6 +230,18 @@ export interface DuplicatePair {
   asset_b_matched_source_ref: string | null;
 }
 
+export interface AcceptDuplicatePairResult {
+  library_root: string;
+  asset_a_id: string;
+  asset_b_id: string;
+  already_accepted: boolean;
+}
+
+export interface ClearAcceptedPairsResult {
+  library_root: string;
+  cleared_pairs: number;
+}
+
 export interface SearchAsset {
   asset_id: string;
   library_url: string;
