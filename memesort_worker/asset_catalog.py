@@ -247,6 +247,26 @@ class DeletePendingJobsResult:
         return asdict(self)
 
 
+@dataclass
+class AcceptDuplicatePairResult:
+    library_root: str
+    asset_a_id: str
+    asset_b_id: str
+    already_accepted: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
+class ClearAcceptedPairsResult:
+    library_root: str
+    cleared_pairs: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
 # ---------------------------------------------------------------------------
 # Database helpers (shared with indexing_pipeline via explicit interface)
 # ---------------------------------------------------------------------------
@@ -496,6 +516,17 @@ def create_schema(conn: sqlite3.Connection) -> None:
             value_json TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS accepted_duplicate_pair (
+            asset_a_id TEXT NOT NULL REFERENCES asset(id) ON DELETE CASCADE,
+            asset_b_id TEXT NOT NULL REFERENCES asset(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (asset_a_id, asset_b_id),
+            CHECK (asset_a_id < asset_b_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_accepted_duplicate_pair_asset_b
+        ON accepted_duplicate_pair (asset_b_id);
 
         PRAGMA user_version = 1;
         """
@@ -2433,6 +2464,96 @@ def delete_pending_jobs(
             requested_job_ids=unique_job_ids,
             deleted_job_ids=deleted_job_ids,
             skipped_job_ids=[job_id for job_id in unique_job_ids if job_id not in deleted_set],
+        )
+    finally:
+        conn.close()
+
+
+def canonical_accepted_pair_ids(
+    asset_a_id: object,
+    asset_b_id: object,
+) -> tuple[str, str]:
+    """Canonicalize an unordered Accepted Duplicate Pair.
+
+    Both IDs must be non-empty strings and must differ. The returned tuple
+    is sorted so ``(a, b)`` and ``(b, a)`` map to the same stored row,
+    matching the ``CHECK (asset_a_id < asset_b_id)`` database constraint.
+    """
+    normalized: list[str] = []
+    for raw_id in (asset_a_id, asset_b_id):
+        if not isinstance(raw_id, str):
+            raise ValueError(f"Invalid asset id: {raw_id!r}")
+        stripped = raw_id.strip()
+        if not stripped:
+            raise ValueError(f"Invalid asset id: {raw_id!r}")
+        normalized.append(stripped)
+    if normalized[0] == normalized[1]:
+        raise ValueError(
+            f"Cannot accept a duplicate pair with the same asset id: {normalized[0]}"
+        )
+    return (normalized[0], normalized[1]) if normalized[0] < normalized[1] else (normalized[1], normalized[0])
+
+
+def fetch_accepted_pair_set(conn: sqlite3.Connection) -> set[tuple[str, str]]:
+    """Return all canonical Accepted Duplicate Pairs visible on ``conn``."""
+    rows = conn.execute(
+        "SELECT asset_a_id, asset_b_id FROM accepted_duplicate_pair"
+    ).fetchall()
+    return {(str(row["asset_a_id"]), str(row["asset_b_id"])) for row in rows}
+
+
+def accept_duplicate_pair(
+    library_root: Path | str,
+    asset_a_id: object,
+    asset_b_id: object,
+) -> AcceptDuplicatePairResult:
+    """Persist a Keep Both decision idempotently.
+
+    The pair is canonicalized so both orderings map to one unique row.
+    Unknown Asset IDs raise ``ValueError`` using the repository's normal
+    error shape.
+    """
+    canonical_a_id, canonical_b_id = canonical_accepted_pair_ids(asset_a_id, asset_b_id)
+    init_result = initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = connect(database_path(library_root_path))
+    try:
+        with conn:
+            require_existing_asset_ids(conn, [canonical_a_id, canonical_b_id])
+            cursor = conn.execute(
+                """
+                INSERT OR IGNORE INTO accepted_duplicate_pair (
+                    asset_a_id,
+                    asset_b_id,
+                    created_at
+                )
+                VALUES (?, ?, ?)
+                """,
+                (canonical_a_id, canonical_b_id, utc_now()),
+            )
+            already_accepted = cursor.rowcount == 0
+        return AcceptDuplicatePairResult(
+            library_root=str(library_root_path),
+            asset_a_id=canonical_a_id,
+            asset_b_id=canonical_b_id,
+            already_accepted=already_accepted,
+        )
+    finally:
+        conn.close()
+
+
+def clear_accepted_pairs(library_root: Path | str) -> ClearAcceptedPairsResult:
+    """Clear all Keep Both decisions without touching Assets or artifacts."""
+    init_result = initialize_library(library_root)
+    library_root_path = Path(init_result.library_root)
+    conn = connect(database_path(library_root_path))
+    try:
+        with conn:
+            cursor = conn.execute("DELETE FROM accepted_duplicate_pair")
+            cleared = int(cursor.rowcount)
+        return ClearAcceptedPairsResult(
+            library_root=str(library_root_path),
+            cleared_pairs=cleared,
         )
     finally:
         conn.close()

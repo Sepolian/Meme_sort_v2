@@ -35,6 +35,8 @@ AssetMutationResult = asset_catalog.AssetMutationResult
 BatchAssetActionResult = asset_catalog.BatchAssetActionResult
 RetryJobsResult = asset_catalog.RetryJobsResult
 DeletePendingJobsResult = asset_catalog.DeletePendingJobsResult
+AcceptDuplicatePairResult = asset_catalog.AcceptDuplicatePairResult
+ClearAcceptedPairsResult = asset_catalog.ClearAcceptedPairsResult
 
 
 def __getattr__(name: str) -> object:
@@ -298,6 +300,20 @@ def delete_pending_jobs(library_root: Path | str, job_ids: list[str]) -> DeleteP
     that becomes running after the user selected it is reported as skipped.
     """
     return asset_catalog.delete_pending_jobs(library_root, job_ids)
+
+
+def accept_duplicate_pair(
+    library_root: Path | str,
+    asset_a_id: object,
+    asset_b_id: object,
+) -> AcceptDuplicatePairResult:
+    """Persist a Keep Both decision as an Accepted Duplicate Pair."""
+    return asset_catalog.accept_duplicate_pair(library_root, asset_a_id, asset_b_id)
+
+
+def clear_accepted_pairs(library_root: Path | str) -> ClearAcceptedPairsResult:
+    """Clear all Accepted Duplicate Pairs without deleting Assets."""
+    return asset_catalog.clear_accepted_pairs(library_root)
 
 
 def list_assets(library_root: Path | str) -> AssetListResult:

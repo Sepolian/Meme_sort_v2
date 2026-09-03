@@ -234,12 +234,23 @@ class LibraryStore:
             """,
             (self.active_recipe.recipe_id,),
         ).fetchall()
+        pairs = scan_duplicate_vector_rows(vector_rows, threshold)
+        accepted = asset_catalog.fetch_accepted_pair_set(self._conn)
+        if accepted:
+            filtered: list[dict[str, object]] = []
+            for pair in pairs:
+                left = str(pair["asset_a_id"])
+                right = str(pair["asset_b_id"])
+                key = (left, right) if left < right else (right, left)
+                if key not in accepted:
+                    filtered.append(pair)
+            pairs = filtered
         return library.DuplicateScanResult(
             library_root=str(self.library_root_path),
             active_recipe_id=self.active_recipe.recipe_id,
             active_recipe_label=self.active_recipe.label,
             threshold=threshold,
-            pairs=scan_duplicate_vector_rows(vector_rows, threshold),
+            pairs=pairs,
         )
 
     def get_library_status(

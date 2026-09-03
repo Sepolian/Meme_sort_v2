@@ -22,6 +22,8 @@ from .app_commands import (
     start_import_batch,
 )
 from .asset_catalog import (
+    accept_duplicate_pair,
+    clear_accepted_pairs,
     delete_asset,
     delete_assets,
     delete_pending_jobs,
@@ -524,6 +526,25 @@ def create_app(
                 threshold = float(query.get("threshold", ["0.92"])[0])
                 with LibraryStore(library_root_path) as store:
                     result = store.scan_duplicate_assets(threshold)
+                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/accept-duplicate-pair" and method == "POST":
+                payload = _read_json_body(environ, max_body_bytes)
+                asset_a_id = payload.get("asset_a_id")
+                asset_b_id = payload.get("asset_b_id")
+                if asset_a_id is None or asset_b_id is None:
+                    raise ValueError(
+                        "The accept-duplicate-pair request must include "
+                        "asset_a_id and asset_b_id."
+                    )
+                result = accept_duplicate_pair(
+                    library_root_path,
+                    asset_a_id,
+                    asset_b_id,
+                )
+                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
+            elif path == "/api/clear-accepted-pairs" and method == "POST":
+                _read_json_body(environ, max_body_bytes)
+                result = clear_accepted_pairs(library_root_path)
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path.startswith("/media/") and method == "GET":
                 media_path = path.removeprefix("/media/")
