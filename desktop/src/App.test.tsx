@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -509,10 +509,11 @@ describe("App", () => {
     expect(await screen.findByText("Import started in the background.")).toBeInTheDocument();
   });
 
-  it("chooses Library files and starts the Import Batch from the selection ID", async () => {
+  it("chooses Library files from the top-bar Import menu and starts the Import Batch from the selection ID", async () => {
     renderApp();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose files" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Choose Files" }));
 
     expect(await screen.findByText(/Import Batch started for 2 files/)).toBeInTheDocument();
     expect(client.chooseLibraryFiles).toHaveBeenCalledTimes(1);
@@ -524,16 +525,47 @@ describe("App", () => {
     );
   });
 
-  it("chooses a Library folder and starts the Import Batch from the selection ID", async () => {
+  it("chooses a Library folder from the top-bar Import menu and starts the Import Batch from the selection ID", async () => {
     renderApp();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose folder" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Choose Folder" }));
 
     expect(await screen.findByText(/Import Batch started for 1 folder/)).toBeInTheDocument();
     expect(client.chooseLibraryFolder).toHaveBeenCalledTimes(1);
     expect(client.startLibraryImport).toHaveBeenCalledWith(
       "123e4567-e89b-12d3-a456-426614174011",
     );
+  });
+
+  it("treats top-bar picker cancellation as a no-op without mutation or error toast", async () => {
+    const cancelled = {
+      ...client,
+      chooseLibraryFiles: vi.fn(async () => null),
+      startLibraryImport: vi.fn(async () => {
+        throw new Error("must not start after cancellation");
+      }),
+    };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <App client={cancelled} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Choose Files" }));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(cancelled.chooseLibraryFiles).toHaveBeenCalledTimes(1);
+    expect(cancelled.startLibraryImport).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("closes the keyboard help dialog with Escape", async () => {

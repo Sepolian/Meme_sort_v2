@@ -422,7 +422,7 @@ describe("Import Batch controls", () => {
     await waitFor(() => expect(client.pauseImport).toHaveBeenCalledTimes(1));
   });
 
-  it("disables new import controls while a batch is active or paused", async () => {
+  it("disables the top-bar Import entry while a batch is active or paused", async () => {
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
       status: "paused",
@@ -432,11 +432,10 @@ describe("Import Batch controls", () => {
     });
     renderApp(createClient());
 
-    expect(await screen.findByRole("button", { name: "Choose files" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Choose folder" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Import" })).toBeDisabled();
   });
 
-  it("enables new import controls again once no batch is running", async () => {
+  it("enables the top-bar Import entry again once no batch is running", async () => {
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
       status: "completed",
@@ -444,8 +443,10 @@ describe("Import Batch controls", () => {
     });
     renderApp(createClient());
 
-    expect(await screen.findByRole("button", { name: "Choose files" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Choose folder" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Import" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(await screen.findByRole("menuitem", { name: "Choose Files" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Choose Folder" })).toBeEnabled();
   });
 });
 

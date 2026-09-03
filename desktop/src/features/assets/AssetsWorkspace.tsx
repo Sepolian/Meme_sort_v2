@@ -8,7 +8,6 @@ import {
   type NativeDragSubscribe,
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
-import { importWorkIsActive } from "../import/import-status";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 
@@ -160,12 +159,10 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
   const startBatch = importBatch.startBatch;
-  const importWorkActive = importWorkIsActive(importBatch.snapshot);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
-  const [libraryBusy, setLibraryBusy] = useState<"files" | "folder" | null>(null);
   const [dragPreview, setDragPreview] = useState<{ itemCount: number } | null>(null);
   const wallRef = useRef<HTMLDivElement | null>(null);
   const startedDropIdRef = useRef<string | null>(null);
@@ -250,27 +247,9 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   };
   const requestDeleteAsset = (assetId: string) => setConfirmation({ title: "Delete this Asset?", detail: "This deletes its Library Copy, Source Records, and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete Asset", request: { kind: "delete-asset", assetId } });
   const requestRemoveSource = (assetId: string, sourcePath: string) => setConfirmation({ title: "Remove this Source Record?", detail: "If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts.", confirmLabel: "Remove Source Record", request: { kind: "remove-source", assetId, sourcePath } });
-  const startLibrarySelection = async (kind: "files" | "folder") => {
-    setLibraryBusy(kind);
-    setLibraryNotice(null);
-    try {
-      const selection = kind === "files" ? await client.chooseLibraryFiles() : await client.chooseLibraryFolder();
-      if (!selection) return;
-      const label = kind === "files" ? "file" : "folder";
-      const count = selection.count;
-      setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${count} ${label}${count === 1 ? "" : "s"}.` });
-      await startBatch(() => client.startLibraryImport(selection.selection_id));
-      setLibraryNotice({ kind: "success", text: `Import Batch started for ${count} ${label}${count === 1 ? "" : "s"}.` });
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
-    } catch (error) {
-      setLibraryNotice({ kind: "error", text: tauriErrorDetail(error, "MemeSort could not start the Library Import Batch. Make a fresh native selection to retry.") });
-    } finally {
-      setLibraryBusy(null);
-    }
-  };
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("files")}>Choose files</button><button className="button button-secondary" type="button" disabled={libraryBusy !== null || importWorkActive} onClick={() => void startLibrarySelection("folder")}>Choose folder</button><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />
@@ -281,7 +260,7 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
         <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
           <h2>Drag image files or folders here</h2>
           <p>Release them over this card to start an Import Batch. Sources are scanned and validated before anything is written to the Library.</p>
-          <p className="import-drop-card-hint">Keyboard alternative: use Choose files or Choose folder in the toolbar.</p>
+          <p className="import-drop-card-hint">Keyboard alternative: use Import in the Library toolbar to choose files or a folder.</p>
         </div>
       )}
       {dragPreview ? (

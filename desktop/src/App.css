@@ -52,8 +52,13 @@ button:focus-visible, a:focus-visible {
 .sidebar-footer nav { display: grid; gap: 4px; }
 .text-button { padding: 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; text-align: left; }
 .library-shell { display: grid; gap: 16px; min-width: 0; }
-.library-toolbar { min-width: 0; }
+.library-toolbar { display: grid; gap: 12px; min-width: 0; }
 .library-toolbar .metric-grid { margin-bottom: 0; }
+.library-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.library-import-menu { position: relative; display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.library-import-dropdown { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; display: grid; gap: 6px; min-width: 200px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 12px 32px rgb(0 0 0 / 28%); }
+.library-import-option { justify-content: start; width: 100%; min-height: 32px; }
+.library-import-menu .notice { width: min(560px, 100%); padding: 12px 14px; }
 .library-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: start; }
 .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
 .library-content { min-width: 0; min-height: 0; overflow-y: auto; }

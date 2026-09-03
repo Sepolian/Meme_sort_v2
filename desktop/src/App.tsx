@@ -7,6 +7,7 @@ import type { AppState, DuplicatePair, RuntimeHealthResult, SearchAsset } from "
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
 import { SettingsPage } from "./features/settings/SettingsPage";
@@ -66,12 +67,17 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     <Page title="Your library" eyebrow="MemeSort desktop">
       <LibraryShell
         toolbar={
-          <section className="metric-grid" aria-label="Library summary">
-            <Metric label="Assets" value={state.library_status.total_assets} />
-            <Metric label="Pending jobs" value={pendingJobs} />
-            <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
-            <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
-          </section>
+          <>
+            <div className="library-toolbar-row">
+              <LibraryImportMenu client={client} />
+            </div>
+            <section className="metric-grid" aria-label="Library summary">
+              <Metric label="Assets" value={state.library_status.total_assets} />
+              <Metric label="Pending jobs" value={pendingJobs} />
+              <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
+              <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
+            </section>
+          </>
         }
         content={
           <AssetsWorkspace
