@@ -12,6 +12,10 @@ _Avoid_: Image, file, source file
 The managed internal file that defines an asset. Deleting, moving, or changing the original source file does not change the asset's identity.
 _Avoid_: Cache file, temp copy
 
+**Clipboard Copy**:
+A representation of an asset placed on the operating-system clipboard for use in another application. It does not create a new asset, source record, or library copy.
+_Avoid_: Copy Asset, Export Asset, Library Copy
+
 **Source Path**:
 The original filesystem path recorded as import metadata. It is not the asset identity and the library does not depend on it remaining available.
 _Avoid_: Asset path, canonical path
@@ -39,6 +43,10 @@ _Avoid_: Processed file, ready file
 **Failed Asset**:
 An asset whose active-recipe embedding job failed. It remains available for browsing, retry, and diagnostics but is not searchable.
 _Avoid_: Broken import, corrupt asset
+
+**Accepted Duplicate Pair**:
+An unordered pair of assets that the user has deliberately chosen to retain after duplicate review. It is excluded from future duplicate review until the decision is cleared or either asset is deleted.
+_Avoid_: Ignored duplicate, false positive, duplicate exception
 
 ## Inference and search
 
