@@ -17,6 +17,10 @@ use std::os::windows::process::CommandExt;
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 
+use crate::clipboard::{
+    build_hdrop_payload, build_static_image_payload, classify_managed_path, write_payload_via,
+    ClipboardPayload, ClipboardWriter, ManagedCopyKind, WindowsClipboardWriter,
+};
 use crate::native_selection::{
     validate_library_paths, ImportSelection, LibraryImportSelection, SearchImageSelection,
 };
@@ -515,6 +519,144 @@ impl SidecarSession {
             ));
         }
         Ok(resolved_path)
+    }
+
+    /// Resolve one managed Library Copy through the fixed reveal-target route.
+    /// The WebView supplies Asset IDs only; no path ever crosses the bridge.
+    fn resolve_managed_copy_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<PathBuf, SidecarError> {
+        Self::resolve_asset_reveal_target_for_connection(
+            origin,
+            session_cookie,
+            asset_id,
+            AssetRevealTarget::Managed,
+            None,
+        )
+    }
+
+    fn validate_managed_file(path: &Path) -> Result<(), SidecarError> {
+        if !path.is_absolute() {
+            return Err(SidecarError::new(
+                "Sidecar returned a non-absolute Asset Library Copy.",
+            ));
+        }
+        let metadata = fs::metadata(path).map_err(|error| {
+            SidecarError::new(format!("Could not access the Asset Library Copy: {error}"))
+        })?;
+        if !metadata.is_file() {
+            return Err(SidecarError::new(
+                "The resolved Asset Library Copy is not a file.",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validate one Asset ID, resolve its managed Library Copy through the
+    /// fixed reveal-target route, and gate on existence/type. Shared by every
+    /// Clipboard Copy command so validation and resolution stay identical.
+    fn resolve_checked_managed_file(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<PathBuf, SidecarError> {
+        let asset_id = validate_asset_id(asset_id)?;
+        let path = Self::resolve_managed_copy_for_connection(origin, session_cookie, &asset_id)?;
+        Self::validate_managed_file(&path)?;
+        Ok(path)
+    }
+
+    /// Build the primary Clipboard Copy payload for one Asset.
+    ///
+    /// Static stills decode to `CF_DIBV5` plus a registered PNG payload. GIFs
+    /// keep their encoded animation via a single-file `CF_HDROP` reference.
+    /// Every fallible step finishes before the caller touches the OS
+    /// clipboard.
+    fn prepare_copy_asset_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<ClipboardPayload, SidecarError> {
+        let path = Self::resolve_checked_managed_file(origin, session_cookie, asset_id)?;
+        match classify_managed_path(&path)? {
+            ManagedCopyKind::StaticImage => {
+                let bytes = fs::read(&path).map_err(|error| {
+                    SidecarError::new(format!(
+                        "Could not read the Asset Library Copy: {error}"
+                    ))
+                })?;
+                build_static_image_payload(&bytes)
+                    .map(ClipboardPayload::StaticImage)
+            }
+            ManagedCopyKind::GifFile => {
+                build_hdrop_payload(std::slice::from_ref(&path)).map(|hdrop| {
+                    ClipboardPayload::FileDrop { hdrop }
+                })
+            }
+        }
+    }
+
+    /// Build a single-file `CF_HDROP` payload for one Asset's Library Copy.
+    fn prepare_copy_original_file_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<ClipboardPayload, SidecarError> {
+        let path = Self::resolve_checked_managed_file(origin, session_cookie, asset_id)?;
+        build_hdrop_payload(std::slice::from_ref(&path))
+            .map(|hdrop| ClipboardPayload::FileDrop { hdrop })
+    }
+
+    /// Build one multi-file `CF_HDROP` payload. IDs are validated and
+    /// de-duplicated up front and the existing batch limit applies.
+    fn prepare_copy_original_files_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_ids: &[String],
+    ) -> Result<ClipboardPayload, SidecarError> {
+        let asset_ids = validate_asset_ids(asset_ids)?;
+        let mut paths = Vec::with_capacity(asset_ids.len());
+        for asset_id in &asset_ids {
+            let path = Self::resolve_checked_managed_file(origin, session_cookie, asset_id)?;
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+        build_hdrop_payload(&paths).map(|hdrop| ClipboardPayload::FileDrop { hdrop })
+    }
+
+    fn copy_asset_with_writer(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+        writer: &impl ClipboardWriter,
+    ) -> Result<(), SidecarError> {
+        let payload = Self::prepare_copy_asset_for_connection(origin, session_cookie, asset_id)?;
+        write_payload_via(writer, &payload)
+    }
+
+    fn copy_original_file_with_writer(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+        writer: &impl ClipboardWriter,
+    ) -> Result<(), SidecarError> {
+        let payload =
+            Self::prepare_copy_original_file_for_connection(origin, session_cookie, asset_id)?;
+        write_payload_via(writer, &payload)
+    }
+
+    fn copy_original_files_with_writer(
+        origin: &str,
+        session_cookie: &str,
+        asset_ids: &[String],
+        writer: &impl ClipboardWriter,
+    ) -> Result<(), SidecarError> {
+        let payload =
+            Self::prepare_copy_original_files_for_connection(origin, session_cookie, asset_ids)?;
+        write_payload_via(writer, &payload)
     }
 
     fn resolve_log_directory_for_connection(
@@ -1086,6 +1228,49 @@ pub fn open_log_directory(app: AppHandle) -> Result<(), SidecarError> {
     open_directory_in_file_explorer(&logs_directory)
 }
 
+/// Primary Clipboard Copy: stills publish `CF_DIBV5` plus a registered PNG
+/// payload; GIFs publish a `CF_HDROP` reference to the managed `.gif` Library
+/// Copy so the encoded animation is preserved. The WebView passes only the
+/// Asset ID; the resolved path never leaves Rust.
+#[tauri::command]
+pub fn copy_asset_to_clipboard(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::copy_asset_with_writer(
+            origin,
+            session_cookie,
+            &asset_id,
+            &WindowsClipboardWriter,
+        )
+    })
+}
+
+/// Copy one raw Library Copy file reference as a `CF_HDROP` payload.
+#[tauri::command]
+pub fn copy_original_file(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::copy_original_file_with_writer(
+            origin,
+            session_cookie,
+            &asset_id,
+            &WindowsClipboardWriter,
+        )
+    })
+}
+
+/// Copy one multi-file `CF_HDROP` payload for the given Assets. IDs are
+/// validated and de-duplicated under the existing batch limit.
+#[tauri::command]
+pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(), SidecarError> {
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::copy_original_files_with_writer(
+            origin,
+            session_cookie,
+            &asset_ids,
+            &WindowsClipboardWriter,
+        )
+    })
+}
+
 fn start_selected_import(
     app: &AppHandle,
     start_indexing: bool,
@@ -1641,6 +1826,10 @@ mod tests {
     use std::sync::Mutex;
     use tauri::http::{Method, Request, StatusCode};
     use tauri::{LogicalPosition, PhysicalPosition};
+
+    use crate::clipboard::{
+        parse_hdrop_payload, ClipboardPayload, FakeClipboardWrite, FakeClipboardWriter,
+    };
 
     #[test]
     fn derives_the_default_library_from_the_portable_root() {
@@ -2852,5 +3041,455 @@ mod tests {
         );
 
         fs::remove_dir_all(&root).expect("drop fixture should be removed");
+    }
+
+    const CLIPBOARD_ASSET_A: &str = "123e4567-e89b-12d3-a456-426614174000";
+    const CLIPBOARD_ASSET_B: &str = "223e4567-e89b-12d3-a456-426614174001";
+    const CLIPBOARD_COOKIE: &str = "memesort_session=test-token";
+
+    fn clipboard_fixture_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("clipboard fixture root should be created");
+        root
+    }
+
+    fn write_clipboard_png(path: &Path, width: u32, height: u32) {
+        let frame: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+            image::ImageBuffer::from_pixel(width, height, image::Rgba([18, 120, 220, 255]));
+        image::DynamicImage::ImageRgba8(frame)
+            .save(path)
+            .expect("png clipboard fixture should be written");
+    }
+
+    fn write_clipboard_photo(path: &Path, width: u32, height: u32) {
+        let frame: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+            image::ImageBuffer::from_pixel(width, height, image::Rgba([90, 140, 60, 255]));
+        // The image format follows the file extension, so `.jpg` and `.webp`
+        // fixtures exercise their real decoders end to end.
+        image::DynamicImage::ImageRgba8(frame)
+            .save(path)
+            .expect("photo clipboard fixture should be written");
+    }
+
+    fn write_clipboard_bmp(path: &Path, width: u32, height: u32) {
+        use std::io::Cursor;
+        let frame: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+            image::ImageBuffer::from_pixel(width, height, image::Rgba([220, 40, 90, 255]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(frame)
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Bmp)
+            .expect("bmp clipboard fixture should encode");
+        fs::write(path, bytes).expect("bmp clipboard fixture should be written");
+    }
+
+    fn write_clipboard_gif(path: &Path) {
+        // Minimal 1x1 GIF89a. The static builder has no GIF decoder, so this
+        // also proves GIF Library Copies never flatten through the image path.
+        fs::write(
+            path,
+            vec![
+                0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00,
+                0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+                0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3B,
+            ],
+        )
+        .expect("gif clipboard fixture should be written");
+    }
+
+    fn read_clipboard_request(stream: &mut std::net::TcpStream) -> String {
+        let mut request = Vec::new();
+        loop {
+            let mut chunk = [0_u8; 1024];
+            let size = stream.read(&mut chunk).expect("request should read");
+            if size == 0 {
+                break;
+            }
+            request.extend_from_slice(&chunk[..size]);
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let headers =
+                std::str::from_utf8(&request[..header_end]).expect("headers must be UTF-8");
+            let content_length = headers
+                .lines()
+                .find_map(|line| line.strip_prefix("Content-Length: "))
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        String::from_utf8(request).expect("request must be UTF-8")
+    }
+
+    /// Fake the fixed managed reveal-target route, serving one resolved path
+    /// per connection in order. Every request must target the managed route.
+    fn spawn_managed_copy_server(paths: Vec<PathBuf>) -> (String, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            for path in paths {
+                let (mut stream, _) = listener.accept().expect("resolve request should connect");
+                let request = read_clipboard_request(&mut stream);
+                assert!(request.starts_with("POST /api/resolve-asset-reveal-target HTTP/1.1"));
+                assert!(request.contains("Cookie: memesort_session=test-token"));
+                assert!(request.contains("\"target\":\"managed\""));
+                assert!(!request.contains("source_path"));
+                let body = serde_json::json!({
+                    "resolved_path": path.to_str().expect("fixture path must be Unicode"),
+                    "target": "managed",
+                })
+                .to_string();
+                stream
+                    .write_all(
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{body}")
+                            .as_bytes(),
+                    )
+                    .expect("resolve response should write");
+            }
+        });
+        (format!("http://127.0.0.1:{port}"), server)
+    }
+
+    #[test]
+    fn rejects_invalid_clipboard_ids_before_connecting() {
+        let fake = FakeClipboardWriter::new();
+        let closed = "http://127.0.0.1:1";
+
+        for invalid in ["", "not-a-uuid", "../library.sqlite"] {
+            let error = SidecarSession::copy_asset_with_writer(
+                closed,
+                CLIPBOARD_COOKIE,
+                invalid,
+                &fake,
+            )
+            .expect_err("invalid Asset ID must be rejected");
+            assert!(
+                error.to_string().contains("Invalid MemeSort Asset"),
+                "unexpected error: {error}"
+            );
+            let error = SidecarSession::copy_original_file_with_writer(
+                closed,
+                CLIPBOARD_COOKIE,
+                invalid,
+                &fake,
+            )
+            .expect_err("invalid Asset ID must be rejected");
+            assert!(error.to_string().contains("Invalid MemeSort Asset"));
+        }
+
+        let error = SidecarSession::copy_original_files_with_writer(
+            closed,
+            CLIPBOARD_COOKIE,
+            &[],
+            &fake,
+        )
+        .expect_err("empty batch must be rejected");
+        assert!(error.to_string().contains("Invalid MemeSort Asset selection"));
+
+        let oversized = vec![CLIPBOARD_ASSET_A.to_owned(); 1_001];
+        let error = SidecarSession::copy_original_files_with_writer(
+            closed,
+            CLIPBOARD_COOKIE,
+            &oversized,
+            &fake,
+        )
+        .expect_err("oversized batch must be rejected");
+        assert!(error.to_string().contains("Invalid MemeSort Asset selection"));
+
+        assert_eq!(
+            fake.write_count(),
+            0,
+            "ID validation must precede any clipboard mutation"
+        );
+    }
+
+    #[test]
+    fn resolves_a_static_copy_only_through_the_fixed_managed_route() {
+        let root = clipboard_fixture_root("memesort-clipboard-managed-png");
+        let still = root.join("still.png");
+        write_clipboard_png(&still, 4, 3);
+        let (origin, server) = spawn_managed_copy_server(vec![still.clone()]);
+
+        let payload = SidecarSession::prepare_copy_asset_for_connection(
+            &origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+        )
+        .expect("static copy should prepare");
+        server.join().expect("test server should finish");
+
+        match payload {
+            ClipboardPayload::StaticImage(image) => {
+                assert_eq!((image.width, image.height), (4, 3));
+                assert_eq!(image.dibv5.len(), 124 + 4 * 3 * 4);
+                assert_eq!(&image.png[0..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
+            }
+            ClipboardPayload::FileDrop { .. } => panic!("PNG must publish image payloads"),
+        }
+
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn builds_a_bmp_copy_without_changing_dimensions() {
+        let root = clipboard_fixture_root("memesort-clipboard-managed-bmp");
+        let still = root.join("still.bmp");
+        write_clipboard_bmp(&still, 5, 2);
+        let (origin, server) = spawn_managed_copy_server(vec![still.clone()]);
+        let fake = FakeClipboardWriter::new();
+
+        SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
+            .expect("bmp copy should succeed");
+        server.join().expect("test server should finish");
+
+        assert_eq!(fake.write_count(), 1);
+        let writes = fake.writes.lock().expect("fake clipboard lock");
+        match &writes[0] {
+            FakeClipboardWrite::StaticImage { dibv5, png } => {
+                assert_eq!(dibv5.len(), 124 + 5 * 2 * 4);
+                assert_eq!(i32::from_le_bytes(dibv5[4..8].try_into().unwrap()), 5);
+                assert_eq!(i32::from_le_bytes(dibv5[8..12].try_into().unwrap()), 2);
+                let decoded = image::load_from_memory(png).expect("png round-trip");
+                assert_eq!((decoded.width(), decoded.height()), (5, 2));
+            }
+            FakeClipboardWrite::FileDrop { .. } => panic!("BMP must publish image payloads"),
+        }
+
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn resolves_jpeg_and_webp_copies_through_the_fixed_route() {
+        let root = clipboard_fixture_root("memesort-clipboard-managed-photo");
+        let photo = root.join("photo.jpg");
+        let sticker = root.join("sticker.webp");
+        write_clipboard_photo(&photo, 6, 4);
+        write_clipboard_photo(&sticker, 7, 5);
+        let (origin, server) = spawn_managed_copy_server(vec![photo.clone(), sticker.clone()]);
+        let fake = FakeClipboardWriter::new();
+
+        SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
+            .expect("jpeg copy should succeed");
+        SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_B, &fake)
+            .expect("webp copy should succeed");
+        server.join().expect("test server should finish");
+
+        assert_eq!(fake.write_count(), 2);
+        let writes = fake.writes.lock().expect("fake clipboard lock");
+        for (write, expected) in writes.iter().zip([(6, 4), (7, 5)]) {
+            match write {
+                FakeClipboardWrite::StaticImage { dibv5, png } => {
+                    assert_eq!(dibv5.len() as u32, 124 + expected.0 * expected.1 * 4);
+                    assert_eq!(
+                        i32::from_le_bytes(dibv5[4..8].try_into().unwrap()),
+                        expected.0 as i32
+                    );
+                    assert_eq!(
+                        i32::from_le_bytes(dibv5[8..12].try_into().unwrap()),
+                        expected.1 as i32
+                    );
+                    let decoded = image::load_from_memory(png).expect("png round-trip");
+                    assert_eq!((decoded.width(), decoded.height()), (expected.0, expected.1));
+                }
+                FakeClipboardWrite::FileDrop { .. } => {
+                    panic!("JPEG/WebP must publish image payloads")
+                }
+            }
+        }
+
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn publishes_gif_copies_as_hdrop_without_decoding() {
+        let root = clipboard_fixture_root("memesort-clipboard-managed-gif");
+        let animated = root.join("animated.gif");
+        write_clipboard_gif(&animated);
+        let (origin, server) = spawn_managed_copy_server(vec![animated.clone()]);
+        let fake = FakeClipboardWriter::new();
+
+        SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
+            .expect("gif copy should succeed");
+        server.join().expect("test server should finish");
+
+        assert_eq!(fake.write_count(), 1);
+        let writes = fake.writes.lock().expect("fake clipboard lock");
+        match &writes[0] {
+            FakeClipboardWrite::FileDrop { hdrop } => {
+                assert_eq!(
+                    parse_hdrop_payload(hdrop).expect("hdrop round-trip"),
+                    vec![animated]
+                );
+            }
+            FakeClipboardWrite::StaticImage { .. } => {
+                panic!("GIF must keep its animation via a file reference")
+            }
+        }
+
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn copies_single_and_multi_original_files_as_hdrop() {
+        let root = clipboard_fixture_root("memesort-clipboard-original-files");
+        let first = root.join("first.png");
+        let second = root.join("second.png");
+        write_clipboard_png(&first, 2, 2);
+        write_clipboard_png(&second, 2, 2);
+
+        let (single_origin, single_server) =
+            spawn_managed_copy_server(vec![first.clone()]);
+        let fake = FakeClipboardWriter::new();
+        SidecarSession::copy_original_file_with_writer(
+            &single_origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .expect("single file copy should succeed");
+        single_server.join().expect("test server should finish");
+        assert_eq!(fake.write_count(), 1);
+        {
+            let writes = fake.writes.lock().expect("fake clipboard lock");
+            match &writes[0] {
+                FakeClipboardWrite::FileDrop { hdrop } => {
+                    assert_eq!(parse_hdrop_payload(hdrop).expect("round-trip"), vec![first.clone()]);
+                }
+                FakeClipboardWrite::StaticImage { .. } => {
+                    panic!("original-file copy must be a file reference")
+                }
+            }
+        }
+
+        // Duplicated IDs resolve once: three inputs, two connections, two paths.
+        let (multi_origin, multi_server) =
+            spawn_managed_copy_server(vec![first.clone(), second.clone()]);
+        let fake = FakeClipboardWriter::new();
+        SidecarSession::copy_original_files_with_writer(
+            &multi_origin,
+            CLIPBOARD_COOKIE,
+            &[
+                CLIPBOARD_ASSET_A.to_owned(),
+                CLIPBOARD_ASSET_A.to_owned(),
+                CLIPBOARD_ASSET_B.to_owned(),
+            ],
+            &fake,
+        )
+        .expect("multi file copy should succeed");
+        multi_server.join().expect("test server should finish");
+        assert_eq!(fake.write_count(), 1);
+        let writes = fake.writes.lock().expect("fake clipboard lock");
+        match &writes[0] {
+            FakeClipboardWrite::FileDrop { hdrop } => {
+                assert_eq!(
+                    parse_hdrop_payload(hdrop).expect("round-trip"),
+                    vec![first, second]
+                );
+            }
+            FakeClipboardWrite::StaticImage { .. } => {
+                panic!("multi-file copy must be one file reference payload")
+            }
+        }
+
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn fails_clipboard_preflight_before_mutation() {
+        let fake = FakeClipboardWriter::new();
+
+        // Missing Library Copy.
+        let root = clipboard_fixture_root("memesort-clipboard-preflight");
+        let missing = root.join("missing.png");
+        let (origin, server) = spawn_managed_copy_server(vec![missing]);
+        assert!(SidecarSession::copy_asset_with_writer(
+            &origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .is_err());
+        server.join().expect("test server should finish");
+
+        // Directory instead of a file.
+        let folder = root.join("folder");
+        fs::create_dir_all(&folder).expect("folder fixture should be created");
+        let (origin, server) = spawn_managed_copy_server(vec![folder]);
+        assert!(SidecarSession::copy_original_file_with_writer(
+            &origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .is_err());
+        server.join().expect("test server should finish");
+
+        // Corrupt still bytes.
+        let corrupt = root.join("corrupt.png");
+        fs::write(&corrupt, b"not an image").expect("corrupt fixture should be written");
+        let (origin, server) = spawn_managed_copy_server(vec![corrupt]);
+        assert!(SidecarSession::copy_asset_with_writer(
+            &origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .is_err());
+        server.join().expect("test server should finish");
+
+        // Unsupported media type.
+        let notes = root.join("notes.tiff");
+        fs::write(&notes, b"unsupported").expect("unsupported fixture should be written");
+        let (origin, server) = spawn_managed_copy_server(vec![notes]);
+        assert!(SidecarSession::copy_asset_with_writer(
+            &origin,
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .is_err());
+        server.join().expect("test server should finish");
+
+        // Unknown Asset reported by the sidecar.
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener.local_addr().expect("listener address").port();
+        let unknown = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("request should connect");
+            let _ = read_clipboard_request(&mut stream);
+            stream
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{\"error\":\"NotFound\",\"detail\":\"Asset was not found.\"}",
+                )
+                .expect("error response should write");
+        });
+        assert!(SidecarSession::copy_original_file_with_writer(
+            &format!("http://127.0.0.1:{port}"),
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .is_err());
+        unknown.join().expect("test server should finish");
+
+        // The WebView never learns a resolved path, even on failure.
+        let error = SidecarSession::copy_original_file_with_writer(
+            &format!("http://127.0.0.1:{port}"),
+            CLIPBOARD_COOKIE,
+            CLIPBOARD_ASSET_A,
+            &fake,
+        )
+        .expect_err("unknown Asset must fail");
+        assert!(!error.to_string().contains(&root.display().to_string()));
+
+        assert_eq!(
+            fake.write_count(),
+            0,
+            "every preflight failure must precede clipboard mutation"
+        );
+        fs::remove_dir_all(&root).expect("fixture should be removed");
     }
 }

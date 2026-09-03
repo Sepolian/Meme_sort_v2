@@ -1,3 +1,4 @@
+mod clipboard;
 mod native_drag;
 mod native_selection;
 mod sidecar;
@@ -63,6 +64,9 @@ pub fn run() {
             sidecar::delete_pending_jobs,
             sidecar::reveal_asset,
             sidecar::open_log_directory,
+            sidecar::copy_asset_to_clipboard,
+            sidecar::copy_original_file,
+            sidecar::copy_original_files,
             sidecar::cancel_search
         ])
         .build(tauri::generate_context!())
