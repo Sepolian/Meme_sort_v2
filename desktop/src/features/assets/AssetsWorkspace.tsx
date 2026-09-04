@@ -10,6 +10,7 @@ import {
 import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import { useOptionalRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { AssetWaterfall } from "./AssetWaterfall";
 import {
   DEFAULT_LIBRARY_DENSITY,
   DEFAULT_LIBRARY_MEDIA,
@@ -65,29 +66,6 @@ function dimensions(asset: AssetSummary): string {
 
 function statusLabel(status: AssetSummary["status"]): string {
   return `${status.charAt(0).toUpperCase()}${status.slice(1)} Asset`;
-}
-
-function AssetPreview({ asset, className }: { asset: AssetSummary; className: string }) {
-  const preview = mediaUrl(asset.thumbnail_url) ?? mediaUrl(asset.library_url);
-  if (!preview) return <div className={`${className} media-placeholder`} aria-label="Preview unavailable" />;
-  return <img className={className} src={preview} alt={`${assetName(asset)} preview`} loading="lazy" />;
-}
-
-function AssetCard({ asset, checked, onSelect, onToggle }: { asset: AssetSummary; checked: boolean; onSelect: () => void; onToggle: () => void }) {
-  const name = assetName(asset);
-  return (
-    <article className="asset-card">
-      <button className="asset-card-open" type="button" onClick={onSelect} aria-label={`Open ${name}`}>
-        <AssetPreview asset={asset} className="asset-card-media" />
-        <span className="asset-card-body">
-          <span className="asset-title">{name}</span>
-          <span className="asset-subtitle">{dimensions(asset)} · {asset.media_type}</span>
-          <span className={`status-pill status-${asset.status}`}>{statusLabel(asset.status)}</span>
-        </span>
-      </button>
-      <label className="asset-select"><input type="checkbox" checked={checked} onChange={onToggle} /> Select {name}</label>
-    </article>
-  );
 }
 
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
@@ -304,14 +282,15 @@ export function AssetsWorkspace({
     <div className="asset-wall">
       {assets.length ? (
         orderedAssets.length ? (
-          <section
-            className={`asset-grid${dragPreview ? " asset-grid-accepting" : ""}`}
-            aria-label="Assets"
-            data-density={density}
-            ref={wallRef}
-          >
-            {orderedAssets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}
-          </section>
+          <AssetWaterfall
+            assets={orderedAssets}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
         ) : (
           <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
             <h2>No Assets match these filters</h2>

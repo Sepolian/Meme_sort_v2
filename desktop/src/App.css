@@ -162,11 +162,17 @@ p { color: var(--muted); line-height: 1.6; }
 .asset-toolbar-actions > span { color: var(--muted); font-size: .875rem; }
 .toolbar-hint { font-size: .8125rem; font-style: italic; }
 .asset-wall { position: relative; }
-.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
-/* Ticket 08: density visibly changes column width/gap per the spec geometry
-   (comfortable 220px/12px, compact 168px/8px). Persisted via ticket 07. */
-.asset-grid[data-density="comfortable"] { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.asset-grid[data-density="compact"] { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+/* Ticket 09: deterministic JS waterfall. Column assignment lives in
+   `waterfall.ts` (shortest-column placement with leftmost tie-breaking);
+   CSS only renders the assigned columns side by side. This is neither CSS
+   multicol (whose visual traversal would reorder the sorted input) nor
+   experimental masonry. Geometry follows the comfortable 220px/12px and
+   compact 168px/8px contract; density is persisted by ticket 07. */
+.asset-grid { display: flex; align-items: flex-start; gap: 12px; }
+.asset-grid[data-density="comfortable"] { gap: 12px; }
+.asset-grid[data-density="compact"] { gap: 8px; }
+.asset-waterfall-column { display: flex; flex-direction: column; gap: 12px; flex: 1 1 0%; min-width: 0; }
+.asset-grid[data-density="compact"] .asset-waterfall-column { gap: 8px; }
 .asset-grid-accepting { outline: 2px dashed var(--accent); outline-offset: 6px; }
 .drop-cue { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; gap: 6px; padding: 24px; border-radius: 16px; background: color-mix(in srgb, var(--canvas) 72%, transparent); text-align: center; pointer-events: none; animation: drop-cue-pulse 1.4s ease-in-out infinite; }
 .drop-cue strong { color: var(--text); font-size: 1.35rem; letter-spacing: -.01em; }
@@ -181,16 +187,31 @@ p { color: var(--muted); line-height: 1.6; }
 .import-drop-card p { max-width: 52ch; margin-bottom: 0; }
 .import-drop-card-hint { color: var(--muted); font-size: .875rem; }
 .import-drop-card-accepting { border-color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
-.asset-card { display: grid; min-width: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.asset-card { position: relative; display: grid; min-width: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .asset-card:hover { border-color: var(--accent); transform: translateY(-1px); }
-.asset-card-open { display: grid; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.asset-card-open { display: block; width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .asset-card-open:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-.asset-card-media { display: block; width: 100%; aspect-ratio: 1.2; background: var(--surface-raised); object-fit: cover; }
+/* Ticket 09: the wrapper always reserves the aspect ratio via an inline style
+   (documented 1:1 fallback), so thumbnail completion never relocates cards.
+   Media is uncropped: the image contains fully inside the reserved box. */
+.asset-card-media-wrap { position: relative; width: 100%; overflow: hidden; background: var(--surface-raised); }
+.asset-card-media, .asset-card-media-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; }
+.asset-card-media { object-fit: contain; }
 .media-placeholder { background: linear-gradient(135deg, var(--surface-raised), var(--border)); }
-.asset-card-body { display: grid; gap: 7px; padding: 12px; }
-.asset-title { overflow: hidden; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-.asset-subtitle { overflow: hidden; color: var(--muted); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
-.asset-select { padding: 0 12px 12px; color: var(--muted); font-size: .8rem; }
+.asset-card-badge { position: absolute; top: 8px; left: 8px; z-index: 1; }
+/* Ticket 09: hover overlay holds the name, quick actions, and selection
+   checkbox. Opacity (never display) keeps card geometry fixed and content
+   queryable; focus-within covers keyboard users. Badges stay always visible. */
+.asset-card-hover { display: grid; gap: 6px; padding: 10px 12px 12px; opacity: 0; transition: opacity 120ms ease-in; }
+.asset-card:hover .asset-card-hover, .asset-card:focus-within .asset-card-hover { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .asset-card-hover { transition: none; }
+}
+.asset-card-name { overflow: hidden; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.asset-card-meta { overflow: hidden; color: var(--muted); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.asset-card-quick-actions { display: flex; gap: 8px; }
+.asset-card-quick-view { min-height: 32px; padding: 4px 10px; font-size: .8rem; }
+.asset-select { padding: 0; color: var(--muted); font-size: .8rem; }
 .asset-select input { margin-right: 6px; accent-color: var(--accent-strong); }
 .status-pill { display: inline-flex; justify-self: start; padding: 3px 7px; border-radius: 999px; background: var(--surface-raised); color: var(--muted); font-size: .72rem; font-weight: 750; }
 .status-indexed { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent); }
