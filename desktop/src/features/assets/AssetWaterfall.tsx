@@ -10,6 +10,8 @@ import type { AssetSummary } from "../../api/types";
 import { mediaUrl } from "../../api/media-url";
 import { getAssetDisplayName, isGifAsset } from "../library/libraryOrdering";
 import type { LibraryDensity } from "../library/libraryUrlState";
+import { AssetContextMenu } from "./AssetContextMenu";
+import { useAssetContextMenu } from "./useAssetContextMenu";
 import {
   WATERFALL_LAZY_ROOT_MARGIN,
   assignWaterfallColumns,
@@ -31,6 +33,14 @@ interface AssetWaterfallProps {
    * Shares the same result mode as the inspector entry point.
    */
   onFindSimilar?: (assetId: string) => void;
+  /**
+   * Right-click menu entry points (ticket 01 follow-up). When both are
+   * present, cards suppress the WebView-native image menu and offer "Copy
+   * image" (primary Clipboard Copy) plus "Copy original file" through these
+   * ID-only handlers. Absent handlers keep cards menu-free (tests, embeds).
+   */
+  onCopyImage?: (assetId: string) => void;
+  onCopyOriginal?: (assetId: string) => void;
   /**
    * Parent-owned ref to the wall section (used for native-drag hit-testing).
    * The waterfall only reads it for measurement/scroll preservation.
@@ -136,6 +146,8 @@ interface AssetWaterfallCardProps {
   onGifActivate: (assetId: string) => void;
   onGifDeactivate: (assetId: string) => void;
   onFindSimilar?: (assetId: string) => void;
+  onCopyImage?: (assetId: string) => void;
+  onCopyOriginal?: (assetId: string) => void;
 }
 
 /**
@@ -161,9 +173,15 @@ function AssetWaterfallCard({
   onGifActivate,
   onGifDeactivate,
   onFindSimilar,
+  onCopyImage,
+  onCopyOriginal,
 }: AssetWaterfallCardProps) {
   const name = getAssetDisplayName(asset);
   const gif = isGifAsset(asset);
+  const menu = useAssetContextMenu();
+  // Both handlers are required: offering only one copy flavor would keep
+  // the misleading native menu one right-click away for the other.
+  const hasCopyMenu = onCopyImage !== undefined && onCopyOriginal !== undefined;
   const thumbnailSrc =
     mediaUrl(asset.thumbnail_url) ?? mediaUrl(asset.library_url);
   const gifSrc = mediaUrl(asset.library_url);
@@ -180,6 +198,10 @@ function AssetWaterfallCard({
       data-column={columnIndex}
       data-gif={gif ? "true" : "false"}
       data-gif-active={gif && gifActive ? "true" : "false"}
+      // Suppress the WebView-native image menu on cards: its "Copy image"
+      // copies the rendered static bitmap and flattens GIF animation. The
+      // app menu below routes through the native client commands instead.
+      onContextMenu={hasCopyMenu ? menu.openMenu : undefined}
       onMouseEnter={gif ? () => onGifActivate(asset.asset_id) : undefined}
       onMouseLeave={gif ? () => onGifDeactivate(asset.asset_id) : undefined}
       onFocus={gif ? () => onGifActivate(asset.asset_id) : undefined}
@@ -250,6 +272,24 @@ function AssetWaterfallCard({
           Select {name}
         </label>
       </div>
+      {menu.anchor && hasCopyMenu ? (
+        <AssetContextMenu
+          x={menu.anchor.x}
+          y={menu.anchor.y}
+          menuLabel={`Actions for ${name}`}
+          items={[
+            {
+              label: "Copy image",
+              onSelect: () => onCopyImage?.(asset.asset_id),
+            },
+            {
+              label: "Copy original file",
+              onSelect: () => onCopyOriginal?.(asset.asset_id),
+            },
+          ]}
+          onClose={menu.closeMenu}
+        />
+      ) : null}
     </article>
   );
 }
@@ -306,6 +346,8 @@ export function AssetWaterfall({
   onOpenAsset,
   onToggleChecked,
   onFindSimilar,
+  onCopyImage,
+  onCopyOriginal,
   sectionRef,
   accepting = false,
   columnCount,
@@ -389,6 +431,8 @@ export function AssetWaterfall({
               onGifActivate={activateGif}
               onGifDeactivate={deactivateGif}
               onFindSimilar={onFindSimilar}
+              onCopyImage={onCopyImage}
+              onCopyOriginal={onCopyOriginal}
             />
           ))}
         </div>

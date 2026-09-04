@@ -4,6 +4,8 @@ import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { mediaUrl } from "../../api/media-url";
 import { getAssetDisplayName } from "../library/libraryOrdering";
+import { AssetContextMenu } from "./AssetContextMenu";
+import { useAssetContextMenu } from "./useAssetContextMenu";
 import type { AssetDetail, AssetListResult, AssetSummary } from "../../api/types";
 
 export interface AssetInspectorProps {
@@ -418,6 +420,7 @@ function InspectorBody({
 }) {
   const name = assetName(asset);
   const preview = mediaUrl(asset.library_url);
+  const previewMenu = useAssetContextMenu();
   const copyPending = copyState.kind === "pending";
   const copyOriginalPending = copyOriginalState.kind === "pending";
   const revealing = revealState.kind === "pending";
@@ -435,6 +438,10 @@ function InspectorBody({
             className="inspector-preview"
             src={preview}
             alt={`${name} preview`}
+            // Same trap as the wall cards: the WebView-native image menu
+            // copies the rendered static bitmap, so right-click offers the
+            // native commands through the app menu instead.
+            onContextMenu={previewMenu.openMenu}
           />
         ) : (
           <div
@@ -442,6 +449,18 @@ function InspectorBody({
             aria-label={`${name} preview unavailable`}
           />
         )}
+        {previewMenu.anchor ? (
+          <AssetContextMenu
+            x={previewMenu.anchor.x}
+            y={previewMenu.anchor.y}
+            menuLabel={`Actions for ${name}`}
+            items={[
+              { label: "Copy image", onSelect: onCopy },
+              { label: "Copy original file", onSelect: onCopyOriginal },
+            ]}
+            onClose={previewMenu.closeMenu}
+          />
+        ) : null}
         <div>
           <span className={`status-pill status-${asset.status}`}>
             {statusLabel(asset.status)}

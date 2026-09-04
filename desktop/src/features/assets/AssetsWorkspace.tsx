@@ -534,6 +534,36 @@ export function AssetsWorkspace({
       setCopyPending(false);
     }
   };
+  // Ticket 01 follow-up: card right-click menu actions. "Copy image" is the
+  // primary Clipboard Copy (GIFs paste animated via CF_HDROP, stills as
+  // image previews via CF_DIBV5/PNG); "Copy original file" is the raw
+  // Library Copy reference. Both are ID-only and report through copyNotice.
+  const runCardClipboardCopy = async (assetId: string) => {
+    if (copyPending || mutation.isPending) return;
+    setCopyPending(true);
+    setCopyNotice(null);
+    try {
+      await client.copyAssetToClipboard(assetId);
+      setCopyNotice({ kind: "success", text: "Copied to clipboard. Paste into QQ or WeChat." });
+    } catch (error) {
+      setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.") });
+    } finally {
+      setCopyPending(false);
+    }
+  };
+  const runCardCopyOriginal = async (assetId: string) => {
+    if (copyPending || mutation.isPending) return;
+    setCopyPending(true);
+    setCopyNotice(null);
+    try {
+      await client.copyOriginalFile(assetId);
+      setCopyNotice({ kind: "success", text: "Original file reference copied." });
+    } catch (error) {
+      setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Copy original file failed. The Library was not modified.") });
+    } finally {
+      setCopyPending(false);
+    }
+  };
   const requestBatch = (action: "delete" | "rebuild-active-index") => {
     const assetIds = getOrderedSelectedIds();
     if (!assetIds.length) return;
@@ -730,6 +760,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -756,6 +788,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -782,6 +816,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -808,6 +844,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -834,6 +872,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -860,6 +900,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -886,6 +928,8 @@ export function AssetsWorkspace({
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
             onFindSimilar={onFindSimilar}
+            onCopyImage={runCardClipboardCopy}
+            onCopyOriginal={runCardCopyOriginal}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -911,6 +955,8 @@ export function AssetsWorkspace({
           onOpenAsset={onSelectAsset}
           onToggleChecked={toggleAsset}
           onFindSimilar={onFindSimilar}
+          onCopyImage={runCardClipboardCopy}
+          onCopyOriginal={runCardCopyOriginal}
           sectionRef={wallRef}
           accepting={Boolean(dragPreview)}
         />

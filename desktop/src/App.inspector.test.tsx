@@ -510,8 +510,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "source", "C:/Source/first.gif");
   });
 
-  it("keeps the legacy centered dialog available (until ticket 19) but off the Library route", async () => {
-    const client = makeClient();
+  it("keeps the legacy centered dialog available (until ticket 19) but off the Library route", async () => {    const client = makeClient();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { unmount } = render(
       <QueryClientProvider client={queryClient}>
@@ -538,5 +537,68 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     await screen.findByRole("complementary", { name: "Inspector" });
     expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
     appRender.unmount();
+  });
+});
+
+describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetRuntimeHealthForTesting();
+    vi.clearAllMocks();
+  });
+
+  it("wall card right-click routes Copy image through copyAssetToClipboard with the Asset ID", async () => {
+    const client = makeClient();
+    const { container } = renderApp("/", client);
+    await screen.findByRole("button", { name: /first\.gif/i });
+
+    const card = container.querySelector(
+      `article[data-asset-id="${FIRST_ASSET}"]`,
+    ) as HTMLElement;
+    // Native image menu suppressed (defaultPrevented).
+    expect(
+      fireEvent.contextMenu(card, { button: 2, clientX: 120, clientY: 90 }),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy image" }));
+    expect(client.copyAssetToClipboard).toHaveBeenCalledTimes(1);
+    expect(client.copyAssetToClipboard).toHaveBeenCalledWith(FIRST_ASSET);
+    const [passed] = (client.copyAssetToClipboard as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(typeof passed).toBe("string");
+    expect(passed).not.toContain("/");
+    expect(passed).not.toContain("C:");
+    expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
+  });
+
+  it("wall card right-click routes Copy original file through copyOriginalFile with the Asset ID", async () => {
+    const client = makeClient();
+    const { container } = renderApp("/", client);
+    await screen.findByRole("button", { name: /first\.gif/i });
+
+    const card = container.querySelector(
+      `article[data-asset-id="${FIRST_ASSET}"]`,
+    ) as HTMLElement;
+    fireEvent.contextMenu(card, { button: 2, clientX: 120, clientY: 90 });
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
+    expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
+    expect(client.copyOriginalFile).toHaveBeenCalledWith(FIRST_ASSET);
+    expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
+  });
+
+  it("inspector preview right-click offers the same native Copy image action", async () => {
+    const client = makeClient();
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+    const inspectorAside = await screen.findByRole("complementary", { name: "Inspector" });
+    const preview = within(inspectorAside).getByRole("img", { name: "first.gif preview" });
+
+    expect(
+      fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 }),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy image" }));
+    expect(client.copyAssetToClipboard).toHaveBeenCalledTimes(1);
+    expect(client.copyAssetToClipboard).toHaveBeenCalledWith(FIRST_ASSET);
+    expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
   });
 });

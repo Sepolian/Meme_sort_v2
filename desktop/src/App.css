@@ -111,6 +111,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .library-import-dropdown { position: absolute; z-index: 5; top: calc(100% + 8px); left: 0; display: grid; gap: 8px; min-width: 200px; padding: 8px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: var(--shadow-raised); }
 .library-import-option { justify-content: start; width: 100%; min-height: 32px; }
 .library-import-menu .notice { width: min(560px, 100%); padding: 12px 16px; }
+/* Ticket 01 follow-up: app right-click menu replacing the WebView-native
+   image menu on Asset media. Same surface/dropdown look, fixed at cursor. */
+.asset-context-menu { position: fixed; z-index: 60; display: grid; gap: 4px; min-width: 224px; max-width: calc(100vw - 16px); padding: 8px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: var(--shadow-raised); }
+.asset-context-menu-item { display: block; width: 100%; min-height: 32px; padding: 4px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text); cursor: pointer; text-align: left; font-size: 14px; font-weight: 500; line-height: 1.35; transition: background-color 120ms ease-out; }
+.asset-context-menu-item:hover { background: var(--color-surface-raised); }
+.asset-context-menu-item:active { transform: scale(0.98); transition: transform 80ms ease-out; }
 /* Ticket 08: visible sort/filter/density controls in the Library toolbar. */
 .library-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; }
 .library-control { display: grid; gap: 4px; min-width: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
