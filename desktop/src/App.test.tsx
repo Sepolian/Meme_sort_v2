@@ -278,13 +278,18 @@ describe("App", () => {
     );
   });
 
-  it("opens Asset detail for a browseable Pending Asset", async () => {
+  it("opens Asset inspector for a browseable Pending Asset", async () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
 
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
+    // Ticket 10: right-side non-overlay inspector (LibraryShell aside).
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     expect(await screen.findByText("reaction text")).toBeInTheDocument();
     expect(screen.getByText("C:/Source/first.gif")).toBeInTheDocument();
+    // Waterfall stays mounted behind the inspector.
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
     expect(screen.getByRole("alertdialog", { name: "Delete this Asset?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -294,7 +299,8 @@ describe("App", () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Reveal Managed File" }));
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Reveal in Explorer" }));
     expect(await screen.findByText("Opened the managed Library Copy in File Explorer.")).toBeInTheDocument();
     expect(client.revealAsset).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174000", "managed");
 

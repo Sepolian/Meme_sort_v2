@@ -7,6 +7,7 @@ import type { AppState, SearchAsset } from "./api/types";
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { AssetInspector } from "./features/assets/AssetInspector";
 import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
 import { LibraryControls } from "./features/library/LibraryControls";
 import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
@@ -70,6 +71,10 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   // URL/preference contract; this page owns the single hook instance and
   // passes effective values plus setters to the toolbar controls and the
   // ordered workspace.
+  // Ticket 10: the inspector renders in `LibraryShell`'s non-overlaying
+  // `aside` so the waterfall stays mounted with scroll preserved. Clipboard
+  // Copy / Copy original file / Delete call ticket 05 client methods with
+  // Asset IDs only; Find Similar exposes the ticket 12 action point.
   const {
     sort,
     media,
@@ -124,6 +129,15 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             density={density}
             onClearFilters={clearFilters}
           />
+        }
+        inspector={
+          selectedAssetId ? (
+            <AssetInspector
+              assetId={selectedAssetId}
+              client={client}
+              onClose={clearAssetId}
+            />
+          ) : undefined
         }
       />
     </Page>

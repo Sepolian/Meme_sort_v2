@@ -25,7 +25,7 @@ import {
   getAssetDisplayName,
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
-import type { AssetDetail, AssetSummary } from "../../api/types";
+import type { AssetDetail, AssetListResult, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -44,8 +44,6 @@ type MutationRequest =
   | { kind: "delete-asset"; assetId: string }
   | { kind: "remove-source"; assetId: string; sourcePath: string }
   | { kind: "batch"; action: "delete" | "rebuild-active-index"; assetIds: string[] };
-
-type RevealRequest = { assetId: string; target: "managed" | "source"; sourcePath?: string };
 
 type LibraryNotice = { kind: "error" | "success"; text: string };
 
@@ -107,7 +105,14 @@ function AssetDetailContent({ asset, onDeleteAsset, onRevealManaged, onRemoveSou
   );
 }
 
-function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { assetId: string; client: MemeSortClient; onClose: () => void; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
+/**
+ * Legacy centered Asset detail dialog (pre-ticket-10).
+ *
+ * Retained only for legacy routes until ticket 19 removes it. The Library
+ * route now uses the right-side `AssetInspector` (non-overlaying `aside`)
+ * opened from `asset=<asset-id>`; this dialog must not be rendered on `/`.
+ */
+export function LegacyAssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { assetId: string; client: MemeSortClient; onClose: () => void; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
   const detailQuery = useQuery({ queryKey: ["asset-detail", assetId], queryFn: () => client.getAssetDetail(assetId) });
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -125,6 +130,9 @@ function AssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRevealMa
     </div>
   );
 }
+
+// Backwards-compatible alias for any legacy-route import until ticket 19.
+export const AssetDetailDialog = LegacyAssetDetailDialog;
 
 function ConfirmDialog({ action, onCancel, onConfirm, pending }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void; pending: boolean }) {
   useEffect(() => {
@@ -186,19 +194,64 @@ export function AssetsWorkspace({
     },
     onSuccess: async (result, request) => {
       setFeedback(mutationSummary(request, result));
-      setSelectedIds(new Set());
+      // Ticket 10: keep inspector/selection coherent after deletes performed
+      // from the toolbar. Batch deletes reconcile from the mutation response;
+      // single deletes (legacy path) close only their own inspector.
+      if (request.kind === "batch" && "affected_asset_ids" in result) {
+        const affected = new Set(result.affected_asset_ids);
+        setSelectedIds((current) => {
+          const next = new Set([...current].filter((id) => !affected.has(id)));
+          return next;
+        });
+        // Optimistically drop deleted Assets from the visible wall so the UI
+        // reflects the deletion even when the mocked `getAssets` still
+        // returns the pre-delete list (tests) or before refetch settles.
+        if (request.action === "delete" && affected.size) {
+          queryClient.setQueryData<AssetListResult | undefined>(
+            ["assets"],
+            (old) =>
+              old
+                ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
+                : old,
+          );
+          for (const deletedId of affected) {
+            queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+          }
+        }
+        if (selectedAssetId && affected.has(selectedAssetId)) {
+          onCloseDetail();
+        }
+      } else {
+        const deletedId = request.kind === "delete-asset" ? request.assetId : null;
+        if (deletedId) {
+          setSelectedIds((current) => {
+            if (!current.has(deletedId)) return current;
+            const next = new Set(current);
+            next.delete(deletedId);
+            return next;
+          });
+          queryClient.setQueryData<AssetListResult | undefined>(
+            ["assets"],
+            (old) =>
+              old
+                ? { ...old, assets: old.assets.filter((item) => item.asset_id !== deletedId) }
+                : old,
+          );
+          queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+        }
+        // Legacy single-asset path closes its own inspector; inspector-owned
+        // deletes (ticket 10) close themselves via onDeleted/onClose.
+        if (deletedId && deletedId === selectedAssetId) {
+          onCloseDetail();
+        }
+        if (request.kind === "remove-source" && "asset_deleted" in result && result.asset_deleted) {
+          onCloseDetail();
+        }
+      }
       setConfirmation(null);
-      onCloseDetail();
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["assets"] }), queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
     },
     onError: () => { setFeedback("The requested Asset change could not be completed. The Library was not modified by the desktop UI."); setConfirmation(null); },
-  });
-  const revealMutation = useMutation({
-    mutationFn: async (request: RevealRequest) => request.sourcePath === undefined
-      ? client.revealAsset(request.assetId, request.target)
-      : client.revealAsset(request.assetId, request.target, request.sourcePath),
-    onSuccess: (_result, request) => { setFeedback(request.target === "managed" ? "Opened the managed Library Copy in File Explorer." : "Opened the recorded Source Path in File Explorer."); },
-    onError: () => { setFeedback("The requested file could not be opened in File Explorer. The Library was not modified."); },
   });
 
   useEffect(() => {
@@ -253,6 +306,19 @@ export function AssetsWorkspace({
   );
   const isFiltered = media !== DEFAULT_LIBRARY_MEDIA || status !== DEFAULT_LIBRARY_STATUS;
 
+  // Ticket 10: prune checkbox selection when the Asset list no longer
+  // contains an ID (e.g. the inspector deleted it via its own mutation that
+  // updated the ["assets"] cache). This keeps toolbar/inspector coherent
+  // without lifting selection state to the Library page.
+  useEffect(() => {
+    if (!assetsData) return;
+    const present = new Set(assetsData.assets.map((item) => item.asset_id));
+    setSelectedIds((current) => {
+      if ([...current].every((id) => present.has(id))) return current;
+      return new Set([...current].filter((id) => present.has(id)));
+    });
+  }, [assetsData]);
+
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
 
@@ -270,8 +336,6 @@ export function AssetsWorkspace({
       ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { kind: "batch", action, assetIds } }
       : { title: `Rebuild ${assetIds.length} selected Asset(s)?`, detail: "This clears their active-recipe embeddings and queues new indexing work. Running Asset jobs are skipped.", confirmLabel: "Queue rebuild", request: { kind: "batch", action, assetIds } });
   };
-  const requestDeleteAsset = (assetId: string) => setConfirmation({ title: "Delete this Asset?", detail: "This deletes its Library Copy, Source Records, and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete Asset", request: { kind: "delete-asset", assetId } });
-  const requestRemoveSource = (assetId: string, sourcePath: string) => setConfirmation({ title: "Remove this Source Record?", detail: "If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts.", confirmLabel: "Remove Source Record", request: { kind: "remove-source", assetId, sourcePath } });
 
   return <>
     <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
@@ -319,7 +383,6 @@ export function AssetsWorkspace({
         </div>
       ) : null}
     </div>
-    {selectedAssetId ? <AssetDetailDialog assetId={selectedAssetId} client={client} onClose={onCloseDetail} onDeleteAsset={() => requestDeleteAsset(selectedAssetId)} onRevealManaged={() => revealMutation.mutate({ assetId: selectedAssetId, target: "managed" })} onRemoveSourceRecord={(sourcePath) => requestRemoveSource(selectedAssetId, sourcePath)} onRevealSource={(sourcePath) => revealMutation.mutate({ assetId: selectedAssetId, target: "source", sourcePath })} mutating={mutation.isPending} revealing={revealMutation.isPending} /> : null}
     {confirmation ? <ConfirmDialog action={confirmation} pending={mutation.isPending} onCancel={() => setConfirmation(null)} onConfirm={() => mutation.mutate(confirmation.request)} /> : null}
   </>;
 }

@@ -318,7 +318,7 @@ describe("application-level Import Batch observer", () => {
     renderApp(client);
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
     const detailMock = client.getAssetDetail as ReturnType<typeof vi.fn>;
-    await screen.findByRole("dialog", { name: "Asset details" });
+    await screen.findByRole("complementary", { name: "Inspector" });
     expect(detailMock).toHaveBeenCalledTimes(1);
 
     currentImportStatus = importSnapshot({

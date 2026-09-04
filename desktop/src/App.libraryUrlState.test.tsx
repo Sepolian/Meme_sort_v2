@@ -198,33 +198,37 @@ describe("Library URL state (ticket 07)", () => {
 
   it("opening an Asset updates the URL without a reload and keeps the waterfall mounted", async () => {
     const client = makeClient();
-    const { getLocation } = renderApp("/", client);
+    const { getLocation, container } = renderApp("/", client);
     // Waterfall content loads.
-    await screen.findByText("Pending Asset");
+    await screen.findByRole("button", { name: /first\.gif/i });
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
-    // Waterfall stays mounted behind the dialog (scroll position preserved).
-    expect(screen.getByText("Pending Asset")).toBeInTheDocument();
+    // Ticket 10: non-overlaying right inspector (aside), not a centered dialog.
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
+    // Waterfall stays mounted behind the inspector (scroll position preserved).
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
+    expect(container.querySelector(".library-content + .library-inspector")).not.toBeNull();
     expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
   });
 
   it("deep-links the inspector from the URL on first load", async () => {
     const client = makeClient();
     renderApp(`/?asset=${FIRST_ASSET}`, client);
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
-    expect(screen.getByText("Pending Asset")).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
   });
 
   it("closing the inspector removes only asset and preserves other params", async () => {
     const client = makeClient();
     const { getLocation } = renderApp(`/?q=cat&sort=oldest&asset=${FIRST_ASSET}`, client);
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    // Dialog closes (inspector target cleared).
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    // Inspector closes (inspector target cleared).
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
     const search = getLocation().search;
     expect(search).toContain("q=cat");
     expect(search).toContain("sort=oldest");
@@ -261,14 +265,14 @@ describe("Library URL state (ticket 07)", () => {
     const client = makeClient();
     renderAppWithHistory(["/", `/?asset=${FIRST_ASSET}`], 1, client);
     // Start on the deep-linked inspector.
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
-    expect(await screen.findByText("Pending Asset")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
   });
 });

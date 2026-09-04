@@ -234,6 +234,33 @@ p { color: var(--muted); line-height: 1.6; }
 .detail-list { display: grid; gap: 8px; max-height: 150px; margin: 0; padding-left: 18px; color: var(--muted); font-size: .875rem; overflow: auto; }
 .detail-list li { display: grid; gap: 4px; }
 .detail-action { justify-self: start; padding: 2px 0; color: var(--accent); font-size: .78rem; }
+/* Ticket 10: right-side non-overlay inspector. It lives in LibraryShell's
+   `aside.library-inspector` sibling to `.library-content`, so the waterfall
+   stays mounted with scroll preserved. No overlay, no page/layout animation;
+   only short opacity/color feedback. Width follows the spec clamp via
+   `.library-body[data-inspector="open"]` (320px/30vw/440px). */
+.inspector { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.inspector-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.inspector-header h2 { margin: 0; font-size: 1.15rem; }
+.inspector-body { display: grid; gap: 16px; min-width: 0; }
+.inspector-primary { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.inspector-preview { display: block; width: 100%; max-height: 360px; border-radius: 10px; background: var(--surface-raised); object-fit: contain; }
+.inspector-primary h3 { margin: 8px 0 4px; font-size: 1.05rem; overflow-wrap: anywhere; }
+.inspector-primary p { margin: 0; font-size: .875rem; }
+.inspector-primary-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inspector-section { min-width: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.inspector-section h3 { margin: 0 0 8px; font-size: .95rem; }
+.inspector-section p { margin: 0 0 8px; font-size: .875rem; }
+.inspector-section p:last-child { margin-bottom: 0; }
+.inspector-advanced, .inspector-overflow { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.inspector-advanced > button, .inspector-overflow > button { min-height: 32px; }
+.inspector-advanced .inspector-section, .inspector-overflow .inspector-section { margin-top: 12px; }
+.inspector-overflow-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.inspector .notice { padding: 12px 14px; }
+.inspector .button, .inspector .text-button { transition: opacity 120ms ease-in, background-color 120ms ease-in, border-color 120ms ease-in; }
+@media (prefers-reduced-motion: reduce) {
+  .inspector .button, .inspector .text-button { transition: none; }
+}
 
 @media (max-width: 760px) {
   .app-shell { display: block; }
