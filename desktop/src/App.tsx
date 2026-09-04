@@ -23,9 +23,9 @@ import { TaskBar } from "./features/tasks/TaskBar";
 import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
 import { RuntimeHealthProvider, useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator, SemanticUnavailableNotice } from "./features/runtime/RuntimeHealthBanner";
+import { ThemeProvider, useTheme } from "./features/theme/ThemeContext";
+import type { ThemePreference } from "./features/theme/theme";
 import "./App.css";
-
-type Theme = "dark" | "light";
 
 interface AppProps {
   client?: MemeSortClient;
@@ -882,8 +882,28 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
   );
 }
 
+function ThemeSidebarControl() {
+  // Compact sidebar mirror of the Settings > Appearance preference. Both read
+  // and write through the single ThemeProvider (ticket 18 sole ownership).
+  const { preference, setPreference } = useTheme();
+  return (
+    <label className="sidebar-theme" htmlFor="sidebar-theme-select">
+      <span>Theme</span>
+      <select
+        id="sidebar-theme-select"
+        aria-label="Theme preference"
+        value={preference}
+        onChange={(event) => setPreference(event.target.value as ThemePreference)}
+      >
+        <option value="system">System</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
+  );
+}
+
 function AppShell({ client }: { client: MemeSortClient }) {
-  const [theme, setTheme] = useState<Theme>("dark");
   const [showHelp, setShowHelp] = useState(false);
   const stateQuery = useQuery({
     queryKey: ["app-state"],
@@ -891,10 +911,6 @@ function AppShell({ client }: { client: MemeSortClient }) {
     // Polling app-state must not start another automatic health check (ticket 14).
     refetchInterval: 5_000,
   });
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
 
   return (
     <div className="app-shell">
@@ -919,9 +935,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
             ))}
           </nav>
           <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
-          <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
-            Use {theme === "dark" ? "light" : "dark"} theme
-          </button>
+          <ThemeSidebarControl />
         </div>
       </aside>
       <div className="workspace">
@@ -947,11 +961,13 @@ function AppShell({ client }: { client: MemeSortClient }) {
 
 export function App({ client = tauriClient }: AppProps) {
   return (
-    <RuntimeHealthProvider client={client}>
-      <ImportBatchProvider client={client}>
-        <AppShell client={client} />
-      </ImportBatchProvider>
-    </RuntimeHealthProvider>
+    <ThemeProvider>
+      <RuntimeHealthProvider client={client}>
+        <ImportBatchProvider client={client}>
+          <AppShell client={client} />
+        </ImportBatchProvider>
+      </RuntimeHealthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 import type { MemeSortClient } from "./api/tauri-client";
@@ -70,6 +70,11 @@ function renderApp(route = "/") {
 }
 
 describe("application shell navigation", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    delete document.documentElement.dataset.theme;
+  });
+
   it("shows Library and Duplicates at the top with Settings anchored at the bottom", async () => {
     renderApp();
     await screen.findByRole("heading", { name: "Your library" });
@@ -142,13 +147,47 @@ describe("application shell navigation", () => {
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
-  it("switches the document theme without changing the active workspace", async () => {
+  it("defaults to the system theme without changing the active workspace", async () => {
+    window.localStorage.clear();
     renderApp();
     await screen.findByRole("heading", { name: "Your library" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Use light theme" }));
-
-    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    // Ticket 18: first launch uses `system`; resolved appearance is written
+    // as dark/light on <html> without disturbing the workspace.
+    const sidebarTheme = screen.getByRole("combobox", { name: "Theme preference" });
+    expect(sidebarTheme).toHaveValue("system");
+    expect(["dark", "light"]).toContain(
+      document.documentElement.getAttribute("data-theme"),
+    );
     expect(screen.getByRole("heading", { name: "Your library" })).toBeInTheDocument();
+  });
+
+  it("persists explicit theme choices from the sidebar without leaving Library", async () => {
+    window.localStorage.clear();
+    renderApp();
+    await screen.findByRole("heading", { name: "Your library" });
+
+    const sidebarTheme = screen.getByRole("combobox", { name: "Theme preference" });
+    fireEvent.change(sidebarTheme, { target: { value: "dark" } });
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("dark");
+    expect(screen.getByRole("heading", { name: "Your library" })).toBeInTheDocument();
+
+    fireEvent.change(sidebarTheme, { target: { value: "light" } });
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("light");
+  });
+
+  it("offers all three theme preferences in Settings without a second control contract", async () => {
+    window.localStorage.clear();
+    renderApp("/settings");
+    await screen.findByRole("heading", { name: "Settings" });
+
+    const group = screen.getByRole("radiogroup", { name: "Theme preference" });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /System/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /Dark/ }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("dark");
   });
 });

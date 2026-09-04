@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState } from "../../api/types";
 import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { ThemeSettingsControl } from "../theme/ThemeSettingsControl";
 import { AdvancedDiagnostics } from "./AdvancedDiagnostics";
 import { AcceptedPairsSection } from "./AcceptedPairsSection";
 
@@ -133,8 +134,11 @@ export function SettingsPage({
   return (
     <>
       <SettingsSection id="settings-appearance" title="Appearance">
-        <p>Theme controls live here. Ticket 18 owns the persisted system | dark | light preference.</p>
-        <p>For now, use the sidebar theme toggle during migration.</p>
+        <p>
+          Theme preference is persisted as system, dark, or light and defaults
+          to system. System follows Windows appearance without a reload.
+        </p>
+        <ThemeSettingsControl />
       </SettingsSection>
       <SettingsSection id="settings-accepted-pairs" title="Accepted Duplicate Pairs">
         {client ? (

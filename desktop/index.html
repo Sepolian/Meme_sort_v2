@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MemeSort</title>
+    <script>
+      // Ticket 18: apply the persisted theme before first paint to avoid a
+      // dark/light flash. Mirrors theme.ts (sole owner is the ThemeProvider at
+      // runtime; this only sets the initial data-theme attribute).
+      try {
+        var stored = localStorage.getItem("memesort.theme.preference/v1");
+        var preference =
+          stored === "dark" || stored === "light" || stored === "system"
+            ? stored
+            : "system";
+        var resolved = preference;
+        if (resolved === "system") {
+          resolved =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        }
+        document.documentElement.dataset.theme = resolved;
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
   </head>
 
   <body>
