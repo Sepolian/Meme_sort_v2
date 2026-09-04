@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { mediaUrl } from "../../api/media-url";
@@ -10,6 +10,20 @@ import {
 import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import { useOptionalRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import {
+  DEFAULT_LIBRARY_DENSITY,
+  DEFAULT_LIBRARY_MEDIA,
+  DEFAULT_LIBRARY_SORT,
+  DEFAULT_LIBRARY_STATUS,
+  type LibraryDensity,
+  type LibraryMediaFilter,
+  type LibrarySort,
+  type LibraryStatusFilter,
+} from "../library/libraryUrlState";
+import {
+  getAssetDisplayName,
+  getOrderedLibraryAssets,
+} from "../library/libraryOrdering";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
@@ -18,6 +32,11 @@ interface AssetsWorkspaceProps {
   onSelectAsset: (assetId: string) => void;
   onCloseDetail: () => void;
   nativeDrag?: NativeDragSubscribe;
+  sort?: LibrarySort;
+  media?: LibraryMediaFilter;
+  status?: LibraryStatusFilter;
+  density?: LibraryDensity;
+  onClearFilters?: () => void;
 }
 
 type MutationRequest =
@@ -37,8 +56,7 @@ interface ConfirmAction {
 }
 
 function assetName(asset: AssetSummary): string {
-  const sourceName = asset.source_records[0]?.source_path.split(/[\\/]/).pop();
-  return sourceName || asset.library_path.split("/").pop() || asset.asset_id;
+  return getAssetDisplayName(asset);
 }
 
 function dimensions(asset: AssetSummary): string {
@@ -156,7 +174,18 @@ function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<Me
   return "Deleted the Asset and its Library Copy and Derived Artifacts.";
 }
 
-export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail, nativeDrag }: AssetsWorkspaceProps) {
+export function AssetsWorkspace({
+  client,
+  selectedAssetId,
+  onSelectAsset,
+  onCloseDetail,
+  nativeDrag,
+  sort = DEFAULT_LIBRARY_SORT,
+  media = DEFAULT_LIBRARY_MEDIA,
+  status = DEFAULT_LIBRARY_STATUS,
+  density = DEFAULT_LIBRARY_DENSITY,
+  onClearFilters,
+}: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
   const runtimeHealth = useOptionalRuntimeHealth();
@@ -231,6 +260,21 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
     });
   }, [client, nativeDragSubscribe, queryClient, startBatch]);
 
+  // Ticket 08: filter first, then sort, to produce the stable waterfall input
+  // sequence. This hook stays above the pending/error early returns so hook
+  // order never changes between loading and loaded renders. Density only
+  // affects presentation (column width/gap) via the grid's data-density
+  // attribute and ticket 07's persisted preference.
+  const assetsData = assetsQuery.data;
+  const orderedAssets = useMemo(
+    () =>
+      assetsData
+        ? getOrderedLibraryAssets(assetsData.assets, { sort, media, status })
+        : [],
+    [assetsData, sort, media, status],
+  );
+  const isFiltered = media !== DEFAULT_LIBRARY_MEDIA || status !== DEFAULT_LIBRARY_STATUS;
+
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
 
@@ -252,14 +296,36 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   const requestRemoveSource = (assetId: string, sourcePath: string) => setConfirmation({ title: "Remove this Source Record?", detail: "If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts.", confirmLabel: "Remove Source Record", request: { kind: "remove-source", assetId, sourcePath } });
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
     {indexingBlocked ? <p role="note">Indexing is unavailable until the current session passes the Runtime health check. Browsing, selection, and delete still work.</p> : null}
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />
     <div className="asset-wall">
       {assets.length ? (
-        <section className={`asset-grid${dragPreview ? " asset-grid-accepting" : ""}`} aria-label="Assets" ref={wallRef}>{assets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}</section>
+        orderedAssets.length ? (
+          <section
+            className={`asset-grid${dragPreview ? " asset-grid-accepting" : ""}`}
+            aria-label="Assets"
+            data-density={density}
+            ref={wallRef}
+          >
+            {orderedAssets.map((asset) => <AssetCard key={asset.asset_id} asset={asset} checked={selectedIds.has(asset.asset_id)} onSelect={() => onSelectAsset(asset.asset_id)} onToggle={() => toggleAsset(asset.asset_id)} />)}
+          </section>
+        ) : (
+          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
+            <h2>No Assets match these filters</h2>
+            <p>
+              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Adjust the Media and Status filters, or clear them to browse the full Library.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearFilters?.()}>
+                Clear filters
+              </button>
+            </div>
+          </div>
+        )
       ) : (
         <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
           <h2>Drag image files or folders here</h2>

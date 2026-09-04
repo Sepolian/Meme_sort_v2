@@ -37,6 +37,7 @@ export interface LibraryUrlStateApi {
   setDensity: (density: LibraryDensity) => void;
   setAssetId: (assetId: string) => void;
   clearAssetId: () => void;
+  clearFilters: () => void;
   setResultMode: (mode: LibraryResultMode) => void;
   resetResultMode: () => void;
 }
@@ -190,6 +191,26 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
     });
   }, [updateParams]);
 
+  // Ticket 08: clearing both filters atomically avoids the lost-update that
+  // two sequential setMedia/setStatus calls would cause (each derives its
+  // next URL from the same stale `searchParams` snapshot). Still uses only
+  // ticket 07's URL/preference contract: one URL write plus persisted prefs.
+  const clearFilters = useCallback(() => {
+    setPreferences((current) => ({
+      ...current,
+      media: DEFAULT_LIBRARY_MEDIA,
+      status: DEFAULT_LIBRARY_STATUS,
+    }));
+    saveLibraryPreferences(
+      { media: DEFAULT_LIBRARY_MEDIA, status: DEFAULT_LIBRARY_STATUS },
+      storage,
+    );
+    updateParams((next) => {
+      next.delete("media");
+      next.delete("status");
+    });
+  }, [storage, updateParams]);
+
   const setResultMode = useCallback((mode: LibraryResultMode) => {
     setResultModeState(mode);
   }, []);
@@ -218,6 +239,7 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
     setDensity,
     setAssetId,
     clearAssetId,
+    clearFilters,
     setResultMode,
     resetResultMode,
   };

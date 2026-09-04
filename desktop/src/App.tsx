@@ -7,6 +7,7 @@ import type { AppState, DuplicatePair, SearchAsset } from "./api/types";
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { LibraryControls } from "./features/library/LibraryControls";
 import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
@@ -62,7 +63,24 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   // Ticket 07: inspector target is URL-backed (`asset=<asset-id>`) so the
   // waterfall stays mounted, back/forward restores it, and closing removes
   // only `asset` while preserving q/sort/media/status.
-  const { assetId: selectedAssetId, setAssetId, clearAssetId } = useLibraryUrlState();
+  // Ticket 08: sort/media/status/density flow only through ticket 07's
+  // URL/preference contract; this page owns the single hook instance and
+  // passes effective values plus setters to the toolbar controls and the
+  // ordered workspace.
+  const {
+    sort,
+    media,
+    status,
+    density,
+    assetId: selectedAssetId,
+    setSort,
+    setMedia,
+    setStatus,
+    setDensity,
+    setAssetId,
+    clearAssetId,
+    clearFilters,
+  } = useLibraryUrlState();
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
 
   return (
@@ -73,6 +91,16 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             <div className="library-toolbar-row">
               <LibraryImportMenu client={client} />
             </div>
+            <LibraryControls
+              sort={sort}
+              media={media}
+              status={status}
+              density={density}
+              onSortChange={setSort}
+              onMediaChange={setMedia}
+              onStatusChange={setStatus}
+              onDensityChange={setDensity}
+            />
             <section className="metric-grid" aria-label="Library summary">
               <Metric label="Assets" value={state.library_status.total_assets} />
               <Metric label="Pending jobs" value={pendingJobs} />
@@ -87,6 +115,11 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             selectedAssetId={selectedAssetId}
             onSelectAsset={setAssetId}
             onCloseDetail={clearAssetId}
+            sort={sort}
+            media={media}
+            status={status}
+            density={density}
+            onClearFilters={clearFilters}
           />
         }
       />

@@ -59,6 +59,10 @@ button:focus-visible, a:focus-visible {
 .library-import-dropdown { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; display: grid; gap: 6px; min-width: 200px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 12px 32px rgb(0 0 0 / 28%); }
 .library-import-option { justify-content: start; width: 100%; min-height: 32px; }
 .library-import-menu .notice { width: min(560px, 100%); padding: 12px 14px; }
+/* Ticket 08: visible sort/filter/density controls in the Library toolbar. */
+.library-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; }
+.library-control { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .8rem; font-weight: 650; }
+.library-control select { min-height: 32px; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
 .library-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: start; }
 .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
 .library-content { min-width: 0; min-height: 0; overflow-y: auto; }
@@ -150,6 +154,10 @@ p { color: var(--muted); line-height: 1.6; }
 .toolbar-hint { font-size: .8125rem; font-style: italic; }
 .asset-wall { position: relative; }
 .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+/* Ticket 08: density visibly changes column width/gap per the spec geometry
+   (comfortable 220px/12px, compact 168px/8px). Persisted via ticket 07. */
+.asset-grid[data-density="comfortable"] { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.asset-grid[data-density="compact"] { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
 .asset-grid-accepting { outline: 2px dashed var(--accent); outline-offset: 6px; }
 .drop-cue { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; gap: 6px; padding: 24px; border-radius: 16px; background: color-mix(in srgb, var(--canvas) 72%, transparent); text-align: center; pointer-events: none; animation: drop-cue-pulse 1.4s ease-in-out infinite; }
 .drop-cue strong { color: var(--text); font-size: 1.35rem; letter-spacing: -.01em; }
