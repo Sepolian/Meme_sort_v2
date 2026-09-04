@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
@@ -13,6 +13,7 @@ import type {
   ImportTask,
 } from "../../api/types";
 import { importResultSummary, importSnapshot } from "./import-test-fixtures";
+import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
 
 let currentImportStatus: ImportTask;
 const getImportStatus = vi.fn(async (): Promise<ImportTask> => currentImportStatus);
@@ -63,6 +64,26 @@ const appState: AppState = {
   pending_jobs: [],
 };
 
+function healthyRuntimeCheck() {
+  return {
+    runtime_fingerprint: "runtime-1",
+    backend_name: "llama.cpp",
+    device: "Vulkan0",
+    gpu_name: "Test GPU",
+    gpu_vendor: "amd",
+    gpu_vendor_id: "0x1002",
+    text_smoke_vector_dim: 2048,
+    image_smoke_vector_dim: 2048,
+    diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "Image embedding passed." }],
+    smoke_test_ok: true,
+    error: null,
+  };
+}
+
+beforeEach(() => {
+  resetRuntimeHealthForTesting();
+});
+
 function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
   return {
     getAppState: vi.fn(async (): Promise<AppState> => ({ ...appState, import_task: currentImportStatus })),
@@ -95,7 +116,7 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
     pauseWorkerLoop: unsupported,
     resumeWorkerLoop: unsupported,
     triggerWorkerLoop: unsupported,
-    runRuntimeHealthCheck: unsupported,
+    runRuntimeHealthCheck: vi.fn(async () => healthyRuntimeCheck()),
     retryFailedJobs: unsupported,
     getPendingJobs: unsupported,
     deletePendingJobs: unsupported,

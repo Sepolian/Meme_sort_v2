@@ -71,6 +71,7 @@ button:focus-visible, a:focus-visible {
 .connection { color: var(--muted); font-size: .875rem; font-weight: 650; }
 .connection-online::before { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); content: ""; }
 .topbar-detail { color: var(--muted); font-size: .875rem; }
+.runtime-health-preparing { color: var(--muted); font-size: .875rem; font-weight: 650; }
 .page, .state-panel { width: min(1120px, 100%); margin: 0 auto; padding: 48px 32px; }
 .page-heading { margin-bottom: 30px; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }

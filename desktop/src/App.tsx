@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import { tauriErrorDetail } from "./api/tauri-error";
-import type { AppState, DuplicatePair, RuntimeHealthResult, SearchAsset } from "./api/types";
+import type { AppState, DuplicatePair, SearchAsset } from "./api/types";
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
@@ -14,6 +14,8 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { useImportBatch } from "./features/import/ImportBatchContext";
+import { RuntimeHealthProvider, useRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
+import { RuntimeHealthBanner, RuntimeHealthCompactIndicator, SemanticUnavailableNotice } from "./features/runtime/RuntimeHealthBanner";
 import "./App.css";
 
 type Theme = "dark" | "light";
@@ -103,14 +105,18 @@ function SettingsRoute() {
 function SetupPage({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   const importBatch = useImportBatch();
   const startBatch = importBatch.startBatch;
+  const health = useRuntimeHealth();
   const detail = state.setup_state.runtime_readiness?.ready_detail;
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [healthResult, setHealthResult] = useState<RuntimeHealthResult | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const importTask = state.import_task;
   const importRunning = importTask?.running ?? false;
-  const canStartIndexing = state.setup_state.health_check_ok;
+  // Current-session authorization (ticket 14) is authoritative for indexing.
+  // Persisted/AppState health (`health_check_ok`) is informational only and
+  // never authorizes indexing on its own.
+  const canStartIndexing = health.isAuthorized;
+  const healthResult = health.result;
 
   const runImportAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setIsWorking(true);
@@ -145,9 +151,13 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
     setIsWorking(true);
     setFeedback(null);
     try {
-      const result = await client.runRuntimeHealthCheck();
-      setHealthResult(result);
-      setFeedback(result.smoke_test_ok ? `Runtime health check passed on ${result.device}.` : result.error ?? "Runtime health check failed.");
+      const snapshot = await health.retry();
+      const result = snapshot.result;
+      setFeedback(
+        snapshot.status === "healthy" && result
+          ? `Runtime health check passed on ${result.device}.`
+          : (snapshot.error ?? result?.error ?? "Runtime health check failed."),
+      );
       onStateChanged();
     } catch (error) {
       setFeedback(tauriErrorDetail(error, "MemeSort could not run the Vulkan health check."));
@@ -170,18 +180,30 @@ function SetupPage({ state, client, onStateChanged }: { state: AppState; client:
         <p>{state.runtime.model_label ?? "Manifest-pinned model"} · {state.runtime.output_dimension ?? "unknown"}d · {state.runtime.storage_dtype ?? "unknown"}</p>
         <p>{state.runtime.backend_name} / {state.runtime.device}; this descriptor is read-only.</p>
       </section>
-      {state.setup_state.health_check_ok ? (
+      {health.status === "checking" || health.status === "idle" ? (
+        <section className="notice" role="status" aria-label="Runtime health">
+          <strong>Preparing search…</strong>
+          <span>Running one automatic Runtime health check for this app session. Browsing and import remain usable.</span>
+        </section>
+      ) : health.isAuthorized ? (
         <section className="notice notice-success" role="status">
           <strong>Runtime ready in this app session.</strong>
           <span>{detail ?? "The current health check authorizes indexing."}</span>
         </section>
       ) : (
-        <RuntimeNotReady detail={detail} />
+        <>
+          <RuntimeNotReady detail={health.error ?? detail} />
+          <p>Run the external setup script to install the pinned runtime; this app does not install the Runtime. Library browsing and import still work.</p>
+        </>
       )}
       <section className="surface import-card" aria-labelledby="health-check-title">
         <h2 id="health-check-title">Vulkan health check</h2>
-        <p>Checks the manifest-pinned llama.cpp Vulkan0 runtime in this application session.</p>
-        <div className="import-actions"><button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void runHealthCheck()}>Run Vulkan health check</button></div>
+        <p>Checks the manifest-pinned llama.cpp Vulkan0 runtime in this application session. Persisted health is informational only; only this session&apos;s check authorizes indexing.</p>
+        <div className="import-actions">
+          <button className="button button-secondary" type="button" disabled={isWorking || health.status === "checking"} onClick={() => void runHealthCheck()}>
+            {health.isBlocked ? "Retry health check" : "Run Vulkan health check"}
+          </button>
+        </div>
         {healthResult ? <ul className="detail-list">{healthResult.diagnostic_steps.map((step) => <li key={`${step.step}-${step.status}`}><strong>{step.step} · {step.status} · {step.detail}</strong></li>)}</ul> : null}
       </section>
       <section className="surface import-card" aria-labelledby="setup-checklist-title">
@@ -281,11 +303,13 @@ function SearchLandingPage() {
 }
 
 function TextSearchPage({ client }: { client: MemeSortClient }) {
+  const health = useRuntimeHealth();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchAsset[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeRequestId = useRef<string | null>(null);
+  const semanticBlocked = health.isBlocked;
 
   const cancelCurrentSearch = useCallback(() => {
     const requestId = activeRequestId.current;
@@ -322,15 +346,17 @@ function TextSearchPage({ client }: { client: MemeSortClient }) {
 
   return (
     <Page title="Text search" eyebrow="Search Request">
+      <SemanticUnavailableNotice />
       <section className="surface search-panel">
         <form className="search-form" onSubmit={(event) => void submit(event)}>
           <label htmlFor="text-search-query">Search text</label>
           <div>
             <input id="text-search-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Describe a reaction or meme" />
-            <button className="button" type="submit" disabled={isSearching || !query.trim()}>Search</button>
+            <button className="button" type="submit" disabled={isSearching || !query.trim() || semanticBlocked}>Search</button>
           </div>
         </form>
         <p>Each request is scoped to this page and is cancelled when you replace it or leave the page.</p>
+        {semanticBlocked ? <p>Semantic search is unavailable until the current session passes the Runtime health check. Library browsing and import still work.</p> : null}
       </section>
       {isSearching ? <p aria-live="polite">Searching the Active Index Recipe…</p> : null}
       {error ? <section className="notice notice-warning" role="alert"><strong>Search unavailable</strong><span>{error}</span></section> : null}
@@ -350,12 +376,14 @@ function TextSearchPage({ client }: { client: MemeSortClient }) {
 }
 
 function ImageSearchPage({ client }: { client: MemeSortClient }) {
+  const health = useRuntimeHealth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [results, setResults] = useState<SearchAsset[] | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeRequestId = useRef<string | null>(null);
+  const semanticBlocked = health.isBlocked;
 
   const cancelCurrentSearch = useCallback(() => {
     const requestId = activeRequestId.current;
@@ -403,6 +431,7 @@ function ImageSearchPage({ client }: { client: MemeSortClient }) {
 
   return (
     <Page title="Image search" eyebrow="Search Request">
+      <SemanticUnavailableNotice />
       <section className="surface search-panel">
         <h2>Search by image</h2>
         <p>Choose an image with the native dialog. Its filesystem path stays outside the WebView.</p>
@@ -411,11 +440,12 @@ function ImageSearchPage({ client }: { client: MemeSortClient }) {
           <button className="button button-secondary" type="button" disabled={isSelecting || isSearching} onClick={() => void chooseImage()}>
             Choose image
           </button>
-          <button className="button" type="button" disabled={isSelecting || isSearching || !selectedImage} onClick={() => void search()}>
+          <button className="button" type="button" disabled={isSelecting || isSearching || !selectedImage || semanticBlocked} onClick={() => void search()}>
             Search image
           </button>
         </div>
         <p>Each request is scoped to this page and is cancelled when you replace it or leave the page.</p>
+        {semanticBlocked ? <p>Semantic search is unavailable until the current session passes the Runtime health check. Library browsing and import still work.</p> : null}
       </section>
       {isSearching ? <p aria-live="polite">Searching the Active Index Recipe…</p> : null}
       {error ? <section className="notice notice-warning" role="alert"><strong>Search unavailable</strong><span>{error}</span></section> : null}
@@ -435,6 +465,7 @@ function ImageSearchPage({ client }: { client: MemeSortClient }) {
 }
 
 function SimilarSearchPage({ client }: { client: MemeSortClient }) {
+  const health = useRuntimeHealth();
   const [assetId, setAssetId] = useState("");
   const [results, setResults] = useState<SearchAsset[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -444,6 +475,7 @@ function SimilarSearchPage({ client }: { client: MemeSortClient }) {
     queryFn: () => client.getAssets(),
   });
   const indexedAssets = assetsQuery.data?.assets.filter((asset) => asset.status === "indexed") ?? [];
+  const semanticBlocked = health.isBlocked;
 
   const search = async () => {
     if (!assetId) return;
@@ -461,6 +493,7 @@ function SimilarSearchPage({ client }: { client: MemeSortClient }) {
 
   return (
     <Page title="Find similar Assets" eyebrow="Active Index Recipe">
+      <SemanticUnavailableNotice />
       <section className="surface search-panel">
         <h2>Asset to Assets</h2>
         <p>Only Indexed Assets participate in semantic retrieval with the Active Index Recipe.</p>
@@ -470,10 +503,11 @@ function SimilarSearchPage({ client }: { client: MemeSortClient }) {
             <option value="">Choose an Indexed Asset</option>
             {indexedAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.library_path}</option>)}
           </select>
-          <button className="button" type="button" disabled={assetsQuery.isPending || isSearching || !assetId} onClick={() => void search()}>
+          <button className="button" type="button" disabled={assetsQuery.isPending || isSearching || !assetId || semanticBlocked} onClick={() => void search()}>
             Find similar
           </button>
         </div>
+        {semanticBlocked ? <p>Semantic search is unavailable until the current session passes the Runtime health check. Library browsing and import still work.</p> : null}
         {assetsQuery.isError ? <p role="alert">{tauriErrorDetail(assetsQuery.error, "MemeSort could not load Indexed Assets.")}</p> : null}
         {!assetsQuery.isPending && !assetsQuery.isError && !indexedAssets.length ? <p>No Indexed Assets are available yet.</p> : null}
       </section>
@@ -495,12 +529,14 @@ function SimilarSearchPage({ client }: { client: MemeSortClient }) {
 }
 
 function DuplicatesPage({ client }: { client: MemeSortClient }) {
+  const health = useRuntimeHealth();
   const [threshold, setThreshold] = useState("0.92");
   const [pairs, setPairs] = useState<DuplicatePair[] | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const thresholdValue = Number(threshold);
   const isValidThreshold = Number.isFinite(thresholdValue) && thresholdValue >= 0 && thresholdValue <= 1;
+  const semanticBlocked = health.isBlocked;
 
   const scan = async () => {
     if (!isValidThreshold) return;
@@ -518,17 +554,19 @@ function DuplicatesPage({ client }: { client: MemeSortClient }) {
 
   return (
     <Page title="Duplicate assets" eyebrow="Library maintenance">
+      {semanticBlocked ? <SemanticUnavailableNotice /> : null}
       <section className="surface search-panel">
         <h2>Duplicate review</h2>
         <p>Compare Indexed Asset pairs from the Active Index Recipe. GIF matches use the strongest frame-to-frame score.</p>
         <label htmlFor="duplicate-threshold">Duplicate threshold</label>
         <div className="search-form">
           <input id="duplicate-threshold" type="number" min="0" max="1" step="0.01" value={threshold} onChange={(event) => setThreshold(event.target.value)} />
-          <button className="button" type="button" disabled={isScanning || !isValidThreshold} onClick={() => void scan()}>
+          <button className="button" type="button" disabled={isScanning || !isValidThreshold || semanticBlocked} onClick={() => void scan()}>
             Scan duplicates
           </button>
         </div>
         {!isValidThreshold ? <p role="alert">Enter a threshold between 0 and 1.</p> : null}
+        {semanticBlocked ? <p>Duplicate review is unavailable until the current session passes the Runtime health check. Library browsing and import still work.</p> : null}
       </section>
       {isScanning ? <p aria-live="polite">Scanning Indexed Assets for duplicate pairs…</p> : null}
       {error ? <section className="notice notice-warning" role="alert"><strong>Duplicate scan unavailable</strong><span>{error}</span></section> : null}
@@ -745,12 +783,13 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
   );
 }
 
-export function App({ client = tauriClient }: AppProps) {
+function AppShell({ client }: { client: MemeSortClient }) {
   const [theme, setTheme] = useState<Theme>("dark");
   const [showHelp, setShowHelp] = useState(false);
   const stateQuery = useQuery({
     queryKey: ["app-state"],
     queryFn: () => client.getAppState(),
+    // Polling app-state must not start another automatic health check (ticket 14).
     refetchInterval: 5_000,
   });
 
@@ -759,49 +798,59 @@ export function App({ client = tauriClient }: AppProps) {
   }, [theme]);
 
   return (
-    <ImportBatchProvider client={client}>
-      <div className="app-shell">
-        <aside className="sidebar" aria-label="Primary navigation">
-          <Link className="brand" to="/" aria-label="MemeSort library">
-            <span className="brand-mark">M</span>
-            <span>MemeSort</span>
-          </Link>
-          <nav aria-label="Primary">
-            {primaryNavigation.map(({ to, label, end }) => (
-              <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Primary navigation">
+        <Link className="brand" to="/" aria-label="MemeSort library">
+          <span className="brand-mark">M</span>
+          <span>MemeSort</span>
+        </Link>
+        <nav aria-label="Primary">
+          {primaryNavigation.map(({ to, label, end }) => (
+            <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <nav aria-label="Settings">
+            {settingsNavigation.map(({ to, label }) => (
+              <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
                 {label}
               </NavLink>
             ))}
           </nav>
-          <div className="sidebar-footer">
-            <nav aria-label="Settings">
-              {settingsNavigation.map(({ to, label }) => (
-                <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
-                  {label}
-                </NavLink>
-              ))}
-            </nav>
-            <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
-            <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
-              Use {theme === "dark" ? "light" : "dark"} theme
-            </button>
-          </div>
-        </aside>
-        <div className="workspace">
-          <header className="topbar">
-            <span className={stateQuery.isSuccess ? "connection connection-online" : "connection"}>
-              {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
-            </span>
-            <span className="topbar-detail">Authenticated desktop session</span>
-          </header>
-          <ImportBatchPanel />
-          {stateQuery.isPending ? <LoadingState /> : null}
-          {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
-          {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+          <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
+          <button className="text-button" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>
+            Use {theme === "dark" ? "light" : "dark"} theme
+          </button>
         </div>
-        {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <span className={stateQuery.isSuccess ? "connection connection-online" : "connection"}>
+            {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
+          </span>
+          <RuntimeHealthCompactIndicator />
+          <span className="topbar-detail">Authenticated desktop session</span>
+        </header>
+        <ImportBatchPanel />
+        <RuntimeHealthBanner />
+        {stateQuery.isPending ? <LoadingState /> : null}
+        {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
+        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
       </div>
-    </ImportBatchProvider>
+      {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
+    </div>
+  );
+}
+
+export function App({ client = tauriClient }: AppProps) {
+  return (
+    <RuntimeHealthProvider client={client}>
+      <ImportBatchProvider client={client}>
+        <AppShell client={client} />
+      </ImportBatchProvider>
+    </RuntimeHealthProvider>
   );
 }
 

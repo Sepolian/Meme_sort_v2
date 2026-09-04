@@ -9,6 +9,7 @@ import {
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
+import { useOptionalRuntimeHealth } from "../runtime/RuntimeHealthProvider";
 import type { AssetDetail, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
@@ -158,6 +159,8 @@ function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<Me
 export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onCloseDetail, nativeDrag }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
+  const runtimeHealth = useOptionalRuntimeHealth();
+  const indexingBlocked = runtimeHealth?.isBlocked ?? false;
   const startBatch = importBatch.startBatch;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
@@ -249,7 +252,8 @@ export function AssetsWorkspace({ client, selectedAssetId, onSelectAsset, onClos
   const requestRemoveSource = (assetId: string, sourcePath: string) => setConfirmation({ title: "Remove this Source Record?", detail: "If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts.", confirmLabel: "Remove Source Record", request: { kind: "remove-source", assetId, sourcePath } });
 
   return <>
-    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{assets.length} Asset{assets.length === 1 ? "" : "s"} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    {indexingBlocked ? <p role="note">Indexing is unavailable until the current session passes the Runtime health check. Browsing, selection, and delete still work.</p> : null}
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />

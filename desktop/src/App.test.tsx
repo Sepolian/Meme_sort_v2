@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
+import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -245,6 +246,11 @@ const client = {
 };
 
 describe("App", () => {
+  beforeEach(() => {
+    resetRuntimeHealthForTesting();
+    vi.clearAllMocks();
+  });
+
   function renderApp(route = "/") {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -367,10 +373,24 @@ describe("App", () => {
     expect(screen.queryByText("Search is being migrated")).not.toBeInTheDocument();
   });
 
-  it("shows a runtime-not-ready state on setup", async () => {
+  it("shows a runtime-not-ready state on setup when the session check fails", async () => {
+    client.runRuntimeHealthCheck.mockResolvedValueOnce({
+      runtime_fingerprint: "runtime-1",
+      backend_name: "llama.cpp",
+      device: "Vulkan0",
+      gpu_name: null,
+      gpu_vendor: null,
+      gpu_vendor_id: null,
+      text_smoke_vector_dim: null,
+      image_smoke_vector_dim: null,
+      diagnostic_steps: [{ step: "vulkan-device", status: "error", detail: "Vulkan0 unavailable." }],
+      smoke_test_ok: false,
+      error: "Vulkan0 unavailable.",
+    } as never);
     renderApp("/setup");
 
     expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
+    expect(await screen.findByRole("alert", { name: "Runtime health failure" })).toBeInTheDocument();
   });
 
   it("shows the read-only Runtime Descriptor and setup checklist", async () => {
@@ -385,9 +405,12 @@ describe("App", () => {
   it("runs the pinned Vulkan health check and displays its diagnostic step", async () => {
     renderApp("/setup");
 
+    // Wait for the single automatic startup check to authorize the session,
+    // then an explicit Retry starts a second check.
+    await screen.findByText("Runtime ready in this app session.");
     fireEvent.click(await screen.findByRole("button", { name: "Run Vulkan health check" }));
 
-    expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1);
+    expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(2);
     expect(await screen.findByText("Runtime health check passed on Vulkan0.")).toBeInTheDocument();
     expect(screen.getByText("image-embedding-smoke · ok · Image embedding passed.")).toBeInTheDocument();
   });

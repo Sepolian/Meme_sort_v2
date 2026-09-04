@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+
 interface SettingsSectionProps {
   id: string;
   title: string;
@@ -13,13 +16,66 @@ function SettingsSection({ id, title, children }: SettingsSectionProps) {
   );
 }
 
+function RuntimeHealthSection() {
+  const health = useRuntimeHealth();
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const onRetry = async () => {
+    setIsRetrying(true);
+    try {
+      await health.retry();
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  return (
+    <>
+      <p>MemeSort uses the manifest-pinned llama.cpp Vulkan0 runtime. Runtime selection is not configurable.</p>
+      {health.status === "checking" || health.status === "idle" ? (
+        <p role="status" aria-label="Runtime health">
+          Preparing search…
+        </p>
+      ) : health.isAuthorized ? (
+        <p role="status">
+          Runtime ready in this app session{health.result ? ` on ${health.result.device}` : ""}. This session authorizes indexing and semantic search.
+        </p>
+      ) : (
+        <section className="notice notice-warning" role="alert" aria-label="Runtime health failure">
+          <strong>Semantic search and indexing are unavailable</strong>
+          <span>{health.result?.error ?? health.error ?? "The current session health check failed."}</span>
+          <span>Library browsing and import still work.</span>
+        </section>
+      )}
+      {health.result?.diagnostic_steps?.length ? (
+        <ul className="detail-list">
+          {health.result.diagnostic_steps.map((step) => (
+            <li key={`${step.step}-${step.status}`}>
+              <strong>
+                {step.step} · {step.status} · {step.detail}
+              </strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="import-actions">
+        <button className="button button-secondary" type="button" disabled={isRetrying || health.status === "checking"} onClick={() => void onRetry()}>
+          {isRetrying ? "Retrying…" : "Retry health check"}
+        </button>
+      </div>
+      <p>Full Runtime descriptor and Advanced Diagnostics land with ticket 15.</p>
+    </>
+  );
+}
+
 /**
- * Settings route skeleton (ticket 06).
+ * Settings route skeleton (ticket 06) with startup health lifecycle (ticket 14).
  *
  * Final destination for Appearance, Accepted Duplicate Pair reset, Runtime
  * descriptor/health, external installation guidance, and Advanced Diagnostics.
- * Full behavior lands in tickets 14, 15, and 18; legacy Setup/Status routes
- * remain usable until those replacements ship (ticket 19).
+ * Ticket 14 owns the current-session health display and Retry; full behavior
+ * lands in tickets 15 and 18; legacy Setup/Status routes remain usable until
+ * those replacements ship (ticket 19).
  */
 export function SettingsPage() {
   return (
@@ -36,8 +92,7 @@ export function SettingsPage() {
         <p>Clear-all and pair inspection land with tickets 02, 03, and 16.</p>
       </SettingsSection>
       <SettingsSection id="settings-runtime" title="Runtime">
-        <p>MemeSort uses the manifest-pinned llama.cpp Vulkan0 runtime. Runtime selection is not configurable.</p>
-        <p>Runtime descriptor, current health, and Retry land here with tickets 14 and 15.</p>
+        <RuntimeHealthSection />
       </SettingsSection>
       <SettingsSection id="settings-installation" title="Installation">
         <p>
