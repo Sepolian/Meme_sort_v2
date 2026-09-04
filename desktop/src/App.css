@@ -24,7 +24,7 @@
   --color-text: #f4f6f8;
   --color-text-muted: #9aa4b2;
   --color-border: #2c3340;
-  --color-accent: #7c8cff;
+  --color-accent: #02b6ff;
   --color-pending: #e0a43b;
   --color-failed: #e25f5f;
   --color-on-accent: #0c0e12;
@@ -90,7 +90,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .app-shell { display: grid; min-height: 100vh; grid-template-columns: 208px minmax(0, 1fr); }
-.sidebar { display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid var(--color-border); background: var(--color-surface); }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid var(--color-border); background: var(--color-surface); }
 .brand { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--color-text); font-size: 16px; font-weight: 600; line-height: 1.35; text-decoration: none; }
 .brand-mark { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); font-size: 14px; font-weight: 600; }
 .sidebar nav { display: grid; gap: 4px; }
@@ -290,11 +290,14 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 /* No gradients by contract: solid raised placeholder. */
 .media-placeholder { background: var(--color-surface-raised); }
 .asset-card-badge { position: absolute; top: 8px; left: 8px; z-index: 1; }
-/* Ticket 09: hover overlay holds the name, quick actions, and selection
-   checkbox. Opacity (never display) keeps card geometry fixed and content
-   queryable; focus-within covers keyboard users. Badges stay always visible. */
-.asset-card-hover { display: grid; gap: 8px; padding: 8px 12px 12px; opacity: 0; transition: opacity 120ms ease-out; }
-.asset-card:hover .asset-card-hover, .asset-card:focus-within .asset-card-hover { opacity: 1; }
+/* Library cards: name + meta live in the always-visible in-flow footer so
+   rest-state cards never look empty. `.asset-card-hover` holds only quick
+   actions + Select and is an absolute overlay pinned to the card bottom;
+   opacity (never display) keeps card geometry fixed and content queryable;
+   focus-within covers keyboard users. Badges stay always visible. */
+.asset-card-info { display: grid; gap: 4px; padding: 8px 12px 12px; }
+.asset-card-hover { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: grid; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--color-border); background: var(--color-surface); opacity: 0; pointer-events: none; transition: opacity 120ms ease-out; }
+.asset-card:hover .asset-card-hover, .asset-card:focus-within .asset-card-hover { opacity: 1; pointer-events: auto; }
 .asset-card-name { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .asset-card-meta { overflow: hidden; color: var(--color-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .asset-card-quick-actions { display: flex; gap: 8px; }
@@ -349,7 +352,7 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 
 @media (max-width: 760px) {
   .app-shell { display: block; }
-  .sidebar { position: sticky; z-index: 2; top: 0; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; }
+  .sidebar { position: sticky; z-index: 2; top: 0; display: flex; flex-direction: row; align-items: center; gap: 8px; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; overflow-y: visible; }
   .sidebar nav { display: flex; gap: 4px; }
   .nav-link { padding: 8px; white-space: nowrap; }
   .sidebar-footer { display: flex; align-items: center; margin: 0 0 0 auto; }

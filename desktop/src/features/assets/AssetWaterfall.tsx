@@ -155,7 +155,9 @@ interface AssetWaterfallCardProps {
  *
  * - Media is uncropped (`object-fit: contain` inside the reserved wrapper).
  * - Pending/Failed badges are always visible; normal Indexed state is hidden.
- * - Name, quick actions, and the selection checkbox live in the hover overlay
+ * - Name and meta live in the always-visible in-flow `.asset-card-info`
+ *   footer so rest-state cards never look empty. Quick actions and the
+ *   selection checkbox live in the absolute `.asset-card-hover` overlay
  *   (revealed on hover and on focus-within for keyboard users). The overlay
  *   uses opacity rather than display so showing it never shifts geometry.
  * - GIF cards render the static thumbnail by default and swap only the active
@@ -233,11 +235,13 @@ function AssetWaterfallCard({
           {formatStatusBadge(asset.status)}
         </span>
       ) : null}
-      <div className="asset-card-hover">
+      <div className="asset-card-info">
         <span className="asset-card-name">{name}</span>
         <span className="asset-card-meta">
           {formatDimensions(asset)} · {asset.media_type}
         </span>
+      </div>
+      <div className="asset-card-hover">
         <div
           className="asset-card-quick-actions"
           aria-label={`Quick actions for ${name}`}
