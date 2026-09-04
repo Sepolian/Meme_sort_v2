@@ -43,18 +43,31 @@ interface AssetsWorkspaceProps {
   onClearFilters?: () => void;
   /** URL query text driving local filtering (typing updates `q`). */
   query?: string;
-  /** Transient result mode from ticket 07 (`browse`/`local`/`semantic`; image/similar fall back to browse). */
+  /** Transient result mode from ticket 07 (`browse`/`local`/`semantic`/`image`/`similar`). */
   resultMode?: LibraryResultMode;
   /** Raw semantic projections for the latest committed request (null until first success). */
   semanticRawResults?: SearchAsset[] | null;
   /** Query text of the latest committed semantic results (null until first success). */
   semanticQuery?: string | null;
-  /** True while a semantic Search Request is in flight. */
+  /** Raw image projections for the latest committed image request (null until first success). */
+  imageRawResults?: SearchAsset[] | null;
+  /** Request ID of the latest committed image results (null until first success). */
+  committedImageRequestId?: string | null;
+  /** Raw similar projections for the latest committed similar request (null until first success). */
+  similarRawResults?: SearchAsset[] | null;
+  /** Asset ID of the latest committed similar results (null until first success). */
+  committedSimilarAssetId?: string | null;
+  /** True while a Search Request (any mode) is in flight. */
   isSearching?: boolean;
-  /** Latest semantic error for the current request (null when none). */
+  /** Latest error for the current request (null when none). Only the latest identity may commit. */
   searchError?: string | null;
-  /** Clear semantic + local search and restore browsing (cancels active work). */
+  /** Clear all search modes and restore browsing (cancels active work). */
   onClearSearch?: () => void;
+  /**
+   * Find Similar entry point for ticket 12 (card hover/context action).
+   * Shares the same result mode as the inspector entry point.
+   */
+  onFindSimilar?: (assetId: string) => void;
 }
 
 type MutationRequest =
@@ -192,9 +205,14 @@ export function AssetsWorkspace({
   resultMode,
   semanticRawResults = null,
   semanticQuery = null,
+  imageRawResults = null,
+  committedImageRequestId = null,
+  similarRawResults = null,
+  committedSimilarAssetId = null,
   isSearching = false,
   searchError = null,
   onClearSearch,
+  onFindSimilar,
 }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
@@ -335,13 +353,19 @@ export function AssetsWorkspace({
   // retained, Pending/Failed included). Semantic composes raw SearchAsset
   // projections through ticket 05's helper, preserves relevance order, and
   // excludes non-Indexed Assets. Raw scores appear only in advanced details.
+  // Ticket 12: image and similar reuse the same composed, cancellable
+  // waterfall in relevance/similarity order with shared latest-wins.
   // These memos stay above the pending/error early returns to keep hook order
-  // stable. `image`/`similar` modes (ticket 12) fall back to browse here.
+  // stable.
   const effectiveMode: LibraryResultMode =
     resultMode ?? (query.trim() !== "" ? { kind: "local", query } : { kind: "browse" });
   const isSemanticMode = effectiveMode.kind === "semantic";
   const isLocalMode = effectiveMode.kind === "local";
+  const isImageMode = effectiveMode.kind === "image";
+  const isSimilarMode = effectiveMode.kind === "similar";
   const semanticModeQuery = isSemanticMode ? effectiveMode.query : "";
+  const imageSelectionId = isImageMode ? effectiveMode.selectionId : null;
+  const similarModeAssetId = isSimilarMode ? effectiveMode.assetId : "";
   const localDisplayQuery = isLocalMode ? effectiveMode.query : query;
   const summaryMap = useMemo(
     () => buildAssetSummaryMap(assetsData?.assets ?? []),
@@ -355,11 +379,30 @@ export function AssetsWorkspace({
     () => (semanticRawResults ? composeSearchItems(semanticRawResults, summaryMap) : null),
     [semanticRawResults, summaryMap],
   );
-  // Only the committed results for the current semantic query may render.
+  const composedImage = useMemo(
+    () => (imageRawResults ? composeSearchItems(imageRawResults, summaryMap) : null),
+    [imageRawResults, summaryMap],
+  );
+  const composedSimilar = useMemo(
+    () => (similarRawResults ? composeSearchItems(similarRawResults, summaryMap) : null),
+    [similarRawResults, summaryMap],
+  );
+  // Only the committed results for the current query may render.
   // Older in-flight promises settle with a mismatched identity and stay hidden
-  // (latest-wins); typing a new q falls back to local via ticket 07's effect.
+  // (latest-wins, including cross-mode); typing a new q falls back to local
+  // via ticket 07's effect. Image/similar are query-independent and stay
+  // sticky until cleared (never restored from URL/storage).
   const hasFreshSemantic =
     isSemanticMode && semanticRawResults !== null && semanticQuery !== null && semanticQuery === semanticModeQuery;
+  const hasFreshImage =
+    isImageMode &&
+    imageRawResults !== null &&
+    // `selectionId` carries the UUID-scoped image request ID (ticket 12).
+    // A null selection can only arise from legacy callers; treat any
+    // committed image payload as fresh in that case.
+    (imageSelectionId === null || committedImageRequestId === imageSelectionId);
+  const hasFreshSimilar =
+    isSimilarMode && similarRawResults !== null && committedSimilarAssetId !== null && committedSimilarAssetId === similarModeAssetId;
   const semanticIndexedItems = useMemo(() => {
     if (!hasFreshSemantic || !composedSemantic) return [];
     return composedSemantic.items.filter((item) => item.summary.status === "indexed");
@@ -369,6 +412,24 @@ export function AssetsWorkspace({
     [semanticIndexedItems],
   );
   const semanticStaleCount = hasFreshSemantic && composedSemantic ? composedSemantic.stale.length : 0;
+  const imageIndexedItems = useMemo(() => {
+    if (!hasFreshImage || !composedImage) return [];
+    return composedImage.items.filter((item) => item.summary.status === "indexed");
+  }, [hasFreshImage, composedImage]);
+  const imageSummaries = useMemo(
+    () => imageIndexedItems.map((item) => item.summary),
+    [imageIndexedItems],
+  );
+  const imageStaleCount = hasFreshImage && composedImage ? composedImage.stale.length : 0;
+  const similarIndexedItems = useMemo(() => {
+    if (!hasFreshSimilar || !composedSimilar) return [];
+    return composedSimilar.items.filter((item) => item.summary.status === "indexed");
+  }, [hasFreshSimilar, composedSimilar]);
+  const similarSummaries = useMemo(
+    () => similarIndexedItems.map((item) => item.summary),
+    [similarIndexedItems],
+  );
+  const similarStaleCount = hasFreshSimilar && composedSimilar ? composedSimilar.stale.length : 0;
 
   // Ticket 10: prune checkbox selection when the Asset list no longer
   // contains an ID (e.g. the inspector deleted it via its own mutation that
@@ -467,6 +528,100 @@ export function AssetsWorkspace({
         ) : null}
       </section>
     ) : null}
+    {isImageMode ? (
+      <section className="notice" role="status" aria-label="Image search results">
+        <strong>
+          {isSearching && !hasFreshImage
+            ? `Searching the Active Index Recipe for the chosen image\u2026`
+            : `Image results \u00B7 ${imageSummaries.length}`}
+        </strong>
+        <span>Image results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
+        {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
+        {searchError ? (
+          <section className="notice notice-warning" role="alert" aria-label="Image search error">
+            <strong>Image search unavailable</strong>
+            <span>{searchError}</span>
+            <span>Library browsing remains available. Local matches stay visible below.</span>
+          </section>
+        ) : null}
+        {imageStaleCount ? (
+          <section className="notice notice-warning" role="status" aria-label="Stale image results">
+            <strong>{imageStaleCount} image result{imageStaleCount === 1 ? "" : "s"} omitted</strong>
+            <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
+          </section>
+        ) : null}
+        {hasFreshImage && imageIndexedItems.length ? (
+          <details>
+            <summary>Advanced details</summary>
+            <ul className="detail-list">
+              {imageIndexedItems.map((item) => (
+                <li key={item.summary.asset_id}>
+                  <span className="mono">{item.summary.asset_id}</span>
+                  <span>
+                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
+                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {onClearSearch ? (
+          <div className="import-actions">
+            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
+              Clear search
+            </button>
+          </div>
+        ) : null}
+      </section>
+    ) : null}
+    {isSimilarMode ? (
+      <section className="notice" role="status" aria-label="Similar search results">
+        <strong>
+          {isSearching && !hasFreshSimilar
+            ? `Finding similar Assets\u2026`
+            : `Similar results \u00B7 ${similarSummaries.length}`}
+        </strong>
+        <span>Similar results in similarity order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
+        {isSearching ? <p aria-live="polite">Finding similar Assets in the Active Index Recipe&hellip;</p> : null}
+        {searchError ? (
+          <section className="notice notice-warning" role="alert" aria-label="Similar search error">
+            <strong>Find Similar unavailable</strong>
+            <span>{searchError}</span>
+            <span>Library browsing remains available. Local matches stay visible below.</span>
+          </section>
+        ) : null}
+        {similarStaleCount ? (
+          <section className="notice notice-warning" role="status" aria-label="Stale similar results">
+            <strong>{similarStaleCount} similar result{similarStaleCount === 1 ? "" : "s"} omitted</strong>
+            <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
+          </section>
+        ) : null}
+        {hasFreshSimilar && similarIndexedItems.length ? (
+          <details>
+            <summary>Advanced details</summary>
+            <ul className="detail-list">
+              {similarIndexedItems.map((item) => (
+                <li key={item.summary.asset_id}>
+                  <span className="mono">{item.summary.asset_id}</span>
+                  <span>
+                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
+                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {onClearSearch ? (
+          <div className="import-actions">
+            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
+              Clear search
+            </button>
+          </div>
+        ) : null}
+      </section>
+    ) : null}
     <div className="asset-wall">
       {!assets.length ? (
         <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
@@ -482,6 +637,7 @@ export function AssetsWorkspace({
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -507,6 +663,7 @@ export function AssetsWorkspace({
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
@@ -532,12 +689,117 @@ export function AssetsWorkspace({
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
             onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
+            <p>
+              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Clearing the search restores browsing with the selected sort and filters.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        )
+      ) : isImageMode ? (
+        hasFreshImage && imageSummaries.length ? (
+          <AssetWaterfall
+            assets={imageSummaries}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : hasFreshImage && !imageSummaries.length && !isSearching && !searchError ? (
+          <div className="empty-state" aria-label="No image matches" ref={wallRef}>
+            <h2>No image matches</h2>
+            <p>
+              Only Indexed Assets appear in image results. Try another image, or index
+              more Assets with the Active Index Recipe.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        ) : localMatches.length ? (
+          // In-progress or failed image request keeps the Library visible
+          // through local matches instead of discarding browsing.
+          <AssetWaterfall
+            assets={localMatches}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : (
+          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
+            <h2>No local matches</h2>
+            <p>
+              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Clearing the search restores browsing with the selected sort and filters.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        )
+      ) : isSimilarMode ? (
+        hasFreshSimilar && similarSummaries.length ? (
+          <AssetWaterfall
+            assets={similarSummaries}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : hasFreshSimilar && !similarSummaries.length && !isSearching && !searchError ? (
+          <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
+            <h2>No similar Assets</h2>
+            <p>
+              Only Indexed Assets appear in similar results. Index more Assets with
+              the Active Index Recipe to expand this search.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        ) : localMatches.length ? (
+          // In-progress or failed similar request keeps the Library visible
+          // through local matches instead of discarding browsing.
+          <AssetWaterfall
+            assets={localMatches}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            onFindSimilar={onFindSimilar}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : (
+          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
+            <h2>No local matches</h2>
             <p>
               The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
               Clearing the search restores browsing with the selected sort and filters.
@@ -556,6 +818,7 @@ export function AssetsWorkspace({
           checkedIds={selectedIds}
           onOpenAsset={onSelectAsset}
           onToggleChecked={toggleAsset}
+          onFindSimilar={onFindSimilar}
           sectionRef={wallRef}
           accepting={Boolean(dragPreview)}
         />

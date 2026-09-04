@@ -82,6 +82,10 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   // `searchText(query, requestId)`. Cancellation calls
   // `cancelSearch(previous)` before new work; clear/unmount cancel; only the
   // latest request identity may commit (best-effort latest-wins).
+  // Ticket 12: image attachment (`chooseSearchImage` then
+  // `searchImage(requestId)`) and Find Similar (`findSimilar(assetId)`) reuse
+  // the same composed, cancellable waterfall. Image/similar state stays
+  // transient (never in URL/storage); picker cancel leaves state unchanged.
   const {
     q,
     sort,
@@ -104,11 +108,18 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   const {
     rawResults: semanticRawResults,
     committedQuery: semanticCommittedQuery,
-    isSearching: isSemanticSearching,
-    searchError: semanticSearchError,
+    imageRawResults,
+    committedImageRequestId,
+    similarRawResults,
+    committedSimilarAssetId,
+    isSearching,
+    searchError,
     submitSearch,
+    submitImageSearch,
+    submitSimilarSearch,
     clearSearch,
   } = useLibraryTextSearch({ client });
+  const [isChoosingImage, setIsChoosingImage] = useState(false);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
@@ -132,6 +143,39 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     [submitSearch, setResultMode, semanticBlocked],
   );
 
+  const handleImageSearch = useCallback(async () => {
+    if (semanticBlocked || isChoosingImage) return;
+    setIsChoosingImage(true);
+    try {
+      const selection = await client.chooseSearchImage();
+      // Picker cancel (`selected_path: null`) leaves the current
+      // Library/result state unchanged: no submit, no mode change.
+      if (!selection.selected_path) return;
+      const requestId = submitImageSearch();
+      setResultMode({ kind: "image", selectionId: requestId });
+    } catch {
+      // Picker/transport failure also leaves browsing usable without
+      // inventing a result mode; the image hook error surfaces only for
+      // `searchImage` failures after a successful pick.
+    } finally {
+      setIsChoosingImage(false);
+    }
+  }, [client, submitImageSearch, setResultMode, semanticBlocked, isChoosingImage]);
+
+  const handleFindSimilar = useCallback(
+    (assetId: string) => {
+      const trimmed = assetId.trim();
+      if (!trimmed || semanticBlocked) return;
+      const internalId = submitSimilarSearch(trimmed);
+      if (internalId) {
+        // Both inspector and card entries share this mode shape so they
+        // produce identical behavior for the same Asset ID.
+        setResultMode({ kind: "similar", assetId: trimmed });
+      }
+    },
+    [submitSimilarSearch, setResultMode, semanticBlocked],
+  );
+
   const handleClearSearch = useCallback(() => {
     clearSearch();
     clearQuery();
@@ -148,11 +192,13 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             </div>
             <LibrarySearchBar
               query={q}
-              isSearching={isSemanticSearching}
+              isSearching={isSearching}
               semanticBlocked={semanticBlocked}
+              isChoosingImage={isChoosingImage}
               onQueryChange={handleQueryChange}
               onSubmit={handleSemanticSubmit}
               onClear={handleClearSearch}
+              onImageSearch={() => void handleImageSearch()}
             />
             <LibraryControls
               sort={sort}
@@ -187,9 +233,14 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             resultMode={resultMode}
             semanticRawResults={semanticRawResults}
             semanticQuery={semanticCommittedQuery}
-            isSearching={isSemanticSearching}
-            searchError={semanticSearchError}
+            imageRawResults={imageRawResults}
+            committedImageRequestId={committedImageRequestId}
+            similarRawResults={similarRawResults}
+            committedSimilarAssetId={committedSimilarAssetId}
+            isSearching={isSearching}
+            searchError={searchError}
             onClearSearch={handleClearSearch}
+            onFindSimilar={handleFindSimilar}
           />
         }
         inspector={
@@ -198,6 +249,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               assetId={selectedAssetId}
               client={client}
               onClose={clearAssetId}
+              onFindSimilar={handleFindSimilar}
             />
           ) : undefined
         }

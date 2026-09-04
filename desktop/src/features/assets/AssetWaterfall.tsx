@@ -26,6 +26,12 @@ interface AssetWaterfallProps {
   onOpenAsset: (assetId: string) => void;
   onToggleChecked: (assetId: string) => void;
   /**
+   * Find Similar entry point for ticket 12 (card hover/context action).
+   * Passes the Asset ID; the parent owns composition and transient mode.
+   * Shares the same result mode as the inspector entry point.
+   */
+  onFindSimilar?: (assetId: string) => void;
+  /**
    * Parent-owned ref to the wall section (used for native-drag hit-testing).
    * The waterfall only reads it for measurement/scroll preservation.
    */
@@ -129,6 +135,7 @@ interface AssetWaterfallCardProps {
   onToggle: (assetId: string) => void;
   onGifActivate: (assetId: string) => void;
   onGifDeactivate: (assetId: string) => void;
+  onFindSimilar?: (assetId: string) => void;
 }
 
 /**
@@ -153,6 +160,7 @@ function AssetWaterfallCard({
   onToggle,
   onGifActivate,
   onGifDeactivate,
+  onFindSimilar,
 }: AssetWaterfallCardProps) {
   const name = getAssetDisplayName(asset);
   const gif = isGifAsset(asset);
@@ -219,6 +227,19 @@ function AssetWaterfallCard({
           >
             View
           </button>
+          {onFindSimilar ? (
+            <button
+              className="button button-secondary asset-card-quick-similar"
+              type="button"
+              // Distinct from the inspector's exact "Find Similar" name and
+              // from the Open button's filename label so ticket 10's
+              // filename/exact queries keep resolving unambiguously.
+              aria-label={`Find Similar for asset ${asset.asset_id}`}
+              onClick={() => onFindSimilar(asset.asset_id)}
+            >
+              Find Similar
+            </button>
+          ) : null}
         </div>
         <label className="asset-select">
           <input
@@ -284,6 +305,7 @@ export function AssetWaterfall({
   checkedIds,
   onOpenAsset,
   onToggleChecked,
+  onFindSimilar,
   sectionRef,
   accepting = false,
   columnCount,
@@ -366,6 +388,7 @@ export function AssetWaterfall({
               onToggle={onToggleChecked}
               onGifActivate={activateGif}
               onGifDeactivate={deactivateGif}
+              onFindSimilar={onFindSimilar}
             />
           ))}
         </div>
