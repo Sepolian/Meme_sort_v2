@@ -223,6 +223,10 @@ export function AssetsWorkspace({
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
+  // Ticket 17: batch Copy original files feedback. Selection is preserved on
+  // both success and failure; failure never claims clipboard restoration.
+  const [copyPending, setCopyPending] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<LibraryNotice | null>(null);
   const [dragPreview, setDragPreview] = useState<{ itemCount: number } | null>(null);
   const wallRef = useRef<HTMLDivElement | null>(null);
   const startedDropIdRef = useRef<string | null>(null);
@@ -239,30 +243,38 @@ export function AssetsWorkspace({
       // Ticket 10: keep inspector/selection coherent after deletes performed
       // from the toolbar. Batch deletes reconcile from the mutation response;
       // single deletes (legacy path) close only their own inspector.
+      // Ticket 17: only Delete reconciles selection (removing exactly
+      // `affected_asset_ids` so skipped/failed IDs are retained). Rebuild
+      // preserves the full selection and never closes the inspector because
+      // the Assets still exist.
       if (request.kind === "batch" && "affected_asset_ids" in result) {
         const affected = new Set(result.affected_asset_ids);
-        setSelectedIds((current) => {
-          const next = new Set([...current].filter((id) => !affected.has(id)));
-          return next;
-        });
-        // Optimistically drop deleted Assets from the visible wall so the UI
-        // reflects the deletion even when the mocked `getAssets` still
-        // returns the pre-delete list (tests) or before refetch settles.
-        if (request.action === "delete" && affected.size) {
-          queryClient.setQueryData<AssetListResult | undefined>(
-            ["assets"],
-            (old) =>
-              old
-                ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
-                : old,
-          );
-          for (const deletedId of affected) {
-            queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+        if (request.action === "delete") {
+          setSelectedIds((current) => {
+            const next = new Set([...current].filter((id) => !affected.has(id)));
+            return next;
+          });
+          // Optimistically drop deleted Assets from the visible wall so the UI
+          // reflects the deletion even when the mocked `getAssets` still
+          // returns the pre-delete list (tests) or before refetch settles.
+          if (affected.size) {
+            queryClient.setQueryData<AssetListResult | undefined>(
+              ["assets"],
+              (old) =>
+                old
+                  ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
+                  : old,
+            );
+            for (const deletedId of affected) {
+              queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+            }
+          }
+          if (selectedAssetId && affected.has(selectedAssetId)) {
+            onCloseDetail();
           }
         }
-        if (selectedAssetId && affected.has(selectedAssetId)) {
-          onCloseDetail();
-        }
+        // Rebuild: intentionally preserve selection and keep the inspector
+        // open; only feedback + invalidation below apply.
       } else {
         const deletedId = request.kind === "delete-asset" ? request.assetId : null;
         if (deletedId) {
@@ -448,14 +460,82 @@ export function AssetsWorkspace({
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
 
   const { assets, active_recipe_label: activeRecipe } = assetsQuery.data;
+  // Ticket 17: selection lives only in this `useState` (never in URL or
+  // persisted preferences). The waterfall hover checkbox adds/removes IDs via
+  // `toggleAsset`; the toolbar below renders only for >=1 selection.
   const toggleAsset = (assetId: string) => setSelectedIds((current) => {
     const next = new Set(current);
     if (next.has(assetId)) next.delete(assetId);
     else next.add(assetId);
     return next;
   });
+  // Ticket 17: stable visual-order IDs for batch actions. The visible
+  // waterfall order wins (browse => sorted input, search modes => composed
+  // relevance order or local fallback); selected IDs absent from the visible
+  // wall (e.g. filtered out) append in sorted-library order so none are
+  // dropped and the order stays deterministic.
+  const getOrderedSelectedIds = (): string[] => {
+    if (!selectedIds.size) return [];
+    const visibleForOrder: readonly AssetSummary[] = (() => {
+      if (isLocalMode) return localMatches;
+      if (isSemanticMode) {
+        if (hasFreshSemantic && semanticSummaries.length) return semanticSummaries;
+        if (localMatches.length) return localMatches;
+        return orderedAssets;
+      }
+      if (isImageMode) {
+        if (hasFreshImage && imageSummaries.length) return imageSummaries;
+        if (localMatches.length) return localMatches;
+        return orderedAssets;
+      }
+      if (isSimilarMode) {
+        if (hasFreshSimilar && similarSummaries.length) return similarSummaries;
+        if (localMatches.length) return localMatches;
+        return orderedAssets;
+      }
+      return orderedAssets;
+    })();
+    const visibleOrder = new Map(visibleForOrder.map((item, index) => [item.asset_id, index] as const));
+    const inVisible = [...selectedIds].filter((id) => visibleOrder.has(id));
+    inVisible.sort((a, b) => (visibleOrder.get(a) ?? 0) - (visibleOrder.get(b) ?? 0));
+    if (inVisible.length === selectedIds.size) return inVisible;
+    const libraryOrder = new Map(orderedAssets.map((item, index) => [item.asset_id, index] as const));
+    const missing = [...selectedIds].filter((id) => !visibleOrder.has(id));
+    missing.sort((a, b) => (libraryOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (libraryOrder.get(b) ?? Number.MAX_SAFE_INTEGER));
+    return [...inVisible, ...missing];
+  };
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+  // Ticket 17: one selection uses the single-file client method; multiple
+  // selections call the multi-file method once with stable visual-order IDs
+  // (ID-only, never paths). Selection is preserved on success and failure.
+  const runCopyOriginalFiles = async () => {
+    const assetIds = getOrderedSelectedIds();
+    if (!assetIds.length || copyPending || mutation.isPending) return;
+    setCopyPending(true);
+    setCopyNotice(null);
+    try {
+      if (assetIds.length === 1) {
+        await client.copyOriginalFile(assetIds[0]);
+      } else {
+        await client.copyOriginalFiles(assetIds);
+      }
+      setCopyNotice({
+        kind: "success",
+        text: assetIds.length === 1 ? "Original file reference copied." : `Copied ${assetIds.length} original file references.`,
+      });
+    } catch (error) {
+      setCopyNotice({
+        kind: "error",
+        text: tauriErrorDetail(error, "Copy original files failed. The Library was not modified."),
+      });
+    } finally {
+      setCopyPending(false);
+    }
+  };
   const requestBatch = (action: "delete" | "rebuild-active-index") => {
-    const assetIds = [...selectedIds];
+    const assetIds = getOrderedSelectedIds();
     if (!assetIds.length) return;
     setConfirmation(action === "delete"
       ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { kind: "batch", action, assetIds } }
@@ -463,9 +543,21 @@ export function AssetsWorkspace({
   };
 
   return <>
-    <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span><span>{selectedIds.size} selected</span><button className="button button-secondary" type="button" disabled={!selectedIds.size || mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button><button className="button button-danger" type="button" disabled={!selectedIds.size || mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button></div></section>
+    <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span></div></section>
+    {selectedIds.size > 0 ? (
+      <section className="selection-toolbar" role="toolbar" aria-label="Selection toolbar">
+        <span>{selectedIds.size} selected</span>
+        <div className="selection-toolbar-actions">
+          <button className="button button-secondary" type="button" disabled={copyPending || mutation.isPending} onClick={() => void runCopyOriginalFiles()}>Copy original files</button>
+          <button className="button button-secondary" type="button" disabled={mutation.isPending || indexingBlocked} onClick={() => requestBatch("rebuild-active-index")}>Rebuild Active Index</button>
+          <button className="button button-danger" type="button" disabled={mutation.isPending} onClick={() => requestBatch("delete")}>Delete selected</button>
+          <button className="button button-secondary" type="button" disabled={copyPending || mutation.isPending} onClick={clearSelection}>Clear selection</button>
+        </div>
+      </section>
+    ) : null}
     {indexingBlocked ? <p role="note">Indexing is unavailable until the current session passes the Runtime health check. Browsing, selection, and delete still work.</p> : null}
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
+    {copyNotice ? <section className={`notice ${copyNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={copyNotice.kind === "error" ? "alert" : "status"}><span>{copyNotice.text}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />
     {isLocalMode ? (
