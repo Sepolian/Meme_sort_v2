@@ -87,7 +87,7 @@ describe("application shell navigation", () => {
     const settingsNav = screen.getByRole("navigation", { name: "Settings" });
     expect(settingsNav).toHaveTextContent("Settings");
 
-    // Legacy routes leave the primary navigation but stay reachable directly.
+    // Removed legacy routes resolve to NotFoundPage, never to a sidebar entry.
     expect(screen.queryByRole("link", { name: "Setup" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Status" })).not.toBeInTheDocument();
@@ -131,15 +131,16 @@ describe("application shell navigation", () => {
   });
 
   it.each([
-    ["/setup", "Setup & runtime"],
-    ["/search", "Search MemeSort"],
-    ["/search/text", "Text search"],
-    ["/search/image", "Image search"],
-    ["/search/similar", "Find similar Assets"],
-    ["/status", "Application status"],
-  ])("keeps legacy route %s directly reachable", async (route, heading) => {
+    "/setup",
+    "/search",
+    "/search/text",
+    "/search/image",
+    "/search/similar",
+    "/status",
+  ])("routes removed legacy page %s to NotFoundPage", async (route) => {
     renderApp(route);
-    expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open library" })).toHaveAttribute("href", "/");
   });
 
   it("renders NotFoundPage for unknown routes", async () => {

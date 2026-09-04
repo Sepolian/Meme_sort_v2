@@ -326,16 +326,24 @@ describe("App", () => {
     ["/", "Your library"],
     ["/duplicates", "Duplicate assets"],
     ["/settings", "Settings"],
-    ["/setup", "Setup & runtime"],
-    ["/search", "Search MemeSort"],
-    ["/search/text", "Text search"],
-    ["/search/image", "Image search"],
-    ["/search/similar", "Find similar Assets"],
-    ["/status", "Application status"],
   ])("renders the %s route when it is opened directly", async (route, heading) => {
     renderApp(route);
 
     expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+  });
+
+  it.each([
+    "/setup",
+    "/search",
+    "/search/text",
+    "/search/image",
+    "/search/similar",
+    "/status",
+  ])("routes removed legacy page %s to NotFoundPage with a Library link", async (route) => {
+    renderApp(route);
+
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open library" })).toHaveAttribute("href", "/");
   });
 
   it("renders the Settings skeleton inside the final shell", async () => {
@@ -368,98 +376,6 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
-  it("makes the Search route actionable without showing the migration placeholder", async () => {
-    renderApp("/search");
-
-    expect(await screen.findByRole("link", { name: /Text search/ })).toHaveAttribute("href", "/search/text");
-    expect(screen.getByRole("link", { name: /Image search/ })).toHaveAttribute("href", "/search/image");
-    expect(screen.getByRole("link", { name: /Find similar Assets/ })).toHaveAttribute("href", "/search/similar");
-    expect(screen.getByText("Only Indexed Assets participate in semantic retrieval.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Set up and index Assets" })).toHaveAttribute("href", "/setup");
-    expect(screen.queryByText("Search is being migrated")).not.toBeInTheDocument();
-  });
-
-  it("shows a runtime-not-ready state on setup when the session check fails", async () => {
-    client.runRuntimeHealthCheck.mockResolvedValueOnce({
-      runtime_fingerprint: "runtime-1",
-      backend_name: "llama.cpp",
-      device: "Vulkan0",
-      gpu_name: null,
-      gpu_vendor: null,
-      gpu_vendor_id: null,
-      text_smoke_vector_dim: null,
-      image_smoke_vector_dim: null,
-      diagnostic_steps: [{ step: "vulkan-device", status: "error", detail: "Vulkan0 unavailable." }],
-      smoke_test_ok: false,
-      error: "Vulkan0 unavailable.",
-    } as never);
-    renderApp("/setup");
-
-    expect(await screen.findByText("Runtime not ready")).toBeInTheDocument();
-    expect(await screen.findByRole("alert", { name: "Runtime health failure" })).toBeInTheDocument();
-  });
-
-  it("shows the read-only Runtime Descriptor and setup checklist", async () => {
-    renderApp("/setup");
-
-    expect(await screen.findByRole("heading", { name: "Runtime Descriptor" })).toBeInTheDocument();
-    expect(screen.getByText("Qwen3-VL · 2048d · float32")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Setup checklist" })).toBeInTheDocument();
-    expect(screen.getByText("Next · Run runtime health check · Vulkan health has not been checked.")).toBeInTheDocument();
-  });
-
-  it("runs the pinned Vulkan health check and displays its diagnostic step", async () => {
-    renderApp("/setup");
-
-    // Wait for the single automatic startup check to authorize the session,
-    // then an explicit Retry starts a second check.
-    await screen.findByText("Runtime ready in this app session.");
-    fireEvent.click(await screen.findByRole("button", { name: "Run Vulkan health check" }));
-
-    expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(2);
-    expect(await screen.findByText("Runtime health check passed on Vulkan0.")).toBeInTheDocument();
-    expect(screen.getByText("image-embedding-smoke · ok · Image embedding passed.")).toBeInTheDocument();
-  });
-
-  it("submits a UUID-scoped text Search Request and shows its Asset matches", async () => {
-    renderApp("/search/text");
-
-    fireEvent.change(await screen.findByLabelText("Search text"), { target: { value: "surprised reaction" } });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-    expect(await screen.findByText("originals/first.gif")).toBeInTheDocument();
-    expect(client.searchText).toHaveBeenCalledWith("surprised reaction", expect.any(String));
-  });
-
-  it("searches an image selected through the native dialog", async () => {
-    renderApp("/search/image");
-
-    expect(await screen.findByRole("button", { name: "Search image" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Choose image" }));
-    expect(await screen.findByText("C:/Source/query.png")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Search image" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Search image" }));
-
-    expect(await screen.findByRole("region", { name: "Image search results" })).toBeInTheDocument();
-    expect(client.searchImage).toHaveBeenCalledWith(expect.any(String));
-    expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
-  });
-
-  it("finds Assets similar to a selected Indexed Asset", async () => {
-    renderApp("/search/similar");
-
-    const selector = await screen.findByLabelText("Indexed Asset");
-    await screen.findByRole("option", { name: "originals/indexed.png" });
-    expect(screen.getByRole("button", { name: "Find similar" })).toBeDisabled();
-    fireEvent.change(selector, { target: { value: "123e4567-e89b-12d3-a456-426614174002" } });
-    expect(screen.getByRole("button", { name: "Find similar" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Find similar" }));
-
-    expect(await screen.findByRole("region", { name: "Similar Asset results" })).toBeInTheDocument();
-    expect(client.findSimilar).toHaveBeenCalledWith("123e4567-e89b-12d3-a456-426614174002");
-    expect(screen.getByText("originals/first.gif")).toBeInTheDocument();
-  });
-
   it("reviews duplicate Asset pairs at the chosen threshold", async () => {
     renderApp("/duplicates");
 
@@ -473,69 +389,12 @@ describe("App", () => {
     expect(screen.getByText(/GIF matches use the strongest frame-to-frame score/i)).toBeInTheDocument();
   });
 
-  it("resumes the paused Worker Loop through the typed desktop command", async () => {
-    renderApp("/status");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Resume worker" }));
-
-    expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
-  });
-
-  it("retries failed Job records without changing Assets", async () => {
-    renderApp("/status");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Retry failed Jobs" }));
-
-    expect(client.retryFailedJobs).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("Retried 2 failed Job record(s); 0 remain failed.")).toBeInTheDocument();
-  });
-
   it("opens the Library log directory through the native desktop command", async () => {
-    renderApp("/status");
+    renderApp("/settings");
 
     fireEvent.click(await screen.findByRole("button", { name: "Open log folder" }));
 
     expect(client.openLogDirectory).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows Recent Jobs and worker events from the read-only app-state projection", async () => {
-    renderApp("/status");
-
-    expect(await screen.findByRole("heading", { name: "Recent Jobs" })).toBeInTheDocument();
-    expect(screen.getByText("embed_asset · failed · attempt 2")).toBeInTheDocument();
-    expect(screen.getByText("The embedding worker stopped.")).toBeInTheDocument();
-    expect(screen.getByText("123e4567-e89b-12d3-a456-426614174002 · updated 2026-08-09T01:00:00Z")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Worker events" })).toBeInTheDocument();
-    expect(screen.getByText("worker-loop-paused")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Persisted worker log" })).toBeInTheDocument();
-    expect(screen.getByText("tick-finished")).toBeInTheDocument();
-    expect(screen.getByText('{"processed_jobs":1}')).toBeInTheDocument();
-  });
-
-  it("confirms deletion of selected Pending Job records without deleting Assets", async () => {
-    renderApp("/status");
-
-    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
-    expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
-
-    expect(client.deletePendingJobs).toHaveBeenCalledWith(["123e4567-e89b-12d3-a456-426614174003"]);
-    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
-  });
-
-  it("imports only a folder selected through the native dialog", async () => {
-    renderApp("/setup");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Choose import folder" }));
-    expect(await screen.findByText("C:/Source/Memes")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import folder" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Import folder" }));
-
-    expect(client.chooseImportFolder).toHaveBeenCalledTimes(1);
-    expect(client.startImport).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("Import started in the background.")).toBeInTheDocument();
   });
 
   it("chooses Library files from the top-bar Import menu and starts the Import Batch from the selection ID", async () => {
@@ -598,8 +457,8 @@ describe("App", () => {
   });
 
   it("closes the keyboard help dialog with Escape", async () => {
-    renderApp("/status");
-    await screen.findByRole("heading", { name: "Application status" });
+    renderApp("/settings");
+    await screen.findByRole("heading", { name: "Settings" });
 
     fireEvent.click(screen.getByRole("button", { name: "Keyboard help" }));
     expect(screen.getByRole("dialog", { name: "MemeSort navigation" })).toBeInTheDocument();

@@ -22,39 +22,12 @@ export function RuntimeHealthCompactIndicator() {
 }
 
 /**
- * Semantic-action gate notice (ticket 14).
+ * Global Runtime health banner (ticket 14).
  *
- * Rendered inside search/indexing surfaces when the current session is not
- * authorized. Browsing/import remain enabled; only semantic actions block.
+ * Rendered once in the application shell workspace, so every surviving route
+ * (`/`, `/duplicates`, `/settings`) reports a failed current-session health
+ * check without blocking Library browsing or import.
  */
-export function SemanticUnavailableNotice() {
-  const health = useRuntimeHealth();
-  const [isRetrying, setIsRetrying] = useState(false);
-
-  if (!health.isBlocked) return null;
-
-  return (
-    <section className="notice notice-warning" role="alert" aria-label="Semantic search unavailable">
-      <strong>Semantic search is unavailable until the current session passes the Runtime health check.</strong>
-      <span>{health.result?.error ?? health.error ?? "Runtime health check failed."}</span>
-      <span>Library browsing and import still work. Run the external setup script to install the pinned runtime.</span>
-      <div className="import-actions">
-        <button
-          className="button button-secondary"
-          type="button"
-          disabled={isRetrying}
-          onClick={() => {
-            setIsRetrying(true);
-            void health.retry().finally(() => setIsRetrying(false));
-          }}
-        >
-          {isRetrying ? "Retrying…" : "Retry health check"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 export function RuntimeHealthBanner() {
   const health = useRuntimeHealth();
   const [isRetrying, setIsRetrying] = useState(false);

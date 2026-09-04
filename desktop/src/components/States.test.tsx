@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { LoadingState, RuntimeNotReady, SidecarDisconnected } from "./States";
+import { LoadingState, SidecarDisconnected } from "./States";
 
 describe("desktop state components", () => {
   it("announces that the authenticated sidecar is connecting", () => {
@@ -22,13 +22,4 @@ describe("desktop state components", () => {
     expect(screen.getByRole("main")).toHaveAttribute("aria-live", "assertive");
   });
 
-  it("uses runtime details when available and a safe default otherwise", () => {
-    const { rerender } = render(<RuntimeNotReady />);
-    expect(
-      screen.getByText("Install the pinned runtime and run a Vulkan health check before indexing."),
-    ).toBeInTheDocument();
-
-    rerender(<RuntimeNotReady detail="Vulkan0 is not available in this session." />);
-    expect(screen.getByText("Vulkan0 is not available in this session.")).toBeInTheDocument();
-  });
 });

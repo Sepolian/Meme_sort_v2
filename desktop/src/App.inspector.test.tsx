@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import { AssetInspector } from "./features/assets/AssetInspector";
-import { LegacyAssetDetailDialog } from "./features/assets/AssetsWorkspace";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
@@ -510,28 +509,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "source", "C:/Source/first.gif");
   });
 
-  it("keeps the legacy centered dialog available (until ticket 19) but off the Library route", async () => {    const client = makeClient();
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { unmount } = render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/status"]}>
-          <LegacyAssetDetailDialog
-            assetId={FIRST_ASSET}
-            client={client as never}
-            onClose={() => undefined}
-            onDeleteAsset={() => undefined}
-            onRevealManaged={() => undefined}
-            onRemoveSourceRecord={() => undefined}
-            onRevealSource={() => undefined}
-            mutating={false}
-            revealing={false}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    expect(await screen.findByRole("dialog", { name: "Asset details" })).toBeInTheDocument();
-    unmount();
-
+  it("renders no centered detail dialog anywhere: the inspector is the only detail surface", async () => {
     const appClient = makeClient();
     const appRender = renderApp(`/?asset=${FIRST_ASSET}`, appClient);
     await screen.findByRole("complementary", { name: "Inspector" });

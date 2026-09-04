@@ -21,15 +21,6 @@ export function SidecarDisconnected({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function RuntimeNotReady({ detail }: { detail?: string }) {
-  return (
-    <section className="notice notice-warning" role="status">
-      <strong>Runtime not ready</strong>
-      <span>{detail ?? "Install the pinned runtime and run a Vulkan health check before indexing."}</span>
-    </section>
-  );
-}
-
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
   return (
     <section className="empty-state">

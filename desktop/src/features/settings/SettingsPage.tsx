@@ -118,8 +118,8 @@ function InstallationSection() {
  * descriptor/health, external installation guidance, and Advanced Diagnostics.
  * Ticket 14 owns the current-session health display and Retry; ticket 15 owns
  * the full Runtime descriptor, external setup-script instructions, and the
- * Advanced Diagnostics parity surface. Legacy Setup/Status routes remain usable
- * until those replacements ship (ticket 19).
+ * Advanced Diagnostics parity surface. The legacy Setup/Status routes were
+ * removed in ticket 19 after this parity shipped.
  */
 export function SettingsPage({
   client,

@@ -197,7 +197,7 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
 
   it("blocks semantic search and indexing on failure while browsing and import still work", async () => {
     const client = makeClient({ runRuntimeHealthCheck: vi.fn(async () => failedResult()) });
-    const view = renderApp("/search/text", client);
+    const view = renderApp("/", client);
 
     const failure = await screen.findByRole("alert", { name: "Runtime health failure" });
     expect(failure.textContent).toContain("Semantic search and indexing are unavailable");
@@ -244,7 +244,7 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
       }),
       runRuntimeHealthCheck: vi.fn(async () => failedResult()),
     });
-    const first = renderApp("/search/text", persistedOkClient);
+    const first = renderApp("/", persistedOkClient);
     await screen.findByRole("alert", { name: "Runtime health failure" });
     first.unmount();
 
@@ -263,7 +263,7 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
       }),
       runRuntimeHealthCheck: vi.fn(async () => healthyResult()),
     });
-    renderApp("/search/text", sessionOkClient);
+    renderApp("/", sessionOkClient);
     await waitFor(() => expect(sessionOkClient.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(screen.queryByRole("alert", { name: "Runtime health failure" })).not.toBeInTheDocument(),

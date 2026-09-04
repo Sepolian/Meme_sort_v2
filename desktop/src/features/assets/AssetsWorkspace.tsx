@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
-import { mediaUrl } from "../../api/media-url";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import {
   subscribeNativeDrag,
@@ -25,10 +24,9 @@ import {
   type LibraryStatusFilter,
 } from "../library/libraryUrlState";
 import {
-  getAssetDisplayName,
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
-import type { AssetDetail, AssetListResult, AssetSummary, SearchAsset } from "../../api/types";
+import type { AssetListResult, AssetSummary, SearchAsset } from "../../api/types";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -83,86 +81,6 @@ interface ConfirmAction {
   confirmLabel: string;
   request: MutationRequest;
 }
-
-function assetName(asset: AssetSummary): string {
-  return getAssetDisplayName(asset);
-}
-
-function dimensions(asset: AssetSummary): string {
-  return asset.width && asset.height ? `${asset.width} × ${asset.height}` : "Dimensions unavailable";
-}
-
-function statusLabel(status: AssetSummary["status"]): string {
-  return `${status.charAt(0).toUpperCase()}${status.slice(1)} Asset`;
-}
-
-function DetailSection({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="detail-section"><h3>{title}</h3>{children}</section>;
-}
-
-function AssetDetailContent({ asset, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { asset: AssetDetail; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
-  const preview = mediaUrl(asset.library_url);
-  return (
-    <div className="detail-content">
-      <div className="detail-hero">
-        {preview ? <img className="detail-media" src={preview} alt={`${assetName(asset)} preview`} /> : <div className="detail-media media-placeholder" />}
-        <div>
-          <span className={`status-pill status-${asset.status}`}>{statusLabel(asset.status)}</span>
-          <h3>{assetName(asset)}</h3>
-          <p>{dimensions(asset)} · {asset.media_type} · {asset.source_record_count} Source Record{asset.source_record_count === 1 ? "" : "s"}</p>
-          <button className="button button-secondary" type="button" disabled={revealing} onClick={onRevealManaged}>Reveal Managed File</button>
-          <button className="button button-danger" type="button" disabled={mutating} onClick={onDeleteAsset}>Delete Asset</button>
-        </div>
-      </div>
-      <div className="detail-sections">
-        <DetailSection title="Index recipes">
-          <p>Active recipes: {asset.indexed_recipe_labels.join(", ") || "None yet"}</p>
-          {asset.stale_recipe_labels.length ? <p>Stale recipes: {asset.stale_recipe_labels.join(", ")}</p> : null}
-        </DetailSection>
-        <DetailSection title="Source Records">
-          {asset.source_records.length ? <ul className="detail-list">
-            {asset.source_records.map((source) => <li key={source.source_path}><span className="mono">{source.source_path}</span><button className="text-button detail-action" type="button" disabled={revealing} onClick={() => onRevealSource(source.source_path)}>Reveal Source</button><button className="text-button detail-action" type="button" disabled={mutating} onClick={() => onRemoveSourceRecord(source.source_path)}>Remove Source Record</button></li>)}
-          </ul> : <p>No Source Records are available.</p>}
-        </DetailSection>
-        <DetailSection title="OCR">
-          {asset.ocr_results.length ? <ul className="detail-list">{asset.ocr_results.map((result) => <li key={result.result_id}>{result.text || "OCR result contains no text."}</li>)}</ul> : <p>No OCR text is available for this Asset.</p>}
-        </DetailSection>
-        <DetailSection title="Jobs">
-          {asset.jobs.length ? <ul className="detail-list">{asset.jobs.map((job) => <li key={job.job_id}>{job.type} · {job.status} · attempt {job.attempt_count}</li>)}</ul> : <p>No jobs are recorded for this Asset.</p>}
-        </DetailSection>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Legacy centered Asset detail dialog (pre-ticket-10).
- *
- * Retained only for legacy routes until ticket 19 removes it. The Library
- * route now uses the right-side `AssetInspector` (non-overlaying `aside`)
- * opened from `asset=<asset-id>`; this dialog must not be rendered on `/`.
- */
-export function LegacyAssetDetailDialog({ assetId, client, onClose, onDeleteAsset, onRevealManaged, onRemoveSourceRecord, onRevealSource, mutating, revealing }: { assetId: string; client: MemeSortClient; onClose: () => void; onDeleteAsset: () => void; onRevealManaged: () => void; onRemoveSourceRecord: (sourcePath: string) => void; onRevealSource: (sourcePath: string) => void; mutating: boolean; revealing: boolean }) {
-  const detailQuery = useQuery({ queryKey: ["asset-detail", assetId], queryFn: () => client.getAssetDetail(assetId) });
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-  return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="dialog detail-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-detail-title" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-title-row"><div><p className="eyebrow">Asset detail</p><h2 id="asset-detail-title">Asset details</h2></div><button className="button button-secondary" type="button" autoFocus onClick={onClose}>Close</button></div>
-        {detailQuery.isPending ? <p aria-live="polite">Loading Asset detail…</p> : null}
-        {detailQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Asset details are unavailable</strong><span>{tauriErrorDetail(detailQuery.error, "This Asset may no longer exist in the Library. Refresh the Asset wall and try again.")}</span></section> : null}
-        {detailQuery.data ? <AssetDetailContent asset={detailQuery.data.asset} onDeleteAsset={onDeleteAsset} onRevealManaged={onRevealManaged} onRemoveSourceRecord={onRemoveSourceRecord} onRevealSource={onRevealSource} mutating={mutating} revealing={revealing} /> : null}
-      </section>
-    </div>
-  );
-}
-
-// Backwards-compatible alias for any legacy-route import until ticket 19.
-export const AssetDetailDialog = LegacyAssetDetailDialog;
 
 function ConfirmDialog({ action, onCancel, onConfirm, pending }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void; pending: boolean }) {
   useEffect(() => {
