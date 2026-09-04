@@ -15,6 +15,8 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { useImportBatch } from "./features/import/ImportBatchContext";
+import { TaskBar } from "./features/tasks/TaskBar";
+import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
 import { RuntimeHealthProvider, useRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator, SemanticUnavailableNotice } from "./features/runtime/RuntimeHealthBanner";
 import "./App.css";
@@ -127,10 +129,10 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   );
 }
 
-function SettingsRoute() {
+function SettingsRoute({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   return (
     <Page title="Settings" eyebrow="Configuration">
-      <SettingsPage />
+      <SettingsPage client={client} appState={state} onStateChanged={onStateChanged} />
     </Page>
   );
 }
@@ -804,7 +806,7 @@ function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState;
     <Routes>
       <Route path="/" element={<LibraryPage state={state} client={client} />} />
       <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
-      <Route path="/settings" element={<SettingsRoute />} />
+      <Route path="/settings" element={<SettingsRoute state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="/setup" element={<SetupPage state={state} client={client} onStateChanged={onStateChanged} />} />
       <Route path="/search" element={<SearchLandingPage />} />
       <Route path="/search/text" element={<TextSearchPage client={client} />} />
@@ -864,6 +866,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
             {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
           </span>
           <RuntimeHealthCompactIndicator />
+          <TopBarTaskEntry appState={stateQuery.data ?? null} />
           <span className="topbar-detail">Authenticated desktop session</span>
         </header>
         <ImportBatchPanel />
@@ -871,6 +874,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
         {stateQuery.isPending ? <LoadingState /> : null}
         {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
         {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+        <TaskBar appState={stateQuery.data ?? null} />
       </div>
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
     </div>

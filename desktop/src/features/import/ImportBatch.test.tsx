@@ -217,7 +217,13 @@ describe("application-level Import Batch observer", () => {
     });
     const client = createClient();
     const { invalidateSpy } = renderApp(client);
-    await waitFor(() => expect(screen.getByText("Importing 0 of 0 supported files")).toBeInTheDocument(), { timeout: 6_000 });
+    await waitFor(
+      () =>
+        expect(screen.getByRole("status", { name: "Import Batch progress" }).textContent).toContain(
+          "Importing 0 of 0 supported files",
+        ),
+      { timeout: 6_000 },
+    );
 
     fireEvent.click(screen.getByRole("link", { name: "Duplicates" }));
     expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
@@ -283,7 +289,13 @@ describe("application-level Import Batch observer", () => {
       status: "importing",
       running: true,
     });
-    await waitFor(() => expect(screen.getByText(/Importing 0 of 0 supported files/)).toBeInTheDocument(), { timeout: 6_000 });
+    await waitFor(
+      () =>
+        expect(screen.getByRole("status", { name: "Import Batch progress" }).textContent).toMatch(
+          /Importing 0 of 0 supported files/,
+        ),
+      { timeout: 6_000 },
+    );
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
       status: "completed_with_errors",
@@ -314,7 +326,13 @@ describe("application-level Import Batch observer", () => {
       status: "importing",
       running: true,
     });
-    await waitFor(() => expect(screen.getByText(/Importing 0 of 0 supported files/)).toBeInTheDocument(), { timeout: 6_000 });
+    await waitFor(
+      () =>
+        expect(screen.getByRole("status", { name: "Import Batch progress" }).textContent).toMatch(
+          /Importing 0 of 0 supported files/,
+        ),
+      { timeout: 6_000 },
+    );
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
       status: "completed",
@@ -404,8 +422,9 @@ describe("Import Batch controls", () => {
     });
     renderApp(createClient());
 
-    expect(await screen.findByText("Pausing the Import Batch after the current file finishes safely."))
-      .toBeInTheDocument();
+    expect(
+      (await screen.findByRole("status", { name: "Import Batch progress" })).textContent,
+    ).toContain("Pausing the Import Batch after the current file finishes safely.");
     expect(screen.getByRole("button", { name: "Pause Import Batch" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Resume Import Batch" })).toBeDisabled();
   });

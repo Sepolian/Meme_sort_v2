@@ -76,6 +76,15 @@ button:focus-visible, a:focus-visible {
 .connection-online::before { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); content: ""; }
 .topbar-detail { color: var(--muted); font-size: .875rem; }
 .runtime-health-preparing { color: var(--muted); font-size: .875rem; font-weight: 650; }
+/* Ticket 15: compact top-bar task entry and minimizable bottom task bar. */
+.task-top-entry { max-width: 40ch; overflow: hidden; color: var(--muted); font-size: .875rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.task-top-entry[data-tone="attention"] { color: var(--warning); }
+.task-bar { margin: 0 32px 24px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.task-bar[data-tone="attention"] { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); }
+.task-bar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.task-bar-header strong { overflow-wrap: anywhere; }
+.task-bar-actions { display: flex; align-items: center; gap: 8px; }
+.task-bar-details { margin-top: 12px; }
 .page, .state-panel { width: min(1120px, 100%); margin: 0 auto; padding: 48px 32px; }
 .page-heading { margin-bottom: 30px; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
