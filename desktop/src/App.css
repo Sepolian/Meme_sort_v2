@@ -123,8 +123,12 @@ p { color: var(--muted); line-height: 1.6; }
 .duplicate-pair { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .duplicate-pair header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--muted); }
 .duplicate-assets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.duplicate-assets > div { display: grid; gap: 7px; min-width: 0; }
+.duplicate-assets > div { display: grid; gap: 7px; min-width: 0; align-content: start; }
 .duplicate-assets img, .duplicate-assets .media-placeholder { width: 100%; height: 120px; border-radius: 7px; object-fit: cover; }
+/* Ticket 16: composed comparison uses large uncropped previews so both sides
+   stay comparable. Dimensions/Source counts come from AssetSummary; score and
+   Matched Frames come from DuplicatePair (see DuplicatesPage header). */
+.duplicate-pair-composed .duplicate-assets img, .duplicate-pair-composed .duplicate-assets .media-placeholder { height: 240px; object-fit: contain; background: var(--surface-raised); }
 .duplicate-assets strong { overflow-wrap: anywhere; }
 .duplicate-assets p { margin: 0; color: var(--muted); font-size: .82rem; }
 .search-result strong { overflow-wrap: anywhere; }

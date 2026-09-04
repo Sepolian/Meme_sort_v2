@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import { tauriErrorDetail } from "./api/tauri-error";
-import type { AppState, DuplicatePair, SearchAsset } from "./api/types";
+import type { AppState, SearchAsset } from "./api/types";
 import { mediaUrl } from "./api/media-url";
 import { EmptyState, LoadingState, RuntimeNotReady, SidecarDisconnected } from "./components/States";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
+import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
 import { LibraryControls } from "./features/library/LibraryControls";
 import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
 import { LibraryShell } from "./features/library/LibraryShell";
@@ -558,71 +559,6 @@ function SimilarSearchPage({ client }: { client: MemeSortClient }) {
             </article>;
           })}
         </section> : <EmptyState title="No similar Assets yet" detail="Index more Assets with the Active Index Recipe to expand this search." />
-      ) : null}
-    </Page>
-  );
-}
-
-function DuplicatesPage({ client }: { client: MemeSortClient }) {
-  const health = useRuntimeHealth();
-  const [threshold, setThreshold] = useState("0.92");
-  const [pairs, setPairs] = useState<DuplicatePair[] | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const thresholdValue = Number(threshold);
-  const isValidThreshold = Number.isFinite(thresholdValue) && thresholdValue >= 0 && thresholdValue <= 1;
-  const semanticBlocked = health.isBlocked;
-
-  const scan = async () => {
-    if (!isValidThreshold) return;
-    setIsScanning(true);
-    setError(null);
-    try {
-      const result = await client.getDuplicates(thresholdValue);
-      setPairs(result.pairs);
-    } catch (requestError) {
-      setError(tauriErrorDetail(requestError, "MemeSort could not scan for duplicate Assets."));
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  return (
-    <Page title="Duplicate assets" eyebrow="Library maintenance">
-      {semanticBlocked ? <SemanticUnavailableNotice /> : null}
-      <section className="surface search-panel">
-        <h2>Duplicate review</h2>
-        <p>Compare Indexed Asset pairs from the Active Index Recipe. GIF matches use the strongest frame-to-frame score.</p>
-        <label htmlFor="duplicate-threshold">Duplicate threshold</label>
-        <div className="search-form">
-          <input id="duplicate-threshold" type="number" min="0" max="1" step="0.01" value={threshold} onChange={(event) => setThreshold(event.target.value)} />
-          <button className="button" type="button" disabled={isScanning || !isValidThreshold || semanticBlocked} onClick={() => void scan()}>
-            Scan duplicates
-          </button>
-        </div>
-        {!isValidThreshold ? <p role="alert">Enter a threshold between 0 and 1.</p> : null}
-        {semanticBlocked ? <p>Duplicate review is unavailable until the current session passes the Runtime health check. Library browsing and import still work.</p> : null}
-      </section>
-      {isScanning ? <p aria-live="polite">Scanning Indexed Assets for duplicate pairs…</p> : null}
-      {error ? <section className="notice notice-warning" role="alert"><strong>Duplicate scan unavailable</strong><span>{error}</span></section> : null}
-      {pairs ? (
-        pairs.length ? <section className="duplicate-pairs" aria-label="Duplicate pairs" role="region">
-          {pairs.map((pair) => (
-            <article className="duplicate-pair" key={`${pair.asset_a_id}-${pair.asset_b_id}`}>
-              <header><strong>Similarity score {pair.score.toFixed(3)}</strong><span>Threshold {thresholdValue.toFixed(2)}</span></header>
-              <div className="duplicate-assets">
-                <div>
-                  {mediaUrl(pair.asset_a_thumbnail_url) ? <img src={mediaUrl(pair.asset_a_thumbnail_url)!} alt="" /> : <div className="media-placeholder" aria-hidden="true" />}
-                  <strong>{pair.asset_a_path}</strong>{pair.asset_a_matched_source_ref ? <p>Matched frame: {pair.asset_a_matched_source_ref}</p> : null}
-                </div>
-                <div>
-                  {mediaUrl(pair.asset_b_thumbnail_url) ? <img src={mediaUrl(pair.asset_b_thumbnail_url)!} alt="" /> : <div className="media-placeholder" aria-hidden="true" />}
-                  <strong>{pair.asset_b_path}</strong>{pair.asset_b_matched_source_ref ? <p>Matched frame: {pair.asset_b_matched_source_ref}</p> : null}
-                </div>
-              </div>
-            </article>
-          ))}
-        </section> : <EmptyState title="No duplicate pairs found" detail="Lower the threshold or index more Assets, then scan again." />
       ) : null}
     </Page>
   );

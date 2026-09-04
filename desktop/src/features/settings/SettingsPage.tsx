@@ -3,6 +3,7 @@ import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState } from "../../api/types";
 import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
 import { AdvancedDiagnostics } from "./AdvancedDiagnostics";
+import { AcceptedPairsSection } from "./AcceptedPairsSection";
 
 interface SettingsSectionProps {
   id: string;
@@ -136,11 +137,17 @@ export function SettingsPage({
         <p>For now, use the sidebar theme toggle during migration.</p>
       </SettingsSection>
       <SettingsSection id="settings-accepted-pairs" title="Accepted Duplicate Pairs">
-        <p>
-          Accepted Duplicate Pair management lives here. Pairs are unordered, excluded from
-          future duplicate review, and removed when either Asset is deleted.
-        </p>
-        <p>Clear-all and pair inspection land with tickets 02, 03, and 16.</p>
+        {client ? (
+          <AcceptedPairsSection client={client} onStateChanged={onStateChanged} />
+        ) : (
+          <>
+            <p>
+              Accepted Duplicate Pair management lives here. Pairs are unordered, excluded from
+              future duplicate review, and removed when either Asset is deleted.
+            </p>
+            <p>Diagnostics load with the Library state. If this message persists, return to Library and reopen Settings.</p>
+          </>
+        )}
       </SettingsSection>
       <SettingsSection id="settings-runtime" title="Runtime">
         <RuntimeHealthSection appState={appState ?? null} />
