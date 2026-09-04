@@ -11,6 +11,8 @@ import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import { useOptionalRuntimeHealth } from "../runtime/RuntimeHealthProvider";
 import { AssetWaterfall } from "./AssetWaterfall";
+import { buildAssetSummaryMap, composeSearchItems } from "../../api/result-models";
+import { filterLocalAssets } from "../library/librarySearch";
 import {
   DEFAULT_LIBRARY_DENSITY,
   DEFAULT_LIBRARY_MEDIA,
@@ -18,6 +20,7 @@ import {
   DEFAULT_LIBRARY_STATUS,
   type LibraryDensity,
   type LibraryMediaFilter,
+  type LibraryResultMode,
   type LibrarySort,
   type LibraryStatusFilter,
 } from "../library/libraryUrlState";
@@ -25,7 +28,7 @@ import {
   getAssetDisplayName,
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
-import type { AssetDetail, AssetListResult, AssetSummary } from "../../api/types";
+import type { AssetDetail, AssetListResult, AssetSummary, SearchAsset } from "../../api/types";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -38,6 +41,20 @@ interface AssetsWorkspaceProps {
   status?: LibraryStatusFilter;
   density?: LibraryDensity;
   onClearFilters?: () => void;
+  /** URL query text driving local filtering (typing updates `q`). */
+  query?: string;
+  /** Transient result mode from ticket 07 (`browse`/`local`/`semantic`; image/similar fall back to browse). */
+  resultMode?: LibraryResultMode;
+  /** Raw semantic projections for the latest committed request (null until first success). */
+  semanticRawResults?: SearchAsset[] | null;
+  /** Query text of the latest committed semantic results (null until first success). */
+  semanticQuery?: string | null;
+  /** True while a semantic Search Request is in flight. */
+  isSearching?: boolean;
+  /** Latest semantic error for the current request (null when none). */
+  searchError?: string | null;
+  /** Clear semantic + local search and restore browsing (cancels active work). */
+  onClearSearch?: () => void;
 }
 
 type MutationRequest =
@@ -171,6 +188,13 @@ export function AssetsWorkspace({
   status = DEFAULT_LIBRARY_STATUS,
   density = DEFAULT_LIBRARY_DENSITY,
   onClearFilters,
+  query = "",
+  resultMode,
+  semanticRawResults = null,
+  semanticQuery = null,
+  isSearching = false,
+  searchError = null,
+  onClearSearch,
 }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
@@ -306,6 +330,46 @@ export function AssetsWorkspace({
   );
   const isFiltered = media !== DEFAULT_LIBRARY_MEDIA || status !== DEFAULT_LIBRARY_STATUS;
 
+  // Ticket 11: single Library search bar with instant local filtering and
+  // explicit semantic submit. Local preserves the ordered input (sort order
+  // retained, Pending/Failed included). Semantic composes raw SearchAsset
+  // projections through ticket 05's helper, preserves relevance order, and
+  // excludes non-Indexed Assets. Raw scores appear only in advanced details.
+  // These memos stay above the pending/error early returns to keep hook order
+  // stable. `image`/`similar` modes (ticket 12) fall back to browse here.
+  const effectiveMode: LibraryResultMode =
+    resultMode ?? (query.trim() !== "" ? { kind: "local", query } : { kind: "browse" });
+  const isSemanticMode = effectiveMode.kind === "semantic";
+  const isLocalMode = effectiveMode.kind === "local";
+  const semanticModeQuery = isSemanticMode ? effectiveMode.query : "";
+  const localDisplayQuery = isLocalMode ? effectiveMode.query : query;
+  const summaryMap = useMemo(
+    () => buildAssetSummaryMap(assetsData?.assets ?? []),
+    [assetsData],
+  );
+  const localMatches = useMemo(
+    () => filterLocalAssets(orderedAssets, localDisplayQuery),
+    [orderedAssets, localDisplayQuery],
+  );
+  const composedSemantic = useMemo(
+    () => (semanticRawResults ? composeSearchItems(semanticRawResults, summaryMap) : null),
+    [semanticRawResults, summaryMap],
+  );
+  // Only the committed results for the current semantic query may render.
+  // Older in-flight promises settle with a mismatched identity and stay hidden
+  // (latest-wins); typing a new q falls back to local via ticket 07's effect.
+  const hasFreshSemantic =
+    isSemanticMode && semanticRawResults !== null && semanticQuery !== null && semanticQuery === semanticModeQuery;
+  const semanticIndexedItems = useMemo(() => {
+    if (!hasFreshSemantic || !composedSemantic) return [];
+    return composedSemantic.items.filter((item) => item.summary.status === "indexed");
+  }, [hasFreshSemantic, composedSemantic]);
+  const semanticSummaries = useMemo(
+    () => semanticIndexedItems.map((item) => item.summary),
+    [semanticIndexedItems],
+  );
+  const semanticStaleCount = hasFreshSemantic && composedSemantic ? composedSemantic.stale.length : 0;
+
   // Ticket 10: prune checkbox selection when the Asset list no longer
   // contains an ID (e.g. the inspector deleted it via its own mutation that
   // updated the ["assets"] cache). This keeps toolbar/inspector coherent
@@ -343,11 +407,77 @@ export function AssetsWorkspace({
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />
+    {isLocalMode ? (
+      <section className="notice" role="status" aria-label="Local search results">
+        <strong>Local matches for &ldquo;{localDisplayQuery}&rdquo; &middot; {localMatches.length} of {orderedAssets.length}</strong>
+        <span>Local matches &middot; instant filter by displayed name and available/primary Source Path &middot; includes Pending and Failed Assets.</span>
+        {onClearSearch ? (
+          <div className="import-actions">
+            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
+              Clear search
+            </button>
+          </div>
+        ) : null}
+      </section>
+    ) : null}
+    {isSemanticMode ? (
+      <section className="notice" role="status" aria-label="Semantic search results">
+        <strong>
+          {isSearching && !hasFreshSemantic
+            ? `Searching the Active Index Recipe for \u201C${semanticModeQuery}\u201D\u2026`
+            : `Semantic results for \u201C${semanticModeQuery}\u201D \u00B7 ${semanticSummaries.length}`}
+        </strong>
+        <span>Semantic results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
+        {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
+        {searchError ? (
+          <section className="notice notice-warning" role="alert" aria-label="Semantic search error">
+            <strong>Semantic search unavailable</strong>
+            <span>{searchError}</span>
+            <span>Library browsing remains available. Local matches for this query stay visible below.</span>
+          </section>
+        ) : null}
+        {semanticStaleCount ? (
+          <section className="notice notice-warning" role="status" aria-label="Stale semantic results">
+            <strong>{semanticStaleCount} semantic result{semanticStaleCount === 1 ? "" : "s"} omitted</strong>
+            <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
+          </section>
+        ) : null}
+        {hasFreshSemantic && semanticIndexedItems.length ? (
+          <details>
+            <summary>Advanced details</summary>
+            <ul className="detail-list">
+              {semanticIndexedItems.map((item) => (
+                <li key={item.summary.asset_id}>
+                  <span className="mono">{item.summary.asset_id}</span>
+                  <span>
+                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
+                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {onClearSearch ? (
+          <div className="import-actions">
+            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
+              Clear search
+            </button>
+          </div>
+        ) : null}
+      </section>
+    ) : null}
     <div className="asset-wall">
-      {assets.length ? (
-        orderedAssets.length ? (
+      {!assets.length ? (
+        <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
+          <h2>Drag image files or folders here</h2>
+          <p>Release them over this card to start an Import Batch. Sources are scanned and validated before anything is written to the Library.</p>
+          <p className="import-drop-card-hint">Keyboard alternative: use Import in the Library toolbar to choose files or a folder.</p>
+        </div>
+      ) : isLocalMode ? (
+        localMatches.length ? (
           <AssetWaterfall
-            assets={orderedAssets}
+            assets={localMatches}
             density={density}
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
@@ -356,24 +486,91 @@ export function AssetsWorkspace({
             accepting={Boolean(dragPreview)}
           />
         ) : (
-          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
-            <h2>No Assets match these filters</h2>
+          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
+            <h2>No local matches for &ldquo;{localDisplayQuery}&rdquo;</h2>
             <p>
               The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Adjust the Media and Status filters, or clear them to browse the full Library.
+              Local matching covers displayed names and the available/primary Source Path only.
             </p>
             <div>
-              <button className="button button-secondary" type="button" onClick={() => onClearFilters?.()}>
-                Clear filters
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
               </button>
             </div>
           </div>
         )
+      ) : isSemanticMode ? (
+        hasFreshSemantic && semanticSummaries.length ? (
+          <AssetWaterfall
+            assets={semanticSummaries}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : hasFreshSemantic && !semanticSummaries.length && !isSearching && !searchError ? (
+          <div className="empty-state" aria-label="No semantic matches" ref={wallRef}>
+            <h2>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
+            <p>
+              Only Indexed Assets appear in semantic results. Try a different description, or index
+              more Assets with the Active Index Recipe.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        ) : localMatches.length ? (
+          // In-progress or failed semantic request keeps the Library visible
+          // through instant local matches instead of discarding browsing.
+          <AssetWaterfall
+            assets={localMatches}
+            density={density}
+            checkedIds={selectedIds}
+            onOpenAsset={onSelectAsset}
+            onToggleChecked={toggleAsset}
+            sectionRef={wallRef}
+            accepting={Boolean(dragPreview)}
+          />
+        ) : (
+          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
+            <h2>No local matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
+            <p>
+              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Clearing the search restores browsing with the selected sort and filters.
+            </p>
+            <div>
+              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+                Clear search
+              </button>
+            </div>
+          </div>
+        )
+      ) : orderedAssets.length ? (
+        <AssetWaterfall
+          assets={orderedAssets}
+          density={density}
+          checkedIds={selectedIds}
+          onOpenAsset={onSelectAsset}
+          onToggleChecked={toggleAsset}
+          sectionRef={wallRef}
+          accepting={Boolean(dragPreview)}
+        />
       ) : (
-        <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
-          <h2>Drag image files or folders here</h2>
-          <p>Release them over this card to start an Import Batch. Sources are scanned and validated before anything is written to the Library.</p>
-          <p className="import-drop-card-hint">Keyboard alternative: use Import in the Library toolbar to choose files or a folder.</p>
+        <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
+          <h2>No Assets match these filters</h2>
+          <p>
+            The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+            Adjust the Media and Status filters, or clear them to browse the full Library.
+          </p>
+          <div>
+            <button className="button button-secondary" type="button" onClick={() => onClearFilters?.()}>
+              Clear filters
+            </button>
+          </div>
         </div>
       )}
       {dragPreview ? (

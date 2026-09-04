@@ -11,15 +11,17 @@ import { AssetInspector } from "./features/assets/AssetInspector";
 import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
 import { LibraryControls } from "./features/library/LibraryControls";
 import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
+import { LibrarySearchBar } from "./features/library/LibrarySearchBar";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
+import { useLibraryTextSearch } from "./features/library/useLibraryTextSearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { useImportBatch } from "./features/import/ImportBatchContext";
 import { TaskBar } from "./features/tasks/TaskBar";
 import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
-import { RuntimeHealthProvider, useRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
+import { RuntimeHealthProvider, useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator, SemanticUnavailableNotice } from "./features/runtime/RuntimeHealthBanner";
 import "./App.css";
 
@@ -75,12 +77,21 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   // `aside` so the waterfall stays mounted with scroll preserved. Clipboard
   // Copy / Copy original file / Delete call ticket 05 client methods with
   // Asset IDs only; Find Similar exposes the ticket 12 action point.
+  // Ticket 11: single Library search bar with instant local filtering
+  // (typing updates `q`) and explicit UUID-scoped semantic submit via
+  // `searchText(query, requestId)`. Cancellation calls
+  // `cancelSearch(previous)` before new work; clear/unmount cancel; only the
+  // latest request identity may commit (best-effort latest-wins).
   const {
+    q,
     sort,
     media,
     status,
     density,
     assetId: selectedAssetId,
+    resultMode,
+    setQuery,
+    clearQuery,
     setSort,
     setMedia,
     setStatus,
@@ -88,8 +99,44 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     setAssetId,
     clearAssetId,
     clearFilters,
+    setResultMode,
   } = useLibraryUrlState();
+  const {
+    rawResults: semanticRawResults,
+    committedQuery: semanticCommittedQuery,
+    isSearching: isSemanticSearching,
+    searchError: semanticSearchError,
+    submitSearch,
+    clearSearch,
+  } = useLibraryTextSearch({ client });
+  const optionalHealth = useOptionalRuntimeHealth();
+  const semanticBlocked = optionalHealth?.isBlocked ?? false;
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
+
+  const handleQueryChange = useCallback(
+    (next: string) => {
+      setQuery(next);
+    },
+    [setQuery],
+  );
+
+  const handleSemanticSubmit = useCallback(
+    (submitQuery: string) => {
+      const trimmed = submitQuery.trim();
+      if (!trimmed || semanticBlocked) return;
+      const requestId = submitSearch(trimmed);
+      if (requestId) {
+        setResultMode({ kind: "semantic", query: trimmed, requestId });
+      }
+    },
+    [submitSearch, setResultMode, semanticBlocked],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    clearSearch();
+    clearQuery();
+    setResultMode({ kind: "browse" });
+  }, [clearSearch, clearQuery, setResultMode]);
 
   return (
     <Page title="Your library" eyebrow="MemeSort desktop">
@@ -99,6 +146,14 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             <div className="library-toolbar-row">
               <LibraryImportMenu client={client} />
             </div>
+            <LibrarySearchBar
+              query={q}
+              isSearching={isSemanticSearching}
+              semanticBlocked={semanticBlocked}
+              onQueryChange={handleQueryChange}
+              onSubmit={handleSemanticSubmit}
+              onClear={handleClearSearch}
+            />
             <LibraryControls
               sort={sort}
               media={media}
@@ -128,6 +183,13 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             status={status}
             density={density}
             onClearFilters={clearFilters}
+            query={q}
+            resultMode={resultMode}
+            semanticRawResults={semanticRawResults}
+            semanticQuery={semanticCommittedQuery}
+            isSearching={isSemanticSearching}
+            searchError={semanticSearchError}
+            onClearSearch={handleClearSearch}
           />
         }
         inspector={

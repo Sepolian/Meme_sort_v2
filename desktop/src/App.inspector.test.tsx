@@ -264,7 +264,9 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
 
   it("deep-links the inspector from the URL on first load and closes by removing only asset", async () => {
     const client = makeClient();
-    const { getLocation } = renderApp(`/?q=cat&sort=oldest&asset=${FIRST_ASSET}`, client);
+    // Ticket 11: `q` now filters the waterfall locally, so use a matching
+    // query (`first`) to keep the card visible while asserting inspector URL behavior.
+    const { getLocation } = renderApp(`/?q=first&sort=oldest&asset=${FIRST_ASSET}`, client);
 
     expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
@@ -276,7 +278,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
     const search = getLocation().search;
-    expect(search).toContain("q=cat");
+    expect(search).toContain("q=first");
     expect(search).toContain("sort=oldest");
     expect(search).not.toContain("asset=");
   });

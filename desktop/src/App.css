@@ -63,6 +63,13 @@ button:focus-visible, a:focus-visible {
 .library-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; }
 .library-control { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .8rem; font-weight: 650; }
 .library-control select { min-height: 32px; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+/* Ticket 11: single Library search bar with instant local filtering and
+   explicit semantic submit. No page/layout animation; short feedback only. */
+.library-search-bar { display: grid; gap: 6px; min-width: 0; }
+.library-search-bar label { color: var(--muted); font-size: .8rem; font-weight: 650; }
+.library-search-row { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.library-search-row input { min-width: 0; flex: 1 1 220px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.library-search-bar p[role="note"] { margin: 0; font-size: .8rem; }
 .library-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: start; }
 .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
 .library-content { min-width: 0; min-height: 0; overflow-y: auto; }

@@ -237,7 +237,10 @@ describe("Library URL state (ticket 07)", () => {
 
   it("a URL q never reruns semantic search automatically", async () => {
     const client = makeClient();
-    renderApp("/?q=cat", client);
+    // Ticket 11: `q` now drives instant local filtering (case-insensitive
+    // name + primary Source Path). Use a matching query so the card stays
+    // visible while asserting no semantic work starts from URL alone.
+    renderApp("/?q=first", client);
     await screen.findByText("Pending Asset");
     expect(client.searchText).not.toHaveBeenCalled();
   });
