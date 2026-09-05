@@ -68,10 +68,7 @@ interface AssetsWorkspaceProps {
   onFindSimilar?: (assetId: string) => void;
 }
 
-type MutationRequest =
-  | { kind: "delete-asset"; assetId: string }
-  | { kind: "remove-source"; assetId: string; sourcePath: string }
-  | { kind: "batch"; action: "delete" | "rebuild-active-index"; assetIds: string[] };
+type BatchMutationRequest = { action: "delete" | "rebuild-active-index"; assetIds: string[] };
 
 type LibraryNotice = { kind: "error" | "success"; text: string };
 
@@ -79,7 +76,7 @@ interface ConfirmAction {
   title: string;
   detail: string;
   confirmLabel: string;
-  request: MutationRequest;
+  request: BatchMutationRequest;
 }
 
 function ConfirmDialog({ action, onCancel, onConfirm, pending }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void; pending: boolean }) {
@@ -98,14 +95,10 @@ function ConfirmDialog({ action, onCancel, onConfirm, pending }: { action: Confi
   );
 }
 
-function mutationSummary(request: MutationRequest, result: Awaited<ReturnType<MemeSortClient["deleteAsset"]>> | Awaited<ReturnType<MemeSortClient["batchAssetAction"]>>): string {
-  if (request.kind === "batch" && "affected_asset_ids" in result) {
-    return request.action === "delete"
-      ? `Deleted ${result.affected_asset_ids.length} Asset(s).`
-      : `Queued ${result.reindex_jobs_created} Active Index rebuild(s); skipped ${result.skipped_running_asset_ids.length} running Asset(s).`;
-  }
-  if (request.kind === "remove-source" && "asset_deleted" in result) return result.asset_deleted ? "Removed the final Source Record and deleted the Orphan Asset." : "Removed the Source Record.";
-  return "Deleted the Asset and its Library Copy and Derived Artifacts.";
+function mutationSummary(request: BatchMutationRequest, result: Awaited<ReturnType<MemeSortClient["batchAssetAction"]>>): string {
+  return request.action === "delete"
+    ? `Deleted ${result.affected_asset_ids.length} Asset(s).`
+    : `Queued ${result.reindex_jobs_created} Active Index rebuild(s); skipped ${result.skipped_running_asset_ids.length} running Asset(s).`;
 }
 
 export function AssetsWorkspace({
@@ -151,72 +144,35 @@ export function AssetsWorkspace({
   const nativeDragSubscribe = nativeDrag ?? subscribeNativeDrag;
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: () => client.getAssets() });
   const mutation = useMutation({
-    mutationFn: async (request: MutationRequest) => {
-      if (request.kind === "delete-asset") return client.deleteAsset(request.assetId);
-      if (request.kind === "remove-source") return client.removeSourceRecord(request.assetId, request.sourcePath);
-      return client.batchAssetAction(request.action, request.assetIds);
-    },
+    mutationFn: async (request: BatchMutationRequest) => client.batchAssetAction(request.action, request.assetIds),
     onSuccess: async (result, request) => {
       setFeedback(mutationSummary(request, result));
-      // Ticket 10: keep inspector/selection coherent after deletes performed
-      // from the toolbar. Batch deletes reconcile from the mutation response;
-      // single deletes (legacy path) close only their own inspector.
       // Ticket 17: only Delete reconciles selection (removing exactly
       // `affected_asset_ids` so skipped/failed IDs are retained). Rebuild
       // preserves the full selection and never closes the inspector because
       // the Assets still exist.
-      if (request.kind === "batch" && "affected_asset_ids" in result) {
+      if (request.action === "delete") {
         const affected = new Set(result.affected_asset_ids);
-        if (request.action === "delete") {
-          setSelectedIds((current) => {
-            const next = new Set([...current].filter((id) => !affected.has(id)));
-            return next;
-          });
-          // Optimistically drop deleted Assets from the visible wall so the UI
-          // reflects the deletion even when the mocked `getAssets` still
-          // returns the pre-delete list (tests) or before refetch settles.
-          if (affected.size) {
-            queryClient.setQueryData<AssetListResult | undefined>(
-              ["assets"],
-              (old) =>
-                old
-                  ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
-                  : old,
-            );
-            for (const deletedId of affected) {
-              queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
-            }
-          }
-          if (selectedAssetId && affected.has(selectedAssetId)) {
-            onCloseDetail();
-          }
-        }
-        // Rebuild: intentionally preserve selection and keep the inspector
-        // open; only feedback + invalidation below apply.
-      } else {
-        const deletedId = request.kind === "delete-asset" ? request.assetId : null;
-        if (deletedId) {
-          setSelectedIds((current) => {
-            if (!current.has(deletedId)) return current;
-            const next = new Set(current);
-            next.delete(deletedId);
-            return next;
-          });
+        setSelectedIds((current) => {
+          const next = new Set([...current].filter((id) => !affected.has(id)));
+          return next;
+        });
+        // Optimistically drop deleted Assets from the visible wall so the UI
+        // reflects the deletion even when the mocked `getAssets` still
+        // returns the pre-delete list (tests) or before refetch settles.
+        if (affected.size) {
           queryClient.setQueryData<AssetListResult | undefined>(
             ["assets"],
             (old) =>
               old
-                ? { ...old, assets: old.assets.filter((item) => item.asset_id !== deletedId) }
+                ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
                 : old,
           );
-          queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+          for (const deletedId of affected) {
+            queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
+          }
         }
-        // Legacy single-asset path closes its own inspector; inspector-owned
-        // deletes (ticket 10) close themselves via onDeleted/onClose.
-        if (deletedId && deletedId === selectedAssetId) {
-          onCloseDetail();
-        }
-        if (request.kind === "remove-source" && "asset_deleted" in result && result.asset_deleted) {
+        if (selectedAssetId && affected.has(selectedAssetId)) {
           onCloseDetail();
         }
       }
@@ -486,8 +442,8 @@ export function AssetsWorkspace({
     const assetIds = getOrderedSelectedIds();
     if (!assetIds.length) return;
     setConfirmation(action === "delete"
-      ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { kind: "batch", action, assetIds } }
-      : { title: `Rebuild ${assetIds.length} selected Asset(s)?`, detail: "This clears their active-recipe embeddings and queues new indexing work. Running Asset jobs are skipped.", confirmLabel: "Queue rebuild", request: { kind: "batch", action, assetIds } });
+      ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { action, assetIds } }
+      : { title: `Rebuild ${assetIds.length} selected Asset(s)?`, detail: "This clears their active-recipe embeddings and queues new indexing work. Running Asset jobs are skipped.", confirmLabel: "Queue rebuild", request: { action, assetIds } });
   };
 
   return <>
