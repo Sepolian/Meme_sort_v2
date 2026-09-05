@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, act } from "@testing-library/react";
+import { fireEvent, render, screen, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
@@ -249,7 +249,7 @@ describe("Library URL state (ticket 07)", () => {
     const client = makeClient();
     const { getLocation } = renderApp("/?sort=bogus&media=gif", client);
     await screen.findByText("Pending Asset");
-    expect(getLocation().search).not.toContain("bogus");
+    await waitFor(() => expect(getLocation().search).not.toContain("bogus"));
     expect(getLocation().search).toContain("media=gif");
   });
 
