@@ -18,9 +18,11 @@ import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { TaskBar } from "./features/tasks/TaskBar";
 import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
-import { RuntimeHealthProvider, useOptionalRuntimeHealth } from "./features/runtime/RuntimeHealthProvider";
+import { RuntimeHealthProvider } from "./features/runtime/RuntimeHealthProvider";
+import { useOptionalRuntimeHealth } from "./features/runtime/useRuntimeHealth";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator } from "./features/runtime/RuntimeHealthBanner";
-import { ThemeProvider, useTheme } from "./features/theme/ThemeContext";
+import { useTheme } from "./features/theme/ThemeContext";
+import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
 import "./App.css";
 

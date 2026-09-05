@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ThemeProvider, useTheme } from "./ThemeContext";
+import { useTheme } from "./ThemeContext";
+import { ThemeProvider } from "./ThemeProvider";
 import {
   THEME_PREFERENCE_KEY,
   type ThemePreference,

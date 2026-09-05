@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState } from "../../api/types";
-import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { ThemeSettingsControl } from "../theme/ThemeSettingsControl";
 import { AdvancedDiagnostics } from "./AdvancedDiagnostics";
 import { AcceptedPairsSection } from "./AcceptedPairsSection";

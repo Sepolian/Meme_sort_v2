@@ -8,7 +8,7 @@ import {
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
-import { useOptionalRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { useOptionalRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { AssetWaterfall } from "./AssetWaterfall";
 import { buildAssetSummaryMap, composeSearchItems } from "../../api/result-models";
 import { filterLocalAssets } from "../library/librarySearch";

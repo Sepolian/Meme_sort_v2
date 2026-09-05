@@ -1,6 +1,6 @@
 import type { AppState } from "../../api/types";
 import { useImportBatch } from "../import/ImportBatchContext";
-import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { summarizeTasks } from "./taskVisibility";
 
 /**

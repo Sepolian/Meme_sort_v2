@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { tauriErrorDetail } from "../../api/tauri-error";
-import { useRuntimeHealth } from "./RuntimeHealthProvider";
+import { useRuntimeHealth } from "./useRuntimeHealth";
 
 /**
  * Compact Runtime health surfaces (ticket 14).

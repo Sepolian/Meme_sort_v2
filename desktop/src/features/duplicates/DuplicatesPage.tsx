@@ -9,7 +9,7 @@ import {
   composeDuplicatePairs,
   type ComposedDuplicatePair,
 } from "../../api/result-models";
-import { useRuntimeHealth } from "../runtime/RuntimeHealthProvider";
+import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { EmptyState } from "../../components/States";
 
 /**

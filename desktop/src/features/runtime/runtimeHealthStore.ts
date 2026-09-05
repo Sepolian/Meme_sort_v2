@@ -22,7 +22,7 @@ const initialSnapshot: RuntimeHealthSnapshot = {
 };
 
 let snapshot: RuntimeHealthSnapshot = { ...initialSnapshot };
-let listeners = new Set<() => void>();
+const listeners = new Set<() => void>();
 let inFlight: Promise<RuntimeHealthSnapshot> | null = null;
 
 function notify(): void {
