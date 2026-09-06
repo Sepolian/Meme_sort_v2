@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -764,7 +764,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
-    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    });
     expect(cardOrder()).toEqual(["Open zebra.png"]);
 
     await clickImageSearch();
@@ -795,7 +797,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
-    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    });
 
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
     const pending = screen.getByRole("status", { name: "Similar search results" });
@@ -847,7 +851,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
         results: [searchAsset({ asset_id: CAT_ID, score: 0.92 })],
       } as never);
     });
-    expect(await screen.findByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    });
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
   });
 
@@ -889,7 +895,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
         results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.92 })],
       } as never);
     });
-    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    });
     expect(cardOrder()).toEqual(["Open zebra.png"]);
   });
 
@@ -913,7 +921,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
-    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 2");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 2");
+    });
     expect(cardOrder()).toEqual(["Open zebra.png", "Open cat-meme.png"]);
 
     currentAssets = {
@@ -1036,7 +1046,9 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     await clickImageSearch();
-    expect(await screen.findByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    });
     expect(cardOrder()).toEqual(["Open zebra.png"]);
 
     await clickImageSearch();

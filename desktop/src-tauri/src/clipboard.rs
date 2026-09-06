@@ -152,7 +152,7 @@ pub(crate) fn build_dibv5(
     for row in (0..height as usize).rev() {
         let offset = row * stride;
         let scanline = &rgba[offset..offset + stride];
-        for pixel in scanline.chunks_exact(4) {
+        for pixel in scanline.as_chunks::<4>().0 {
             dibv5.push(pixel[2]);
             dibv5.push(pixel[1]);
             dibv5.push(pixel[0]);
@@ -282,8 +282,10 @@ pub(crate) fn parse_hdrop_payload(payload: &[u8]) -> Result<Vec<PathBuf>, Sideca
         ));
     }
     let units: Vec<u16> = body
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| u16::from_le_bytes(*chunk))
         .collect();
     let mut paths = Vec::new();
     let mut current = Vec::new();
