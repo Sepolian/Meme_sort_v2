@@ -12,7 +12,7 @@ import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
 import { LibrarySearchBar } from "./features/library/LibrarySearchBar";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
-import { useLibraryTextSearch } from "./features/library/useLibraryTextSearch";
+import { useLibrarySearch } from "./features/library/useLibrarySearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
@@ -105,19 +105,12 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     setResultMode,
   } = useLibraryUrlState();
   const {
-    rawResults: semanticRawResults,
-    committedQuery: semanticCommittedQuery,
-    imageRawResults,
-    committedImageRequestId,
-    similarRawResults,
-    committedSimilarAssetId,
-    isSearching,
-    searchError,
+    search,
     submitSearch,
     submitImageSearch,
     submitSimilarSearch,
     clearSearch,
-  } = useLibraryTextSearch({ client });
+  } = useLibrarySearch({ client, resultMode });
   const [isChoosingImage, setIsChoosingImage] = useState(false);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
@@ -151,7 +144,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
       // Library/result state unchanged: no submit, no mode change.
       if (!selection.selected_path) return;
       const requestId = submitImageSearch();
-      setResultMode({ kind: "image", selectionId: requestId });
+      if (requestId) setResultMode({ kind: "image", selectionId: requestId });
     } catch {
       // Picker/transport failure also leaves browsing usable without
       // inventing a result mode; the image hook error surfaces only for
@@ -191,7 +184,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             </div>
             <LibrarySearchBar
               query={q}
-              isSearching={isSearching}
+              isSearching={search.current.status === "loading"}
               semanticBlocked={semanticBlocked}
               isChoosingImage={isChoosingImage}
               onQueryChange={handleQueryChange}
@@ -230,14 +223,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             onClearFilters={clearFilters}
             query={q}
             resultMode={resultMode}
-            semanticRawResults={semanticRawResults}
-            semanticQuery={semanticCommittedQuery}
-            imageRawResults={imageRawResults}
-            committedImageRequestId={committedImageRequestId}
-            similarRawResults={similarRawResults}
-            committedSimilarAssetId={committedSimilarAssetId}
-            isSearching={isSearching}
-            searchError={searchError}
+            search={search}
             onClearSearch={handleClearSearch}
             onFindSimilar={handleFindSimilar}
           />

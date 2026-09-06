@@ -546,6 +546,96 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     expect(screen.getByText(/No local matches for/)).toBeInTheDocument();
   });
 
+  it("a late success for identical text cannot complete the newer request", async () => {
+    const first = deferred<{ results: SearchAsset[] }>();
+    const second = deferred<{ results: SearchAsset[] }>();
+    const client = makeClient({
+      searchText: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await typeQuery("cat");
+    await submitSearch();
+    await submitSearch();
+
+    await act(async () => {
+      first.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
+    });
+    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+
+    await act(async () => {
+      second.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
+    });
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+    expect(screen.queryByText("Searching the Active Index Recipe…")).not.toBeInTheDocument();
+  });
+
+  it("repeating the same text retains committed results while pending and on failure", async () => {
+    const replacement = deferred<{ results: SearchAsset[] }>();
+    const client = makeClient({
+      searchText: vi.fn()
+        .mockResolvedValueOnce({ results: [searchAsset({ asset_id: ZEBRA_ID })] })
+        .mockReturnValueOnce(replacement.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await typeQuery("cat");
+    await submitSearch();
+    expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    await submitSearch();
+    const calls = (client.searchText as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][1]).not.toBe(calls[1][1]);
+    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    await act(async () => {
+      replacement.reject({ detail: "retry failed" });
+    });
+    expect(screen.getByRole("alert", { name: "Semantic search error" })).toHaveTextContent("retry failed");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+    expect(screen.queryByText("Searching the Active Index Recipe…")).not.toBeInTheDocument();
+  });
+
+  it("cancellation failure does not block a repeated submit or clear", async () => {
+    const first = deferred<{ results: SearchAsset[] }>();
+    const second = deferred<{ results: SearchAsset[] }>();
+    const cancelledIds: string[] = [];
+    const client = makeClient({
+      searchText: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
+      cancelSearch: async (requestId: string) => {
+        cancelledIds.push(requestId);
+        throw new Error("cancel transport unavailable");
+      },
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await typeQuery("cat");
+    await submitSearch();
+    await submitSearch();
+    const calls = (client.searchText as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][1]).not.toBe(calls[1][1]);
+    expect(cancelledIds).toEqual([calls[0][1]]);
+
+    await act(async () => {
+      first.reject(new Error("stale search failure"));
+    });
+    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(screen.queryByRole("alert", { name: "Semantic search error" })).not.toBeInTheDocument();
+
+    const section = screen.getByRole("status", { name: "Semantic search results" });
+    fireEvent.click(within(section).getByRole("button", { name: "Clear search" }));
+    await act(async () => {
+      second.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
+    });
+    expect(cancelledIds).toEqual([calls[0][1], calls[1][1]]);
+    expect(screen.queryByRole("status", { name: "Semantic search results" })).not.toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open cat-meme.png", "Open zebra.png", "Open dog-park.png", "Open bird-photo.png"]);
+  });
+
   it("clear cancels active work and restores browsing with sort applied", async () => {
     const gate = deferred<never>();
     const client = makeClient({

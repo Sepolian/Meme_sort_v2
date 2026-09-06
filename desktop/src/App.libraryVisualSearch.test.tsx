@@ -745,4 +745,320 @@ describe("Image search and Find Similar (ticket 12)", () => {
     });
     await flush();
   });
+
+  it("a failed image picker preserves already committed similar results", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => {
+        throw new Error("native picker unavailable");
+      }),
+      findSimilar: vi.fn(async () => ({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.93 })],
+      })),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    await clickImageSearch();
+    await flush();
+
+    expect(client.chooseSearchImage).toHaveBeenCalledTimes(1);
+    expect(client.searchImage).not.toHaveBeenCalled();
+    expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+  });
+
+  it("repeating Find Similar for the same Asset retains the prior result while pending and after an error", async () => {
+    const repeat = deferred<never>();
+    const client = makeClient({
+      findSimilar: vi
+        .fn()
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          asset_id: CAT_ID,
+          top_k: 18,
+          results: [searchAsset({ asset_id: CAT_ID, score: 0.93 })],
+        })
+        .mockReturnValueOnce(repeat.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    const pending = screen.getByRole("status", { name: "Similar search results" });
+    expect(pending).toHaveTextContent("Similar results · 1");
+    expect(within(pending).getByText(/Finding similar Assets in the Active Index Recipe/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+
+    await act(async () => {
+      repeat.reject({ error: "SidecarError", detail: "similar index unavailable", retryable: true });
+    });
+
+    expect(await screen.findByRole("alert", { name: "Similar search error" })).toHaveTextContent("similar index unavailable");
+    expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+  });
+
+  it("a late similar failure and finally cannot clear a newer image request's loading state", async () => {
+    const first = deferred<never>();
+    const second = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      findSimilar: vi.fn().mockReturnValueOnce(first.promise),
+      searchImage: vi.fn().mockReturnValueOnce(second.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    await clickImageSearch();
+    expect(client.findSimilar).toHaveBeenCalledWith(CAT_ID);
+    expect(client.searchImage).toHaveBeenCalledTimes(1);
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      first.reject({ error: "SidecarError", detail: "older request failed", retryable: true });
+    });
+
+    const pending = screen.getByRole("status", { name: "Image search results" });
+    expect(pending).toHaveTextContent("Searching the Active Index Recipe for the chosen image…");
+    expect(screen.queryByRole("alert", { name: "Image search error" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      second.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        query_path: "C:/Source/query.png",
+        query_media_type: "image/png",
+        top_k: 18,
+        results: [searchAsset({ asset_id: CAT_ID, score: 0.92 })],
+      } as never);
+    });
+    expect(await screen.findByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+  });
+
+  it("a late similar success cannot replace a newer request for the same Asset or finish it early", async () => {
+    const first = deferred<Record<string, unknown>>();
+    const second = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      findSimilar: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+
+    await act(async () => {
+      first.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [searchAsset({ asset_id: CAT_ID, score: 0.99 })],
+      } as never);
+    });
+
+    const pending = screen.getByRole("status", { name: "Similar search results" });
+    expect(pending).toHaveTextContent("Finding similar Assets…");
+    expect(within(pending).getByText(/Finding similar Assets in the Active Index Recipe/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert", { name: "Similar search error" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      second.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.92 })],
+      } as never);
+    });
+    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+  });
+
+  it("current Asset cache removal and status changes suppress committed similar projections", async () => {
+    let currentAssets: AssetListResult = assets;
+    const client = makeClient({
+      getAssets: vi.fn(async () => currentAssets),
+      findSimilar: vi.fn(async () => ({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [
+          searchAsset({ asset_id: ZEBRA_ID, score: 0.97 }),
+          searchAsset({ asset_id: CAT_ID, score: 0.93 }),
+        ],
+      })),
+    });
+    const { queryClient } = renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    expect(await screen.findByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 2");
+    expect(cardOrder()).toEqual(["Open zebra.png", "Open cat-meme.png"]);
+
+    currentAssets = {
+      ...assets,
+      assets: assets.assets
+        .filter((asset) => asset.asset_id !== ZEBRA_ID)
+        .map((asset) => (asset.asset_id === CAT_ID ? { ...asset, status: "pending" } : asset)),
+    };
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    });
+
+    expect(await screen.findByLabelText("No similar matches")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 0");
+    expect(screen.getByText(/1 similar result.*omitted/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /zebra\.png/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
+  });
+
+  it("clearing a pending similar search never sends a backend cancellation", async () => {
+    const gate = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      findSimilar: vi.fn(async () => gate.promise as never),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    const section = await screen.findByRole("status", { name: "Similar search results" });
+    fireEvent.click(within(section).getByRole("button", { name: "Clear search" }));
+
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status", { name: "Similar search results" })).not.toBeInTheDocument();
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+
+    await act(async () => {
+      gate.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.93 })],
+      } as never);
+    });
+    await flush();
+    expect(screen.queryByRole("status", { name: "Similar search results" })).not.toBeInTheDocument();
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+  });
+
+  it("unmounting a pending similar search never sends a backend cancellation", async () => {
+    const gate = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      findSimilar: vi.fn(async () => gate.promise as never),
+    });
+    const { unmount } = renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    await screen.findByRole("status", { name: "Similar search results" });
+    unmount();
+
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+    await act(async () => {
+      gate.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        asset_id: CAT_ID,
+        top_k: 18,
+        results: [],
+      } as never);
+    });
+    await flush();
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+  });
+
+  it("a picker resolving after Library unmount never starts image search", async () => {
+    const picker = deferred<{ selected_path: string | null }>();
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => picker.promise),
+    });
+    const { unmount } = renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    expect(client.chooseSearchImage).toHaveBeenCalledTimes(1);
+    unmount();
+
+    await act(async () => {
+      picker.resolve({ selected_path: "C:/Source/query.png" });
+    });
+    await flush();
+    expect(client.searchImage).not.toHaveBeenCalled();
+    expect(client.cancelSearch).not.toHaveBeenCalled();
+  });
+
+  it("a new image selection falls back to Library browsing while pending and after failure", async () => {
+    const second = deferred<never>();
+    const client = makeClient({
+      searchImage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          query_path: "C:/Source/first-query.png",
+          query_media_type: "image/png",
+          top_k: 18,
+          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.93 })],
+        })
+        .mockReturnValueOnce(second.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    expect(await screen.findByRole("status", { name: "Image search results" })).toHaveTextContent("Image results · 1");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    await clickImageSearch();
+    const pending = await screen.findByRole("status", { name: "Image search results" });
+    expect(pending).toHaveTextContent("Searching the Active Index Recipe for the chosen image…");
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+
+    await act(async () => {
+      second.reject({ error: "SidecarError", detail: "second image search failed", retryable: true });
+    });
+
+    expect(await screen.findByRole("alert", { name: "Image search error" })).toHaveTextContent("second image search failed");
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+  });
 });

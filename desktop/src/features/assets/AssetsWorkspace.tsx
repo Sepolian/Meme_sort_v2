@@ -26,7 +26,8 @@ import {
 import {
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
-import type { AssetListResult, AssetSummary, SearchAsset } from "../../api/types";
+import { EMPTY_LIBRARY_SEARCH, type LibrarySearchView } from "../library/useLibrarySearch";
+import type { AssetListResult, AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -43,22 +44,8 @@ interface AssetsWorkspaceProps {
   query?: string;
   /** Transient result mode from ticket 07 (`browse`/`local`/`semantic`/`image`/`similar`). */
   resultMode?: LibraryResultMode;
-  /** Raw semantic projections for the latest committed request (null until first success). */
-  semanticRawResults?: SearchAsset[] | null;
-  /** Query text of the latest committed semantic results (null until first success). */
-  semanticQuery?: string | null;
-  /** Raw image projections for the latest committed image request (null until first success). */
-  imageRawResults?: SearchAsset[] | null;
-  /** Request ID of the latest committed image results (null until first success). */
-  committedImageRequestId?: string | null;
-  /** Raw similar projections for the latest committed similar request (null until first success). */
-  similarRawResults?: SearchAsset[] | null;
-  /** Asset ID of the latest committed similar results (null until first success). */
-  committedSimilarAssetId?: string | null;
-  /** True while a Search Request (any mode) is in flight. */
-  isSearching?: boolean;
-  /** Latest error for the current request (null when none). Only the latest identity may commit. */
-  searchError?: string | null;
+  /** Coordinated request state and results already selected for this mode. */
+  search?: LibrarySearchView;
   /** Clear all search modes and restore browsing (cancels active work). */
   onClearSearch?: () => void;
   /**
@@ -114,14 +101,7 @@ export function AssetsWorkspace({
   onClearFilters,
   query = "",
   resultMode,
-  semanticRawResults = null,
-  semanticQuery = null,
-  imageRawResults = null,
-  committedImageRequestId = null,
-  similarRawResults = null,
-  committedSimilarAssetId = null,
-  isSearching = false,
-  searchError = null,
+  search = EMPTY_LIBRARY_SEARCH,
   onClearSearch,
   onFindSimilar,
 }: AssetsWorkspaceProps) {
@@ -250,8 +230,6 @@ export function AssetsWorkspace({
   const isImageMode = effectiveMode.kind === "image";
   const isSimilarMode = effectiveMode.kind === "similar";
   const semanticModeQuery = isSemanticMode ? effectiveMode.query : "";
-  const imageSelectionId = isImageMode ? effectiveMode.selectionId : null;
-  const similarModeAssetId = isSimilarMode ? effectiveMode.assetId : "";
   const localDisplayQuery = isLocalMode ? effectiveMode.query : query;
   const summaryMap = useMemo(
     () => buildAssetSummaryMap(assetsData?.assets ?? []),
@@ -261,61 +239,19 @@ export function AssetsWorkspace({
     () => filterLocalAssets(orderedAssets, localDisplayQuery),
     [orderedAssets, localDisplayQuery],
   );
-  const composedSemantic = useMemo(
-    () => (semanticRawResults ? composeSearchItems(semanticRawResults, summaryMap) : null),
-    [semanticRawResults, summaryMap],
+  const isSearching = search.current.status === "loading";
+  const searchError = search.current.error;
+  const hasResults = search.result !== null;
+  const composedResults = useMemo(
+    () => search.result ? composeSearchItems(search.result.assets, summaryMap) : null,
+    [search.result, summaryMap],
   );
-  const composedImage = useMemo(
-    () => (imageRawResults ? composeSearchItems(imageRawResults, summaryMap) : null),
-    [imageRawResults, summaryMap],
+  const indexedItems = useMemo(
+    () => composedResults?.items.filter((item) => item.summary.status === "indexed") ?? [],
+    [composedResults],
   );
-  const composedSimilar = useMemo(
-    () => (similarRawResults ? composeSearchItems(similarRawResults, summaryMap) : null),
-    [similarRawResults, summaryMap],
-  );
-  // Only the committed results for the current query may render.
-  // Older in-flight promises settle with a mismatched identity and stay hidden
-  // (latest-wins, including cross-mode); typing a new q falls back to local
-  // via ticket 07's effect. Image/similar are query-independent and stay
-  // sticky until cleared (never restored from URL/storage).
-  const hasFreshSemantic =
-    isSemanticMode && semanticRawResults !== null && semanticQuery !== null && semanticQuery === semanticModeQuery;
-  const hasFreshImage =
-    isImageMode &&
-    imageRawResults !== null &&
-    // `selectionId` carries the UUID-scoped image request ID (ticket 12).
-    // A null selection can only arise from legacy callers; treat any
-    // committed image payload as fresh in that case.
-    (imageSelectionId === null || committedImageRequestId === imageSelectionId);
-  const hasFreshSimilar =
-    isSimilarMode && similarRawResults !== null && committedSimilarAssetId !== null && committedSimilarAssetId === similarModeAssetId;
-  const semanticIndexedItems = useMemo(() => {
-    if (!hasFreshSemantic || !composedSemantic) return [];
-    return composedSemantic.items.filter((item) => item.summary.status === "indexed");
-  }, [hasFreshSemantic, composedSemantic]);
-  const semanticSummaries = useMemo(
-    () => semanticIndexedItems.map((item) => item.summary),
-    [semanticIndexedItems],
-  );
-  const semanticStaleCount = hasFreshSemantic && composedSemantic ? composedSemantic.stale.length : 0;
-  const imageIndexedItems = useMemo(() => {
-    if (!hasFreshImage || !composedImage) return [];
-    return composedImage.items.filter((item) => item.summary.status === "indexed");
-  }, [hasFreshImage, composedImage]);
-  const imageSummaries = useMemo(
-    () => imageIndexedItems.map((item) => item.summary),
-    [imageIndexedItems],
-  );
-  const imageStaleCount = hasFreshImage && composedImage ? composedImage.stale.length : 0;
-  const similarIndexedItems = useMemo(() => {
-    if (!hasFreshSimilar || !composedSimilar) return [];
-    return composedSimilar.items.filter((item) => item.summary.status === "indexed");
-  }, [hasFreshSimilar, composedSimilar]);
-  const similarSummaries = useMemo(
-    () => similarIndexedItems.map((item) => item.summary),
-    [similarIndexedItems],
-  );
-  const similarStaleCount = hasFreshSimilar && composedSimilar ? composedSimilar.stale.length : 0;
+  const searchSummaries = useMemo(() => indexedItems.map((item) => item.summary), [indexedItems]);
+  const staleCount = composedResults?.stale.length ?? 0;
 
   // Ticket 10: prune checkbox selection when the Asset list no longer
   // contains an ID (e.g. the inspector deleted it via its own mutation that
@@ -352,18 +288,8 @@ export function AssetsWorkspace({
     if (!selectedIds.size) return [];
     const visibleForOrder: readonly AssetSummary[] = (() => {
       if (isLocalMode) return localMatches;
-      if (isSemanticMode) {
-        if (hasFreshSemantic && semanticSummaries.length) return semanticSummaries;
-        if (localMatches.length) return localMatches;
-        return orderedAssets;
-      }
-      if (isImageMode) {
-        if (hasFreshImage && imageSummaries.length) return imageSummaries;
-        if (localMatches.length) return localMatches;
-        return orderedAssets;
-      }
-      if (isSimilarMode) {
-        if (hasFreshSimilar && similarSummaries.length) return similarSummaries;
+      if (isSemanticMode || isImageMode || isSimilarMode) {
+        if (hasResults && searchSummaries.length) return searchSummaries;
         if (localMatches.length) return localMatches;
         return orderedAssets;
       }
@@ -480,9 +406,9 @@ export function AssetsWorkspace({
     {isSemanticMode ? (
       <section className="notice" role="status" aria-label="Semantic search results">
         <strong>
-          {isSearching && !hasFreshSemantic
+          {isSearching && !hasResults
             ? `Searching the Active Index Recipe for \u201C${semanticModeQuery}\u201D\u2026`
-            : `Semantic results for \u201C${semanticModeQuery}\u201D \u00B7 ${semanticSummaries.length}`}
+            : `Semantic results for \u201C${semanticModeQuery}\u201D \u00B7 ${searchSummaries.length}`}
         </strong>
         <span>Semantic results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
         {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
@@ -493,17 +419,17 @@ export function AssetsWorkspace({
             <span>Library browsing remains available. Local matches for this query stay visible below.</span>
           </section>
         ) : null}
-        {semanticStaleCount ? (
+        {staleCount ? (
           <section className="notice notice-warning" role="status" aria-label="Stale semantic results">
-            <strong>{semanticStaleCount} semantic result{semanticStaleCount === 1 ? "" : "s"} omitted</strong>
+            <strong>{staleCount} semantic result{staleCount === 1 ? "" : "s"} omitted</strong>
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasFreshSemantic && semanticIndexedItems.length ? (
+        {hasResults && indexedItems.length ? (
           <details>
             <summary>Advanced details</summary>
             <ul className="detail-list">
-              {semanticIndexedItems.map((item) => (
+              {indexedItems.map((item) => (
                 <li key={item.summary.asset_id}>
                   <span className="mono">{item.summary.asset_id}</span>
                   <span>
@@ -527,9 +453,9 @@ export function AssetsWorkspace({
     {isImageMode ? (
       <section className="notice" role="status" aria-label="Image search results">
         <strong>
-          {isSearching && !hasFreshImage
+          {isSearching && !hasResults
             ? `Searching the Active Index Recipe for the chosen image\u2026`
-            : `Image results \u00B7 ${imageSummaries.length}`}
+            : `Image results \u00B7 ${searchSummaries.length}`}
         </strong>
         <span>Image results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
         {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
@@ -540,17 +466,17 @@ export function AssetsWorkspace({
             <span>Library browsing remains available. Local matches stay visible below.</span>
           </section>
         ) : null}
-        {imageStaleCount ? (
+        {staleCount ? (
           <section className="notice notice-warning" role="status" aria-label="Stale image results">
-            <strong>{imageStaleCount} image result{imageStaleCount === 1 ? "" : "s"} omitted</strong>
+            <strong>{staleCount} image result{staleCount === 1 ? "" : "s"} omitted</strong>
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasFreshImage && imageIndexedItems.length ? (
+        {hasResults && indexedItems.length ? (
           <details>
             <summary>Advanced details</summary>
             <ul className="detail-list">
-              {imageIndexedItems.map((item) => (
+              {indexedItems.map((item) => (
                 <li key={item.summary.asset_id}>
                   <span className="mono">{item.summary.asset_id}</span>
                   <span>
@@ -574,9 +500,9 @@ export function AssetsWorkspace({
     {isSimilarMode ? (
       <section className="notice" role="status" aria-label="Similar search results">
         <strong>
-          {isSearching && !hasFreshSimilar
+          {isSearching && !hasResults
             ? `Finding similar Assets\u2026`
-            : `Similar results \u00B7 ${similarSummaries.length}`}
+            : `Similar results \u00B7 ${searchSummaries.length}`}
         </strong>
         <span>Similar results in similarity order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
         {isSearching ? <p aria-live="polite">Finding similar Assets in the Active Index Recipe&hellip;</p> : null}
@@ -587,17 +513,17 @@ export function AssetsWorkspace({
             <span>Library browsing remains available. Local matches stay visible below.</span>
           </section>
         ) : null}
-        {similarStaleCount ? (
+        {staleCount ? (
           <section className="notice notice-warning" role="status" aria-label="Stale similar results">
-            <strong>{similarStaleCount} similar result{similarStaleCount === 1 ? "" : "s"} omitted</strong>
+            <strong>{staleCount} similar result{staleCount === 1 ? "" : "s"} omitted</strong>
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasFreshSimilar && similarIndexedItems.length ? (
+        {hasResults && indexedItems.length ? (
           <details>
             <summary>Advanced details</summary>
             <ul className="detail-list">
-              {similarIndexedItems.map((item) => (
+              {indexedItems.map((item) => (
                 <li key={item.summary.asset_id}>
                   <span className="mono">{item.summary.asset_id}</span>
                   <span>
@@ -654,9 +580,9 @@ export function AssetsWorkspace({
           </div>
         )
       ) : isSemanticMode ? (
-        hasFreshSemantic && semanticSummaries.length ? (
+        hasResults && searchSummaries.length ? (
           <AssetWaterfall
-            assets={semanticSummaries}
+            assets={searchSummaries}
             density={density}
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
@@ -667,7 +593,7 @@ export function AssetsWorkspace({
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
-        ) : hasFreshSemantic && !semanticSummaries.length && !isSearching && !searchError ? (
+        ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No semantic matches" ref={wallRef}>
             <h2>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
             <p>
@@ -710,9 +636,9 @@ export function AssetsWorkspace({
           </div>
         )
       ) : isImageMode ? (
-        hasFreshImage && imageSummaries.length ? (
+        hasResults && searchSummaries.length ? (
           <AssetWaterfall
-            assets={imageSummaries}
+            assets={searchSummaries}
             density={density}
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
@@ -723,7 +649,7 @@ export function AssetsWorkspace({
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
-        ) : hasFreshImage && !imageSummaries.length && !isSearching && !searchError ? (
+        ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No image matches" ref={wallRef}>
             <h2>No image matches</h2>
             <p>
@@ -766,9 +692,9 @@ export function AssetsWorkspace({
           </div>
         )
       ) : isSimilarMode ? (
-        hasFreshSimilar && similarSummaries.length ? (
+        hasResults && searchSummaries.length ? (
           <AssetWaterfall
-            assets={similarSummaries}
+            assets={searchSummaries}
             density={density}
             checkedIds={selectedIds}
             onOpenAsset={onSelectAsset}
@@ -779,7 +705,7 @@ export function AssetsWorkspace({
             sectionRef={wallRef}
             accepting={Boolean(dragPreview)}
           />
-        ) : hasFreshSimilar && !similarSummaries.length && !isSearching && !searchError ? (
+        ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
             <h2>No similar Assets</h2>
             <p>
