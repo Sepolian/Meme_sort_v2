@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { AssetsWorkspace } from "./AssetsWorkspace";
 import type { MemeSortClient } from "../../api/tauri-client";
-import { ImportBatchContext } from "../import/ImportBatchContext";
+import { ImportBatchContext, type ImportBatchStartResult } from "../import/ImportBatchContext";
 import type {
   NativeDragListener,
   NativeDragSubscribe,
@@ -97,6 +97,7 @@ function renderWorkspace(options: {
   client?: MemeSortClient;
   nativeDrag?: NativeDragSubscribe;
   list?: AssetListResult;
+  startBatch?: (start: () => Promise<ImportTask>) => Promise<ImportBatchStartResult>;
 } = {}) {
   const client =
     options.client
@@ -106,15 +107,17 @@ function renderWorkspace(options: {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const startBatch = async (start: () => Promise<ImportTask>) => {
-    const snapshot = await start();
-    queryClient.setQueryData(["import-batch"], snapshot);
-    return snapshot;
-  };
+  const startBatch = options.startBatch
+    ?? (async (start: () => Promise<ImportTask>): Promise<ImportBatchStartResult> => {
+      const snapshot = await start();
+      queryClient.setQueryData(["import-batch"], snapshot);
+      return { kind: "started", snapshot };
+    });
   const view = render(
     <QueryClientProvider client={queryClient}>
       <ImportBatchContext.Provider value={{
         snapshot: null,
+        starting: false,
         startBatch,
         requestPause: async () => undefined,
         requestResume: async () => undefined,
@@ -282,6 +285,40 @@ describe("AssetsWorkspace native drag-and-drop", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("An Import Batch is already running or paused.");
+  });
+
+  it("reports a blocked launch without issuing a second start command", async () => {
+    const fake = new FakeNativeDrag();
+    const client = createClient({
+      startLibraryImport: vi.fn(async () => {
+        throw new Error("must not start while another launch is in flight");
+      }),
+    });
+    renderWorkspace({
+      nativeDrag: fake.subscribe,
+      client,
+      startBatch: async () => ({ kind: "blocked", reason: "start-in-progress" }),
+    });
+
+    const grid = await renderedWall("Assets");
+    stubWallRect(grid, 100, 50, 500, 450);
+
+    await act(async () => {
+      fake.fire(
+        dragSummary({
+          phase: "drop",
+          fileCount: 3,
+          x: 150,
+          y: 150,
+          dropId: "123e4567-e89b-12d3-a456-426614174013",
+        }),
+      );
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("already starting an Import Batch");
+    expect(client.startLibraryImport).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Import Batch started for/)).not.toBeInTheDocument();
   });
 
   it("clears the release cue when the drag leaves the window", async () => {

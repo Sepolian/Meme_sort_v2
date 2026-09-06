@@ -3,14 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { LibraryImportMenu } from "./LibraryImportMenu";
 import type { MemeSortClient } from "../../api/tauri-client";
-import { ImportBatchContext } from "../import/ImportBatchContext";
+import { ImportBatchContext, type ImportBatchStartResult } from "../import/ImportBatchContext";
 import type { ImportTask } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
 
 function renderMenu(options: {
   client?: MemeSortClient;
   snapshot?: ImportTask | null;
-  startBatch?: (start: () => Promise<ImportTask>) => Promise<ImportTask>;
+  starting?: boolean;
+  startBatch?: (start: () => Promise<ImportTask>) => Promise<ImportBatchStartResult>;
 } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -18,10 +19,10 @@ function renderMenu(options: {
   const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   const startBatch =
     options.startBatch ??
-    (async (start: () => Promise<ImportTask>) => {
+    (async (start: () => Promise<ImportTask>): Promise<ImportBatchStartResult> => {
       const snapshot = await start();
       queryClient.setQueryData(["import-batch"], snapshot);
-      return snapshot;
+      return { kind: "started", snapshot };
     });
   const client =
     options.client ??
@@ -41,6 +42,7 @@ function renderMenu(options: {
       <ImportBatchContext.Provider
         value={{
           snapshot: options.snapshot ?? null,
+          starting: options.starting ?? false,
           startBatch,
           requestPause: async () => undefined,
           requestResume: async () => undefined,
@@ -152,7 +154,7 @@ describe("LibraryImportMenu", () => {
     expect(alert).toHaveTextContent("An Import Batch is already running or paused.");
   });
 
-  it("invalidates app state after starting an import (task polling picks up the batch)", async () => {
+  it("leaves the start refresh to the shared Import Batch coordination instead of refreshing app state itself", async () => {
     const { invalidateSpy } = renderMenu();
     await openMenu();
     fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
@@ -162,7 +164,59 @@ describe("LibraryImportMenu", () => {
       const key = (options as { queryKey?: readonly unknown[] } | undefined)?.queryKey;
       return Array.isArray(key) && key[0] === "app-state";
     });
-    expect(appStateCalls.length).toBeGreaterThanOrEqual(1);
+    expect(appStateCalls).toHaveLength(0);
+  });
+
+  it("does not start or claim success when another launch is already in flight", async () => {
+    const client = {
+      chooseLibraryFiles: vi.fn(async () => ({
+        selection_id: "123e4567-e89b-12d3-a456-426614174010",
+        count: 2,
+      })),
+      chooseLibraryFolder: vi.fn(async () => null),
+      startLibraryImport: vi.fn(async () => {
+        throw new Error("must not start while another launch is in flight");
+      }),
+    } as unknown as MemeSortClient;
+    renderMenu({
+      client,
+      startBatch: async () => ({ kind: "blocked", reason: "start-in-progress" }),
+    });
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("already starting an Import Batch");
+    expect(client.startLibraryImport).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Import Batch started for/)).not.toBeInTheDocument();
+  });
+
+  it("does not start or claim success when a batch is already running or paused", async () => {
+    const client = {
+      chooseLibraryFiles: vi.fn(async () => ({
+        selection_id: "123e4567-e89b-12d3-a456-426614174010",
+        count: 2,
+      })),
+      chooseLibraryFolder: vi.fn(async () => null),
+      startLibraryImport: vi.fn(async () => {
+        throw new Error("must not start while a batch is active");
+      }),
+    } as unknown as MemeSortClient;
+    renderMenu({
+      client,
+      startBatch: async () => ({ kind: "blocked", reason: "import-batch-active" }),
+    });
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("already running or paused");
+    expect(client.startLibraryImport).not.toHaveBeenCalled();
+  });
+
+  it("disables the Import entry while a launch from any entry point is in flight", async () => {
+    renderMenu({ starting: true });
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
   });
 
   it("closes the menu with Escape for keyboard users", async () => {

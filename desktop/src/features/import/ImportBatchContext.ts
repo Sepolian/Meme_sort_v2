@@ -1,9 +1,18 @@
 import { createContext, useContext } from "react";
 import type { ImportTask } from "../../api/types";
+import type { ImportBatchStartBlockedReason } from "./import-status";
+
+export type { ImportBatchStartBlockedReason };
+
+export type ImportBatchStartResult =
+  | { kind: "started"; snapshot: ImportTask }
+  | { kind: "blocked"; reason: ImportBatchStartBlockedReason };
 
 export interface ImportBatchContextValue {
   snapshot: ImportTask | null;
-  startBatch: (start: () => Promise<ImportTask>) => Promise<ImportTask>;
+  /** True while a launch from any entry point is still awaiting the backend. */
+  starting: boolean;
+  startBatch: (start: () => Promise<ImportTask>) => Promise<ImportBatchStartResult>;
   requestPause: () => Promise<void>;
   requestResume: () => Promise<void>;
   controlsPending: boolean;

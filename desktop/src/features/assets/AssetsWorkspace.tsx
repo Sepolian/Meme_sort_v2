@@ -8,6 +8,7 @@ import {
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { ImportFailureDetails } from "../import/ImportFailureDetails";
+import { importBatchBlockedMessage } from "../import/import-status";
 import { useOptionalRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { AssetWaterfall } from "./AssetWaterfall";
 import { buildAssetSummaryMap, composeSearchItems } from "../../api/result-models";
@@ -160,9 +161,12 @@ export function AssetsWorkspace({
       const label = `${itemCount} dropped item${itemCount === 1 ? "" : "s"}`;
       setLibraryNotice({ kind: "success", text: `Starting Import Batch for ${label}.` });
       try {
-        await startBatch(() => client.startLibraryImport(dropId));
+        const outcome = await startBatch(() => client.startLibraryImport(dropId));
+        if (outcome.kind === "blocked") {
+          setLibraryNotice({ kind: "error", text: importBatchBlockedMessage(outcome.reason) });
+          return;
+        }
         setLibraryNotice({ kind: "success", text: `Import Batch started for ${label}.` });
-        await queryClient.invalidateQueries({ queryKey: ["app-state"] });
       } catch (error) {
         setLibraryNotice({ kind: "error", text: tauriErrorDetail(error, "MemeSort could not start the Import Batch from this drop. Resolve the conflict or make a fresh native selection to retry.") });
       }

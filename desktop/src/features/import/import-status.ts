@@ -17,6 +17,19 @@ export function importWorkIsActive(
   );
 }
 
+/**
+ * Why a launch attempt did not reach the backend. A blocked launch is never
+ * queued: nothing runs later on its behalf, and the backend stays the final
+ * conflict authority for anything the local snapshot does not know yet.
+ */
+export type ImportBatchStartBlockedReason = "start-in-progress" | "import-batch-active";
+
+export function importBatchBlockedMessage(reason: ImportBatchStartBlockedReason): string {
+  return reason === "start-in-progress"
+    ? "MemeSort is already starting an Import Batch. Wait for the current Import Batch to appear before importing more."
+    : "An Import Batch is already running or paused. Wait for it to finish before importing more.";
+}
+
 export function importBatchIsTerminal(snapshot: ImportTask): boolean {
   return (
     !snapshot.running && IMPORT_TERMINAL_STATUSES.has(snapshot.status)

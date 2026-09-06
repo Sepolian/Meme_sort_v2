@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { useImportBatch } from "../import/ImportBatchContext";
-import { importWorkIsActive } from "../import/import-status";
+import { importBatchBlockedMessage, importWorkIsActive } from "../import/import-status";
 
 interface LibraryImportMenuProps {
   client: MemeSortClient;
@@ -19,10 +18,11 @@ type LibraryNotice = { kind: "error" | "success"; text: string };
  * the returned selection ID to `startLibraryImport`, so raw paths never reach
  * React. Picker cancellation (`null`) causes no mutation and no toast.
  * Active-batch gating, pause/resume (via ImportBatchPanel), validation,
- * feedback, and query invalidation match the previous Library flow.
+ * feedback, and query invalidation match the previous Library flow. Launch
+ * coordination (in-flight and known active/paused batches) and the start
+ * refresh belong to the shared Import Batch Provider.
  */
 export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
-  const queryClient = useQueryClient();
   const importBatch = useImportBatch();
   const startBatch = importBatch.startBatch;
   const importWorkActive = importWorkIsActive(importBatch.snapshot);
@@ -31,7 +31,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const controlsDisabled = libraryBusy !== null || importWorkActive;
+  const controlsDisabled = libraryBusy !== null || importBatch.starting || importWorkActive;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -66,12 +66,15 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
         text: `Starting Import Batch for ${count} ${label}${count === 1 ? "" : "s"}.`,
       });
       // Only the opaque selection ID crosses into the import command.
-      await startBatch(() => client.startLibraryImport(selection.selection_id));
+      const outcome = await startBatch(() => client.startLibraryImport(selection.selection_id));
+      if (outcome.kind === "blocked") {
+        setLibraryNotice({ kind: "error", text: importBatchBlockedMessage(outcome.reason) });
+        return;
+      }
       setLibraryNotice({
         kind: "success",
         text: `Import Batch started for ${count} ${label}${count === 1 ? "" : "s"}.`,
       });
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
     } catch (error) {
       setLibraryNotice({
         kind: "error",
