@@ -27,7 +27,8 @@ import {
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
 import { EMPTY_LIBRARY_SEARCH, type LibrarySearchView } from "../library/useLibrarySearch";
-import type { AssetListResult, AssetSummary } from "../../api/types";
+import { useDeletedAssetReconciliation } from "./useDeletedAssetReconciliation";
+import type { AssetSummary } from "../../api/types";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -123,41 +124,29 @@ export function AssetsWorkspace({
   const startedDropIdRef = useRef<string | null>(null);
   const nativeDragSubscribe = nativeDrag ?? subscribeNativeDrag;
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: () => client.getAssets() });
+  const reconcileDeletedAssets = useDeletedAssetReconciliation({
+    inspectedAssetId: selectedAssetId,
+    onCloseDetail,
+  });
   const mutation = useMutation({
     mutationFn: async (request: BatchMutationRequest) => client.batchAssetAction(request.action, request.assetIds),
     onSuccess: async (result, request) => {
       setFeedback(mutationSummary(request, result));
-      // Ticket 17: only Delete reconciles selection (removing exactly
-      // `affected_asset_ids` so skipped/failed IDs are retained). Rebuild
-      // preserves the full selection and never closes the inspector because
-      // the Assets still exist.
+      setConfirmation(null);
       if (request.action === "delete") {
+        // Ticket 17: only Delete reconciles selection (removing exactly
+        // `affected_asset_ids` so skipped/failed IDs are retained). Rebuild
+        // preserves the full selection and never closes the inspector because
+        // the Assets still exist.
         const affected = new Set(result.affected_asset_ids);
         setSelectedIds((current) => {
           const next = new Set([...current].filter((id) => !affected.has(id)));
           return next;
         });
-        // Optimistically drop deleted Assets from the visible wall so the UI
-        // reflects the deletion even when the mocked `getAssets` still
-        // returns the pre-delete list (tests) or before refetch settles.
-        if (affected.size) {
-          queryClient.setQueryData<AssetListResult | undefined>(
-            ["assets"],
-            (old) =>
-              old
-                ? { ...old, assets: old.assets.filter((item) => !affected.has(item.asset_id)) }
-                : old,
-          );
-          for (const deletedId of affected) {
-            queryClient.removeQueries({ queryKey: ["asset-detail", deletedId] });
-          }
-        }
-        if (selectedAssetId && affected.has(selectedAssetId)) {
-          onCloseDetail();
-        }
+        await reconcileDeletedAssets(result.affected_asset_ids);
+      } else {
+        await Promise.all([queryClient.invalidateQueries({ queryKey: ["assets"] }), queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
       }
-      setConfirmation(null);
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["assets"] }), queryClient.invalidateQueries({ queryKey: ["app-state"] })]);
     },
     onError: () => { setFeedback("The requested Asset change could not be completed. The Library was not modified by the desktop UI."); setConfirmation(null); },
   });

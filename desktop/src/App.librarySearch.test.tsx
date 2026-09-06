@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -379,6 +379,60 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     for (const node of allScores) {
       expect(details.contains(node)).toBe(true);
     }
+  });
+
+  it("deleting a semantic result drops it from the results without re-running retrieval", async () => {
+    let currentAssets = [...assets.assets];
+    const searchText = vi.fn(async () => ({
+      library_root: "C:/Library",
+      active_recipe_id: "recipe-1",
+      active_recipe_label: "Vulkan0 recipe",
+      query: "meme",
+      top_k: 18,
+      results: [
+        searchAsset({ asset_id: ZEBRA_ID, score: 0.91, match_sources: ["visual"] }),
+        searchAsset({ asset_id: CAT_ID, score: 0.82, match_sources: ["visual"] }),
+      ],
+    }));
+    const client = makeClient({
+      getAssets: async () => ({ ...assets, assets: [...currentAssets] }),
+      searchText,
+      batchAssetAction: vi.fn(async (action: string, assetIds: string[]) => {
+        currentAssets = currentAssets.filter((asset) => !assetIds.includes(asset.asset_id));
+        return {
+          library_root: "C:/Library",
+          action,
+          requested_asset_ids: assetIds,
+          affected_asset_ids: assetIds,
+          skipped_running_asset_ids: [],
+          removed_source_records: 1,
+          removed_jobs: 0,
+          removed_renditions: 0,
+          removed_embeddings: 0,
+          reindex_jobs_created: 0,
+        };
+      }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await typeQuery("meme");
+    await submitSearch();
+    expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png", "Open cat-meme.png"]);
+
+    fireEvent.click(screen.getByLabelText("Select zebra.png"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete 1 selected Asset(s)?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete selected Assets" }));
+
+    // The deleted Asset no longer appears in the semantic results, the
+    // remaining results stay, and retrieval was not run again.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /zebra\.png/ })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
+    expect(searchText).toHaveBeenCalledTimes(1);
   });
 
   it("a new submit cancels the previous waiting request", async () => {

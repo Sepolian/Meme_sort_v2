@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
@@ -515,6 +515,177 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     await screen.findByRole("complementary", { name: "Inspector" });
     expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
     appRender.unmount();
+  });
+});
+
+describe("Source Record removal and deletion cache coordination", () => {
+  const PRIMARY_SOURCE = "C:/Source/first.gif";
+  const EXTRA_SOURCE = "C:/Source/first-extra.gif";
+
+  beforeEach(() => {
+    localStorage.clear();
+    resetRuntimeHealthForTesting();
+    vi.clearAllMocks();
+  });
+
+  function listWithSources(remaining: string[]) {
+    return {
+      ...assets,
+      assets: assets.assets.map((asset) =>
+        asset.asset_id === FIRST_ASSET
+          ? { ...asset, source_record_count: remaining.length, source_records: remaining.map((source_path) => ({ source_path })) }
+          : asset,
+      ),
+    };
+  }
+
+  function detailWithSources(assetId: string, remaining: string[]) {
+    const base = detailFor(assetId);
+    return {
+      library_root: "C:/Library",
+      active_recipe_id: "recipe-1",
+      active_recipe_label: "Vulkan0 recipe",
+      asset: assetId === FIRST_ASSET
+        ? {
+            ...base,
+            source_record_count: remaining.length,
+            source_records: remaining.map((source_path) => ({ source_path, imported_at: base.imported_at, last_seen_at: null })),
+          }
+        : base,
+    };
+  }
+
+  function removeSourceResult(assetId: string, sourcePath: string, assetDeleted: boolean) {
+    return {
+      library_root: "C:/Library",
+      asset_id: assetId,
+      removed_source_path: sourcePath,
+      asset_deleted: assetDeleted,
+      removed_source_records: 1,
+      removed_jobs: assetDeleted ? 1 : 0,
+      removed_renditions: assetDeleted ? 1 : 0,
+      removed_embeddings: assetDeleted ? 1 : 0,
+    };
+  }
+
+  it("removing a non-final Source Record keeps the Asset, its selection, and shows the remaining Source Record", async () => {
+    let remaining = [PRIMARY_SOURCE, EXTRA_SOURCE];
+    const client = makeClient({
+      getAssets: async () => listWithSources(remaining),
+      getAssetDetail: async (assetId: string) => detailWithSources(assetId, remaining),
+      removeSourceRecord: vi.fn(async (assetId: string, sourcePath: string) => {
+        remaining = remaining.filter((path) => path !== sourcePath);
+        return removeSourceResult(assetId, sourcePath, false);
+      }),
+    });
+    const { container, getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    fireEvent.click(await screen.findByLabelText("Select first.gif"));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    await screen.findByRole("complementary", { name: "Inspector" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove Source Record" })[0]);
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+    expect(await screen.findByText("Removed the Source Record.")).toBeInTheDocument();
+
+    // The Asset, its selection and its detail survive a normal removal.
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
+    // The Asset is still on the wall and still selected. Its displayed name
+    // follows the remaining Source Record, so assert on the Asset itself.
+    const card = container.querySelector(`article[data-asset-id="${FIRST_ASSET}"]`);
+    expect(card).not.toBeNull();
+    expect(card?.querySelector<HTMLInputElement>("input[type='checkbox']")?.checked).toBe(true);
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    const sources = screen.getByRole("region", { name: "Source Records" });
+    expect(sources).toHaveTextContent(EXTRA_SOURCE);
+    expect(sources).not.toHaveTextContent(PRIMARY_SOURCE);
+  });
+
+  it("removing the final Source Record deletes the Orphan Asset like an explicit delete", async () => {
+    let currentAssets = [...assets.assets];
+    const getAssetDetail = vi.fn(async (assetId: string) => ({ library_root: "C:/Library", active_recipe_id: "recipe-1", active_recipe_label: "Vulkan0 recipe", asset: detailFor(assetId) }));
+    const client = makeClient({
+      getAssets: async () => ({ ...assets, assets: [...currentAssets] }),
+      getAssetDetail,
+      removeSourceRecord: vi.fn(async (assetId: string, sourcePath: string) => {
+        currentAssets = currentAssets.filter((asset) => asset.asset_id !== assetId);
+        return removeSourceResult(assetId, sourcePath, true);
+      }),
+    });
+    const { getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await waitFor(() => {
+      expect(getAssetDetail.mock.calls.filter((call) => call[0] === FIRST_ASSET)).toHaveLength(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Source Record" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+
+    // Same post-delete result as Delete: Asset gone from the wall, detail
+    // closed, and no refresh of a detail the backend just deleted.
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /first\.gif/i })).not.toBeInTheDocument();
+    expect(getLocation().search).not.toContain("asset=");
+    expect(screen.getByRole("button", { name: /indexed\.png/i })).toBeInTheDocument();
+    expect(getAssetDetail.mock.calls.filter((call) => call[0] === FIRST_ASSET)).toHaveLength(1);
+  });
+
+  it("keeps a detail that was opened while a Delete was still in flight", async () => {
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    let currentAssets = [...assets.assets];
+    const client = makeClient({
+      getAssets: async () => ({ ...assets, assets: [...currentAssets] }),
+      deleteAsset: vi.fn(async (assetId: string) => {
+        await deleteGate;
+        currentAssets = currentAssets.filter((asset) => asset.asset_id !== assetId);
+        return {
+          library_root: "C:/Library",
+          asset_id: assetId,
+          removed_source_path: null,
+          asset_deleted: true,
+          removed_source_records: 1,
+          removed_jobs: 1,
+          removed_renditions: 1,
+          removed_embeddings: 1,
+        };
+      }),
+    });
+    const { getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Asset" }));
+
+    // The user opens another Asset while the confirmed delete is still running.
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await waitFor(() => {
+      expect(getLocation().search).toContain(`asset=${SECOND_ASSET}`);
+    });
+
+    await act(async () => {
+      releaseDelete();
+    });
+
+    expect(client.deleteAsset).toHaveBeenCalledWith(FIRST_ASSET);
+    // The newer detail is not closed by the older delete.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /first\.gif/i })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(getLocation().search).toContain(`asset=${SECOND_ASSET}`);
   });
 });
 

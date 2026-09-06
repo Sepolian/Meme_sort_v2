@@ -6,7 +6,8 @@ import { mediaUrl } from "../../api/media-url";
 import { getAssetDisplayName } from "../library/libraryOrdering";
 import { AssetContextMenu } from "./AssetContextMenu";
 import { useAssetContextMenu } from "./useAssetContextMenu";
-import type { AssetDetail, AssetListResult, AssetSummary } from "../../api/types";
+import { useDeletedAssetReconciliation } from "./useDeletedAssetReconciliation";
+import type { AssetDetail, AssetSummary } from "../../api/types";
 
 export interface AssetInspectorProps {
   assetId: string;
@@ -83,6 +84,10 @@ export function AssetInspector({
   const detailQuery = useQuery({
     queryKey: ["asset-detail", assetId],
     queryFn: () => client.getAssetDetail(assetId),
+  });
+  const reconcileDeletedAssets = useDeletedAssetReconciliation({
+    inspectedAssetId: assetId,
+    onCloseDetail: onClose,
   });
 
   const [copyState, setCopyState] = useState<CopyStatus>({ kind: "idle" });
@@ -207,26 +212,20 @@ export function AssetInspector({
           ? "Removed the final Source Record and deleted the Orphan Asset."
           : "Removed the Source Record.",
       );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["app-state"] }),
-        queryClient.invalidateQueries({ queryKey: ["asset-detail", assetId] }),
-      ]);
+      // A normal Source Record removal only refreshes the affected data: the
+      // Asset and the current selection stay, the detail shows the remaining
+      // Source Records.
       if (result.asset_deleted) {
-        queryClient.setQueryData<AssetListResult | undefined>(
-          ["assets"],
-          (old) =>
-            old
-              ? {
-                  ...old,
-                  assets: old.assets.filter(
-                    (item) => item.asset_id !== assetId,
-                  ),
-                }
-              : old,
-        );
+        // The backend turned this Asset into an Orphan Asset and deleted it,
+        // so it takes the same post-delete path as an explicit delete.
         onDeleted?.(assetId);
-        onClose();
+        await reconcileDeletedAssets([assetId]);
+      } else {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["assets"] }),
+          queryClient.invalidateQueries({ queryKey: ["app-state"] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-detail", assetId] }),
+        ]);
       }
     } catch (error) {
       setActionFeedback(
@@ -246,28 +245,12 @@ export function AssetInspector({
     setDeleteError(null);
     try {
       await client.deleteAsset(assetId);
-      // Remove from the visible wall immediately so tests and users see the
-      // deletion even before the refetch settles; invalidation then syncs
-      // counts and server state.
-      queryClient.setQueryData<AssetListResult | undefined>(
-        ["assets"],
-        (old) =>
-          old
-            ? {
-                ...old,
-                assets: old.assets.filter((item) => item.asset_id !== assetId),
-              }
-            : old,
-      );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["app-state"] }),
-      ]);
-      queryClient.removeQueries({ queryKey: ["asset-detail", assetId] });
       setConfirmDelete(false);
       onDeleted?.(assetId);
-      // Close only this inspector (caller removes only `asset`).
-      onClose();
+      // Shared post-delete coordination removes the Asset from the visible
+      // wall, drops its detail cache, closes the detail while it still targets
+      // this Asset, and then refreshes counts and App State.
+      await reconcileDeletedAssets([assetId]);
     } catch (error) {
       setDeleteError(
         tauriErrorDetail(

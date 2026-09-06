@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -438,6 +438,148 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect((screen.getByLabelText("Select third.png") as HTMLInputElement).checked).toBe(true);
     expect(screen.queryByLabelText("Select second.png")).not.toBeInTheDocument();
+  });
+
+  it("shows the confirmed deletion before the refresh settles", async () => {
+    let releaseRefresh!: (value: AssetListResult) => void;
+    const gate = new Promise<AssetListResult>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    let refreshSettled = false;
+    let initialLoad = true;
+    const client = makeClient({
+      getAssets: async () => {
+        if (initialLoad) {
+          initialLoad = false;
+          return assets;
+        }
+        return gate.then((value) => {
+          refreshSettled = true;
+          return value;
+        });
+      },
+    });
+    renderApp("/", client);
+
+    await selectByLabel("Select second.png");
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete 1 selected Asset(s)?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete selected Assets" }));
+
+    // The backend confirmed the deletion, so the Asset is gone from the wall
+    // while the refetch is still pending.
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Select second.png")).not.toBeInTheDocument();
+    });
+    expect(refreshSettled).toBe(false);
+
+    await act(async () => {
+      releaseRefresh({ ...assets, assets: assets.assets.filter((asset) => asset.asset_id !== SECOND_ASSET) });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(refreshSettled).toBe(true);
+    expect(screen.queryByLabelText("Select second.png")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Select first.gif")).toBeInTheDocument();
+  });
+
+  it("keeps the confirmed deletion when the following refresh fails", async () => {
+    let calls = 0;
+    const client = makeClient({
+      getAssets: async () => {
+        calls += 1;
+        // The initial load succeeds; the refresh after the deletion fails.
+        if (calls === 1) return assets;
+        throw new Error("sidecar unavailable");
+      },
+    });
+    const { queryClient } = renderApp("/", client);
+
+    await selectByLabel("Select second.png");
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete 1 selected Asset(s)?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete selected Assets" }));
+
+    // A failed refresh is not reported as a failed deletion, and it does not
+    // put the deleted Asset back into the Library.
+    await waitFor(() => {
+      const cached = queryClient.getQueryData(["assets"]) as AssetListResult;
+      expect(cached.assets.map((asset) => asset.asset_id)).not.toContain(SECOND_ASSET);
+    });
+    expect(screen.queryByText(/could not be completed/i)).not.toBeInTheDocument();
+    expect(client.batchAssetAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the detail only for Assets the backend deleted and keeps a skipped Asset's detail", async () => {
+    let currentAssets = [...assets.assets];
+    const client = makeClient({
+      getAssets: async () => ({ ...assets, assets: [...currentAssets] }),
+      batchAssetAction: vi.fn(async (action: string, assetIds: string[]) => {
+        currentAssets = currentAssets.filter((asset) => asset.asset_id !== SECOND_ASSET);
+        return {
+          library_root: "C:/Library",
+          action,
+          requested_asset_ids: assetIds,
+          affected_asset_ids: [SECOND_ASSET],
+          skipped_running_asset_ids: [THIRD_ASSET],
+          removed_source_records: 1,
+          removed_jobs: 0,
+          removed_renditions: 0,
+          removed_embeddings: 0,
+          reindex_jobs_created: 0,
+        };
+      }),
+    });
+
+    const deletedDetail = renderApp(`/?asset=${SECOND_ASSET}`, client);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await selectByLabel("Select second.png");
+    fireEvent.click(screen.getByLabelText("Select third.png"));
+    expect(await screen.findByText("2 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete 2 selected Asset(s)?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete selected Assets" }));
+
+    await waitFor(() => {
+      expect(deletedDetail.getLocation().search).not.toContain("asset=");
+    });
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    // Only the deleted Asset left the selection.
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect((screen.getByLabelText("Select third.png") as HTMLInputElement).checked).toBe(true);
+    deletedDetail.unmount();
+
+    // A skipped Asset keeps its detail open.
+    const skippedDetail = renderApp(`/?asset=${THIRD_ASSET}`, client);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(await screen.findByLabelText("Select third.png"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const skippedDialog = await screen.findByRole("alertdialog", { name: "Delete 1 selected Asset(s)?" });
+    fireEvent.click(within(skippedDialog).getByRole("button", { name: "Delete selected Assets" }));
+
+    await waitFor(() => {
+      expect(skippedDetail.getLocation().search).toContain(`asset=${THIRD_ASSET}`);
+    });
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Select third.png")).toBeInTheDocument();
+  });
+
+  it("keeps the open detail and the selection when Rebuild succeeds", async () => {
+    const client = makeClient();
+    const { getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await selectByLabel("Select first.gif");
+    fireEvent.click(screen.getByRole("button", { name: "Rebuild Active Index" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Queue rebuild" }));
+
+    expect(await screen.findByText(/Queued 1 Active Index rebuild\(s\)/)).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
+    expect((screen.getByLabelText("Select first.gif") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
   });
 
   it("never writes selection to the URL and never persists it across restart", async () => {
