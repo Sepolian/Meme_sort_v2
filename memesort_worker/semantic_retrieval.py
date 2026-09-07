@@ -27,49 +27,6 @@ def blob_to_vector(blob: bytes, vector_dim: int) -> np.ndarray:
     return vector
 
 
-def rank_asset_vector_rows(
-    query_vector: np.ndarray | list[np.ndarray],
-    vector_rows: list[sqlite3.Row],
-    top_k: int,
-) -> list[dict[str, object]]:
-    query_vectors = (
-        [query_vector]
-        if isinstance(query_vector, np.ndarray)
-        else list(query_vector)
-    )
-    if not query_vectors:
-        raise ValueError("At least one query vector is required")
-
-    best_by_asset: dict[str, tuple[float, sqlite3.Row]] = {}
-    for row in vector_rows:
-        vector = blob_to_vector(bytes(row["vector_blob"]), int(row["vector_dim"]))
-        score = max(float(np.dot(candidate, vector)) for candidate in query_vectors)
-        asset_id = str(row["asset_id"])
-        current = best_by_asset.get(asset_id)
-        if current is None or score > current[0]:
-            best_by_asset[asset_id] = (score, row)
-
-    scored = list(best_by_asset.values())
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [
-        {
-            "asset_id": str(row["asset_id"]),
-            "score": score,
-            "library_path": str(row["library_path"]),
-            "library_url": f"/media/{str(row['library_path'])}",
-            "thumbnail_url": f"/media/thumbnails/{str(row['asset_id'])}.jpg",
-            "media_type": str(row["media_type"]),
-            "content_hash": str(row["content_hash"]),
-            "matched_source_ref": (
-                str(row["source_ref"])
-                if "source_ref" in row.keys() and row["source_ref"]
-                else None
-            ),
-        }
-        for score, row in scored[:top_k]
-    ]
-
-
 def rank_asset_embeddings(
     query_vector: np.ndarray | list[np.ndarray],
     embeddings: list[AssetEmbedding],
