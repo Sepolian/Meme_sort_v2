@@ -267,7 +267,7 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
       library_status: { total_assets: 3, job_counts: { pending: 2 } },
     };
     const client = createClient();
-    renderApp("/", client);
+    const { container } = renderApp("/", client);
 
     await waitFor(() =>
       expect(screen.getByRole("status", { name: "Background tasks summary" }).textContent).toContain(
@@ -276,7 +276,11 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     );
     const topEntry = screen.getByRole("status", { name: "Background tasks summary" });
     expect(topEntry.textContent).toContain("Indexing paused");
-    expect(screen.getByRole("region", { name: "Background tasks" })).toBeInTheDocument();
+    const taskBar = screen.getByRole("region", { name: "Background tasks" });
+    const workspaceMain = container.querySelector(".workspace-main");
+
+    expect(taskBar).toBeInTheDocument();
+    expect(workspaceMain).toContainElement(taskBar);
   });
 
   it("shows Runtime failure in the task bar while keeping browsing usable and supporting Retry", async () => {

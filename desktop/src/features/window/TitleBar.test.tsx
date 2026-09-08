@@ -34,12 +34,14 @@ describe("TitleBar", () => {
   it("uses the dedicated drag region and reflects a restored window", () => {
     const windowControls = controls({ isMaximized: true });
     render(<TitleBar controls={windowControls} />);
+    const dragRegion = screen.getByLabelText("Window drag region");
 
-    fireEvent.mouseDown(screen.getByLabelText("Window drag region"), { button: 0 });
-    fireEvent.doubleClick(screen.getByLabelText("Window drag region"));
+    fireEvent.mouseDown(dragRegion, { button: 0 });
+    fireEvent.doubleClick(dragRegion);
 
-    expect(windowControls.startDragging).toHaveBeenCalledOnce();
-    expect(windowControls.toggleMaximize).toHaveBeenCalledOnce();
+    expect(dragRegion).toHaveAttribute("data-tauri-drag-region", "deep");
+    expect(windowControls.startDragging).not.toHaveBeenCalled();
+    expect(windowControls.toggleMaximize).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Restore window" })).toBeInTheDocument();
   });
 

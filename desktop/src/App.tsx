@@ -405,8 +405,8 @@ function AppShell({ client }: { client: MemeSortClient }) {
           {stateQuery.isPending ? <LoadingState /> : null}
           {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
           {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+          <TaskBar appState={stateQuery.data ?? null} />
         </div>
-        <TaskBar appState={stateQuery.data ?? null} />
       </div>
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
     </div>

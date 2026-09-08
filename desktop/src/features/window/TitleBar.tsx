@@ -13,12 +13,7 @@ export function TitleBar({ controls }: TitleBarProps) {
       <div
         className="titlebar-drag-region"
         aria-label="Window drag region"
-        onMouseDown={(event) => {
-          if (event.button === 0 && controls.isNative) void controls.startDragging();
-        }}
-        onDoubleClick={() => {
-          if (controls.isNative) void controls.toggleMaximize();
-        }}
+        data-tauri-drag-region="deep"
       >
         <img
           className="titlebar-brand-mark"
