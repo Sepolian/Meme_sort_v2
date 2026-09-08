@@ -24,6 +24,8 @@ import { RuntimeHealthBanner, RuntimeHealthCompactIndicator } from "./features/r
 import { useTheme } from "./features/theme/ThemeContext";
 import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
+import { TitleBar } from "./features/window/TitleBar";
+import { useWindowControls } from "./features/window/window-controls";
 import "./App.css";
 
 interface AppProps {
@@ -323,6 +325,7 @@ function ThemeSidebarControl() {
 
 function AppShell({ client }: { client: MemeSortClient }) {
   const [showHelp, setShowHelp] = useState(false);
+  const windowControls = useWindowControls();
   const stateQuery = useQuery({
     queryKey: ["app-state"],
     queryFn: () => client.getAppState(),
@@ -332,11 +335,8 @@ function AppShell({ client }: { client: MemeSortClient }) {
 
   return (
     <div className="app-shell">
+      <TitleBar controls={windowControls} />
       <aside className="sidebar" aria-label="Primary navigation">
-        <Link className="brand" to="/" aria-label="MemeSort library">
-          <span className="brand-mark">M</span>
-          <span>MemeSort</span>
-        </Link>
         <nav aria-label="Primary">
           {primaryNavigation.map(({ to, label, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>

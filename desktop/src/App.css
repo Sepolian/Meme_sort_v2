@@ -89,8 +89,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
-.app-shell { display: grid; min-height: 100vh; grid-template-columns: 208px minmax(0, 1fr); }
-.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid var(--color-border); background: var(--color-surface); }
+.app-shell { display: grid; min-height: 100vh; grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); }
+.titlebar { grid-column: 1 / -1; display: flex; min-width: 0; min-height: 40px; align-items: stretch; justify-content: space-between; border-bottom: 1px solid var(--color-border); background: var(--color-surface); user-select: none; }
+.titlebar-drag-region { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 0 12px; cursor: default; }
+.titlebar-brand-mark { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border-radius: 5px; background: var(--color-accent); color: var(--color-on-accent); font-size: 12px; font-weight: 700; }
+.titlebar-brand { overflow: hidden; color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar-controls { display: flex; flex: 0 0 auto; }
+.window-control { display: grid; width: 46px; min-height: 40px; padding: 0; border: 0; place-items: center; background: transparent; color: var(--color-text); cursor: pointer; font-size: 20px; line-height: 1; }
+.window-control:hover:not(:disabled) { background: var(--color-surface-raised); }
+.window-control:disabled { cursor: default; opacity: 0.56; }
+.window-control-close:hover:not(:disabled) { background: #c42b1c; color: #fff; }
+.window-maximize-icon, .window-restore-icon { display: block; width: 11px; height: 11px; border: 1.5px solid currentcolor; }
+.window-restore-icon { position: relative; transform: translate(1px, -1px); }
+.window-restore-icon::after { position: absolute; width: 8px; height: 8px; border: 1.5px solid currentcolor; background: var(--color-surface); content: ""; transform: translate(-4px, 3px); }
+.sidebar { grid-row: 2; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid var(--color-border); background: var(--color-surface); }
 .brand { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--color-text); font-size: 16px; font-weight: 600; line-height: 1.35; text-decoration: none; }
 .brand-mark { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); font-size: 14px; font-weight: 600; }
 .sidebar nav { display: grid; gap: 4px; }
@@ -152,7 +164,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-option-detail { grid-area: detail; color: var(--color-text-muted); font-size: 12px; line-height: 1.35; }
 .theme-status { margin: 0; color: var(--color-text-muted); font-size: 12px; }
 
-.workspace { min-width: 0; }
+.workspace { grid-column: 2; grid-row: 2; min-width: 0; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 32px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
 .connection { color: var(--color-text-muted); font-size: 14px; font-weight: 500; }
 .connection-online::before { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--color-accent); content: ""; }
@@ -328,7 +340,8 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 
 @media (max-width: 760px) {
   .app-shell { display: block; }
-  .sidebar { position: sticky; z-index: 2; top: 0; display: flex; flex-direction: row; align-items: center; gap: 8px; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; overflow-y: visible; }
+  .titlebar { position: sticky; z-index: 3; top: 0; }
+  .sidebar { position: sticky; z-index: 2; top: 40px; display: flex; flex-direction: row; align-items: center; gap: 8px; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; overflow-y: visible; }
   .sidebar nav { display: flex; gap: 4px; }
   .nav-link { padding: 8px; white-space: nowrap; }
   .sidebar-footer { display: flex; align-items: center; margin: 0 0 0 auto; }
