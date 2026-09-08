@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
@@ -36,6 +36,7 @@ interface PageProps {
   title: string;
   eyebrow: string;
   children: ReactNode;
+  className?: string;
 }
 
 const primaryNavigation = [
@@ -45,9 +46,9 @@ const primaryNavigation = [
 
 const settingsNavigation = [{ to: "/settings", label: "Settings" }];
 
-function Page({ title, eyebrow, children }: PageProps) {
+function Page({ title, eyebrow, children, className }: PageProps) {
   return (
-    <main className="page" aria-labelledby="page-title">
+    <main className={`page${className ? ` ${className}` : ""}`} aria-labelledby="page-title">
       <div className="page-heading">
         <p className="eyebrow">{eyebrow}</p>
         <h1 id="page-title">{title}</h1>
@@ -114,6 +115,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     clearSearch,
   } = useLibrarySearch({ client, resultMode });
   const [isChoosingImage, setIsChoosingImage] = useState(false);
+  const detailOpenerRef = useRef<HTMLElement | null>(null);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
   const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
@@ -176,8 +178,35 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     setResultMode({ kind: "browse" });
   }, [clearSearch, clearQuery, setResultMode]);
 
+  const handleSelectAsset = useCallback(
+    (assetId: string) => {
+      // The card/View button remains the active element after its click. Keep
+      // that trigger so closing this non-modal inspector restores focus to it.
+      detailOpenerRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setAssetId(assetId);
+    },
+    [setAssetId],
+  );
+
+  const handleCloseDetail = useCallback(() => {
+    const focusWasInInspector =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest(".library-inspector") !== null;
+    clearAssetId();
+    if (!focusWasInInspector) return;
+    const opener = detailOpenerRef.current;
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) {
+        opener.focus({ preventScroll: true });
+        return;
+      }
+      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+    });
+  }, [clearAssetId]);
+
   return (
-    <Page title="Your library" eyebrow="MemeSort desktop">
+    <Page className="page-library" title="Your library" eyebrow="MemeSort desktop">
       <LibraryShell
         toolbar={
           <>
@@ -216,8 +245,8 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
           <AssetsWorkspace
             client={client}
             selectedAssetId={selectedAssetId}
-            onSelectAsset={setAssetId}
-            onCloseDetail={clearAssetId}
+            onSelectAsset={handleSelectAsset}
+            onCloseDetail={handleCloseDetail}
             sort={sort}
             media={media}
             status={status}
@@ -235,7 +264,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             <AssetInspector
               assetId={selectedAssetId}
               client={client}
-              onClose={clearAssetId}
+              onClose={handleCloseDetail}
               onFindSimilar={handleFindSimilar}
             />
           ) : undefined
@@ -257,6 +286,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         onClose();
       }
     };
@@ -293,12 +323,14 @@ function NotFoundPage() {
 
 function ApplicationRoutes({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   return (
-    <Routes>
-      <Route path="/" element={<LibraryPage state={state} client={client} />} />
-      <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
-      <Route path="/settings" element={<SettingsRoute state={state} client={client} onStateChanged={onStateChanged} />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <div className="route-content">
+      <Routes>
+        <Route path="/" element={<LibraryPage state={state} client={client} />} />
+        <Route path="/duplicates" element={<DuplicatesPage client={client} />} />
+        <Route path="/settings" element={<SettingsRoute state={state} client={client} onStateChanged={onStateChanged} />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </div>
   );
 }
 
@@ -365,11 +397,15 @@ function AppShell({ client }: { client: MemeSortClient }) {
           <TopBarTaskEntry appState={stateQuery.data ?? null} />
           <span className="topbar-detail">Authenticated desktop session</span>
         </header>
-        <ImportBatchPanel />
-        <RuntimeHealthBanner />
-        {stateQuery.isPending ? <LoadingState /> : null}
-        {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
-        {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+        <div className="workspace-main">
+          <div className="workspace-status">
+            <ImportBatchPanel />
+            <RuntimeHealthBanner />
+          </div>
+          {stateQuery.isPending ? <LoadingState /> : null}
+          {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
+          {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}
+        </div>
         <TaskBar appState={stateQuery.data ?? null} />
       </div>
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}

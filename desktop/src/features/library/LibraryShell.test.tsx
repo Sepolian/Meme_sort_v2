@@ -14,7 +14,7 @@ describe("LibraryShell", () => {
     expect(container.querySelector(".library-inspector")).toBeNull();
   });
 
-  it("renders a non-overlaying right inspector alongside content when provided", () => {
+  it("renders one inspector sibling alongside content; CSS changes only its narrow-window placement", () => {
     const { container } = render(
       <LibraryShell
         toolbar={<p>Toolbar</p>}

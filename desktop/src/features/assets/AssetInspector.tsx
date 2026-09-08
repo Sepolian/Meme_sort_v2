@@ -117,17 +117,29 @@ export function AssetInspector({
     setActionFeedback(null);
   }, [assetId]);
 
-  // Escape closes the inspector without touching other URL params (the
-  // caller implements `clearAssetId` from ticket 07).
+  // Escape closes only the highest active surface. Local confirmations are
+  // dismissed first; menus/dialogs above the inspector mark the event handled
+  // so the deferred inspector close cannot consume the same key.
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !confirmDelete && !confirmRemoveSource) {
-        onClose();
+      if (event.key !== "Escape") return;
+      if (confirmDelete) {
+        event.preventDefault();
+        if (!isDeleting) setConfirmDelete(false);
+        return;
       }
+      if (confirmRemoveSource) {
+        event.preventDefault();
+        if (!isRemovingSource) setConfirmRemoveSource(null);
+        return;
+      }
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) onClose();
+      });
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, confirmDelete, confirmRemoveSource]);
+  }, [onClose, confirmDelete, confirmRemoveSource, isDeleting, isRemovingSource]);
 
   const runClipboardCopy = async () => {
     setCopyState({ kind: "pending" });

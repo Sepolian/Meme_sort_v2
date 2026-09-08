@@ -244,7 +244,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     vi.clearAllMocks();
   });
 
-  it("clicking a card updates asset and opens a non-overlaying right panel with the waterfall still mounted", async () => {
+  it("clicking a card keeps the waterfall mounted while opening the single responsive inspector", async () => {
     const client = makeClient();
     const { container, getLocation } = renderApp("/", client);
 
@@ -259,6 +259,57 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
     expect(container.querySelector(".library-body")).toHaveAttribute("data-inspector", "open");
     expect(container.querySelector(".library-content + .library-inspector")).not.toBeNull();
+  });
+
+  it("returns focus to the Asset trigger after closing the inspector", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("does not move Library focus when Escape closes an untouched inspector", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    const libraryTarget = screen.getByRole("button", { name: /indexed\.png/i });
+    libraryTarget.focus();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(libraryTarget);
+  });
+
+  it("lets Escape close an open context menu before it closes the inspector", async () => {
+    const client = makeClient();
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
+    fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
   });
 
   it("deep-links the inspector from the URL on first load and closes by removing only asset", async () => {
