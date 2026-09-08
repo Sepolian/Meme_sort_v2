@@ -94,7 +94,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .app-shell { display: grid; height: 100vh; min-height: 0; overflow: hidden; grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); }
 .titlebar { grid-column: 1 / -1; display: flex; min-width: 0; min-height: 40px; align-items: stretch; justify-content: space-between; border-bottom: 1px solid var(--color-border); background: var(--color-surface); user-select: none; }
 .titlebar-drag-region { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 0 12px; cursor: default; }
-.titlebar-brand-mark { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border-radius: 5px; background: var(--color-accent); color: var(--color-on-accent); font-size: 12px; font-weight: 700; }
+.titlebar-brand-mark { display: block; width: 22px; height: 22px; flex: 0 0 auto; object-fit: contain; }
 .titlebar-brand { overflow: hidden; color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .titlebar-controls { display: flex; flex: 0 0 auto; }
 .window-control { display: grid; width: 46px; min-height: 40px; padding: 0; border: 0; place-items: center; background: transparent; color: var(--color-text); cursor: pointer; font-size: 20px; line-height: 1; }

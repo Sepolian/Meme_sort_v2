@@ -1,3 +1,4 @@
+import memesortIcon from "../../assets/memesort-icon.png";
 import type { WindowControls } from "./window-controls";
 
 interface TitleBarProps {
@@ -19,7 +20,15 @@ export function TitleBar({ controls }: TitleBarProps) {
           if (controls.isNative) void controls.toggleMaximize();
         }}
       >
-        <span className="titlebar-brand-mark" aria-hidden="true">M</span>
+        <img
+          className="titlebar-brand-mark"
+          src={memesortIcon}
+          alt=""
+          width="22"
+          height="22"
+          draggable="false"
+          aria-hidden="true"
+        />
         <span className="titlebar-brand">MemeSort</span>
       </div>
       <div className="titlebar-controls" aria-label="Window controls">
