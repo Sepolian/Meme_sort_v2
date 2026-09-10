@@ -1,12 +1,24 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
-import type { AppState, RuntimeHealthResult } from "../../api/types";
+import type { AppState, PendingJob, RuntimeHealthResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
 import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let settled = false;
+  const promise = new Promise<T>((res) => {
+    resolve = (value: T) => {
+      settled = true;
+      res(value);
+    };
+  });
+  return { promise, resolve, get settled() { return settled; } };
+}
 
 function healthyResult(): RuntimeHealthResult {
   return {
@@ -21,6 +33,30 @@ function healthyResult(): RuntimeHealthResult {
     diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "Image embedding passed." }],
     smoke_test_ok: true,
     error: null,
+  };
+}
+
+function pendingJobFixture(overrides: Partial<PendingJob> = {}): PendingJob {
+  return {
+    job_id: "123e4567-e89b-12d3-a456-426614174003",
+    type: "embed_asset",
+    asset_id: "123e4567-e89b-12d3-a456-426614174002",
+    asset_path: "originals/indexed.png",
+    recipe_id: "recipe-1",
+    attempt_count: 0,
+    created_at: "2026-08-09T00:00:00Z",
+    updated_at: "2026-08-09T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function appStateSnapshot(options: { pendingJobs?: PendingJob[]; pendingCount?: number; paused?: boolean } = {}): AppState {
+  const base = diagnosticsAppState();
+  return {
+    ...base,
+    library_status: { ...base.library_status, job_counts: { pending: options.pendingCount ?? 1 } },
+    worker_loop: { ...base.worker_loop, paused: options.paused ?? true },
+    pending_jobs: options.pendingJobs ?? [pendingJobFixture()],
   };
 }
 
@@ -61,7 +97,7 @@ function diagnosticsAppState(): AppState {
       persisted_events: [{ event: "tick-finished", payload: { processed_jobs: 1 }, timestamp: 1754704700 }],
     },
     import_task: importSnapshot(),
-    pending_jobs: [{ job_id: "job-1" }],
+    pending_jobs: [pendingJobFixture()],
   };
 }
 
@@ -121,20 +157,9 @@ function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn
       retried_jobs: 2,
       failed_jobs_remaining: 0,
     })),
-    getPendingJobs: vi.fn(async () => ({
-      jobs: [
-        {
-          job_id: "123e4567-e89b-12d3-a456-426614174003",
-          type: "embed_asset",
-          asset_id: "123e4567-e89b-12d3-a456-426614174002",
-          asset_path: "originals/indexed.png",
-          recipe_id: "recipe-1",
-          attempt_count: 0,
-          created_at: "2026-08-09T00:00:00Z",
-          updated_at: "2026-08-09T00:00:00Z",
-        },
-      ],
-    })),
+    getPendingJobs: vi.fn(async () => {
+      throw new Error("must not issue an independent Pending Jobs read");
+    }),
     deletePendingJobs: vi.fn(async (jobIds: string[]) => ({
       requested_job_ids: jobIds,
       deleted_job_ids: jobIds,
@@ -267,6 +292,7 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
     expect(client.deletePendingJobs).toHaveBeenCalledWith(["123e4567-e89b-12d3-a456-426614174003"]);
     expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
     expect(client.deleteAsset).not.toHaveBeenCalled();
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("shows Recent Jobs and both Worker event sources from the read-only projection", async () => {
@@ -289,5 +315,151 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Open log folder" }));
     expect(client.openLogDirectory).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
+  beforeEach(() => {
+    resetRuntimeHealthForTesting();
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("reads Pending Jobs from the app state snapshot without an independent Pending Jobs query", async () => {
+    const client = createClient();
+    renderApp("/settings", client);
+
+    expect(await screen.findByLabelText("Select Pending Job embed_asset")).toBeInTheDocument();
+    expect(screen.getByText("originals/indexed.png · recipe-1 · attempt 0")).toBeInTheDocument();
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("keeps the snapshot order and the full queue count when it exceeds the visible list", async () => {
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>).mockResolvedValue(
+      appStateSnapshot({
+        pendingJobs: [
+          pendingJobFixture({ job_id: "job-9", type: "dedupe_asset", asset_path: "originals/second.png", created_at: "2026-08-09T02:00:00Z" }),
+          pendingJobFixture({ asset_path: "originals/first.png", created_at: "2026-08-09T01:00:00Z" }),
+        ],
+        pendingCount: 9,
+      }),
+    );
+    renderApp("/settings", client);
+
+    // The list renders in the snapshot order; no client-side sorting runs.
+    const rows = await screen.findAllByLabelText(/^Select Pending Job /);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAccessibleName("Select Pending Job dedupe_asset");
+    expect(rows[1]).toHaveAccessibleName("Select Pending Job embed_asset");
+    // The count stays the full queue total, not the visible-list length.
+    expect((await screen.findAllByText(/Indexing paused · 9 pending jobs/)).length).toBeGreaterThan(0);
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the queue snapshot after a Worker action and updates the visible list", async () => {
+    const refresh = deferred<AppState>();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(appStateSnapshot())
+      .mockReturnValue(refresh.promise);
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume worker" }));
+    expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
+    expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
+    // Command completion is not worker completion: the refreshed snapshot is
+    // still pending, so the previous list stays visible.
+    expect(refresh.settled).toBe(false);
+    expect(screen.getByLabelText("Select Pending Job embed_asset")).toBeInTheDocument();
+
+    await act(async () => {
+      refresh.resolve(appStateSnapshot({ pendingJobs: [], pendingCount: 0, paused: false }));
+    });
+    expect(await screen.findByText("No Pending Jobs are waiting to be claimed.")).toBeInTheDocument();
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the queue snapshot after a failed-Job retry so the retried Job re-enters the list", async () => {
+    const refresh = deferred<AppState>();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(appStateSnapshot({ pendingJobs: [], pendingCount: 0 }))
+      .mockReturnValue(refresh.promise);
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry failed Jobs" }));
+    expect(await screen.findByText("Retried 2 failed Job record(s); 0 remain failed.")).toBeInTheDocument();
+    expect(screen.getByText("No Pending Jobs are waiting to be claimed.")).toBeInTheDocument();
+
+    await act(async () => {
+      refresh.resolve(appStateSnapshot({
+        pendingJobs: [pendingJobFixture(), pendingJobFixture({ job_id: "job-4", type: "dedupe_asset", attempt_count: 1 })],
+        pendingCount: 2,
+      }));
+    });
+    expect(await screen.findByLabelText("Select Pending Job dedupe_asset")).toBeInTheDocument();
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the queue snapshot after deleting Pending Jobs while the confirmation stays closed", async () => {
+    const refresh = deferred<AppState>();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(appStateSnapshot())
+      .mockReturnValue(refresh.promise);
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(refresh.settled).toBe(false);
+    expect(screen.getByLabelText("Select Pending Job embed_asset")).toBeInTheDocument();
+
+    await act(async () => {
+      refresh.resolve(appStateSnapshot({ pendingJobs: [], pendingCount: 0 }));
+    });
+    expect(await screen.findByText("No Pending Jobs are waiting to be claimed.")).toBeInTheDocument();
+    // The refreshed count updates with the list: no stale pending-jobs label remains.
+    expect(screen.queryByText(/pending jobs/)).not.toBeInTheDocument();
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("shows the global disconnect page when the refreshed snapshot fails", async () => {
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(appStateSnapshot())
+      .mockRejectedValueOnce(new Error("refresh failed"));
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume worker" }));
+
+    // Existing global interaction: a failed App State refresh disconnects the
+    // shell; the stale diagnostics page is not kept on screen.
+    await screen.findByText("MemeSort cannot reach its sidecar");
+    expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
+    expect(client.getPendingJobs).not.toHaveBeenCalled();
+  });
+
+  it("reports partially skipped deletions as deleted plus skipped without failing", async () => {
+    const client = createClient();
+    (client.deletePendingJobs as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      requested_job_ids: ["123e4567-e89b-12d3-a456-426614174003", "job-2"],
+      deleted_job_ids: ["123e4567-e89b-12d3-a456-426614174003"],
+      skipped_job_ids: ["job-2"],
+    });
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 1.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(client.deleteAsset).not.toHaveBeenCalled();
   });
 });

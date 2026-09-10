@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import type { AppState } from "../../api/types";
@@ -11,7 +10,7 @@ interface AdvancedDiagnosticsProps {
 }
 
 /**
- * Settings > Advanced Diagnostics (ticket 15).
+ * Settings > Advanced Diagnostics (tickets 15, 02).
  *
  * Parity destination for every legacy Status capability: Worker Loop
  * pause/resume/one tick, failed-Job retry, Pending Job inspect/select/delete,
@@ -19,13 +18,19 @@ interface AdvancedDiagnosticsProps {
  * log directory. Uses only typed `MemeSortClient` methods and keeps the
  * explicit Pending Job selection + confirmation behavior (deletes queue records
  * only, never Assets).
+ *
+ * Ticket 02: the Pending Jobs list and the queue count both come from the
+ * caller-provided App State snapshot, so no independent Pending Jobs query
+ * runs here and loading/disconnect reuse the app-level interactions. Worker
+ * actions, failed-Job retry, and Pending Job deletion refresh that same
+ * snapshot through `onStateChanged`; the kept five-second polling then keeps
+ * reflecting actual Worker progress.
  */
 export function AdvancedDiagnostics({ client, appState, onStateChanged }: AdvancedDiagnosticsProps) {
   const [isWorking, setIsWorking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [selectedPendingJobIds, setSelectedPendingJobIds] = useState<Set<string>>(() => new Set());
   const [pendingJobDeleteConfirmation, setPendingJobDeleteConfirmation] = useState(false);
-  const pendingJobsQuery = useQuery({ queryKey: ["pending-jobs"], queryFn: () => client.getPendingJobs() });
 
   const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setIsWorking(true);
@@ -75,7 +80,6 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
       setFeedback(`Deleted ${result.deleted_job_ids.length} Pending Job record(s); skipped ${result.skipped_job_ids.length}.`);
       setSelectedPendingJobIds(new Set());
       setPendingJobDeleteConfirmation(false);
-      await pendingJobsQuery.refetch();
       onStateChanged();
     } catch (error) {
       setFeedback(tauriErrorDetail(error, "MemeSort could not delete the selected Pending Job records. Assets and generated files were not modified."));
@@ -101,19 +105,17 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
       <section className="surface import-card" aria-labelledby="diagnostics-pending-jobs-title">
         <h2 id="diagnostics-pending-jobs-title">Pending Jobs</h2>
         <p>Delete only unclaimed queue records. Assets and generated files remain unchanged.</p>
-        {pendingJobsQuery.isPending ? <p aria-live="polite">Loading Pending Jobs…</p> : null}
-        {pendingJobsQuery.isError ? <section className="notice notice-warning" role="alert"><strong>Pending Jobs are unavailable</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void pendingJobsQuery.refetch()}>Retry Pending Jobs</button></section> : null}
-        {pendingJobsQuery.data ? (
-          pendingJobsQuery.data.jobs.length ? <>
+        {appState.pending_jobs.length ? (
+          <>
             <ul className="detail-list pending-job-list">
-              {pendingJobsQuery.data.jobs.map((job) => <li key={job.job_id}>
+              {appState.pending_jobs.map((job) => <li key={job.job_id}>
                 <label className="asset-select"><input type="checkbox" checked={selectedPendingJobIds.has(job.job_id)} onChange={() => togglePendingJob(job.job_id)} />Select Pending Job {job.type}</label>
                 <span>{job.asset_path ?? "No Asset path"}{job.recipe_id ? ` · ${job.recipe_id}` : ""} · attempt {job.attempt_count}</span>
               </li>)}
             </ul>
             <div className="import-actions"><button className="button button-danger" type="button" disabled={isWorking || !selectedPendingJobIds.size} onClick={() => setPendingJobDeleteConfirmation(true)}>Delete selected Pending Jobs</button></div>
-          </> : <p>No Pending Jobs are waiting to be claimed.</p>
-        ) : null}
+          </>
+        ) : <p>No Pending Jobs are waiting to be claimed.</p>}
       </section>
       {pendingJobDeleteConfirmation ? (
         <div className="dialog-backdrop" role="presentation" onMouseDown={isWorking ? undefined : () => setPendingJobDeleteConfirmation(false)}>

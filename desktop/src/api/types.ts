@@ -22,7 +22,7 @@ export interface AppState {
   };
   worker_loop: WorkerLoopState;
   import_task: ImportTask;
-  pending_jobs: Array<{ job_id: string }>;
+  pending_jobs: PendingJob[];
 }
 
 export interface WorkerLoopState {

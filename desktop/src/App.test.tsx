@@ -3,9 +3,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
-import type { AssetDetail, AssetListResult } from "./api/types";
+import type { AssetDetail, AssetListResult, PendingJob } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
+
+const pendingJobSnapshot: PendingJob = {
+  job_id: "123e4567-e89b-12d3-a456-426614174003",
+  type: "embed_asset",
+  asset_id: "123e4567-e89b-12d3-a456-426614174002",
+  asset_path: "originals/indexed.png",
+  recipe_id: "recipe-1",
+  attempt_count: 0,
+  created_at: "2026-08-09T00:00:00Z",
+  updated_at: "2026-08-09T00:00:00Z",
+};
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -103,7 +114,7 @@ const client = {
     persisted_events: [{ event: "tick-finished", payload: { processed_jobs: 1 }, timestamp: 1_754_704_700 }],
   },
   import_task: importSnapshot(),
-  pending_jobs: [{ job_id: "job-1" }],
+  pending_jobs: [pendingJobSnapshot],
   }),
   getImportStatus: vi.fn(async () => importSnapshot()),
   getAssets: async () => assets,
@@ -219,18 +230,7 @@ const client = {
     retried_jobs: 2,
     failed_jobs_remaining: 0,
   })),
-  getPendingJobs: vi.fn(async () => ({
-    jobs: [{
-      job_id: "123e4567-e89b-12d3-a456-426614174003",
-      type: "embed_asset",
-      asset_id: "123e4567-e89b-12d3-a456-426614174002",
-      asset_path: "originals/indexed.png",
-      recipe_id: "recipe-1",
-      attempt_count: 0,
-      created_at: "2026-08-09T00:00:00Z",
-      updated_at: "2026-08-09T00:00:00Z",
-    }],
-  })),
+  getPendingJobs: vi.fn(async () => ({ jobs: [pendingJobSnapshot] })),
   deletePendingJobs: vi.fn(async (jobIds: string[]) => ({ requested_job_ids: jobIds, deleted_job_ids: jobIds, skipped_job_ids: [] })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
   copyAssetToClipboard: vi.fn(async () => undefined),
