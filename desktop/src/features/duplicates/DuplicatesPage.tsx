@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { mediaUrl } from "../../api/media-url";
@@ -10,6 +9,7 @@ import {
   type ComposedDuplicatePair,
 } from "../../api/result-models";
 import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
+import { useDeletedAssetReconciliation } from "../assets/useDeletedAssetReconciliation";
 import { EmptyState } from "../../components/States";
 
 /**
@@ -34,6 +34,8 @@ import { EmptyState } from "../../components/States";
 
 type KeepSide = "left" | "right";
 type PairAction = "keep-left" | "keep-right" | "keep-both";
+
+const neverCloseDetail = () => undefined;
 
 interface PairFailure {
   message: string;
@@ -69,7 +71,10 @@ function survivorAndDeleted(pair: ComposedDuplicatePair, side: KeepSide): { surv
 
 export function DuplicatesPage({ client }: { client: MemeSortClient }) {
   const health = useRuntimeHealth();
-  const queryClient = useQueryClient();
+  const reconcileDeletedAssets = useDeletedAssetReconciliation({
+    inspectedAssetId: null,
+    onCloseDetail: neverCloseDetail,
+  });
   const [threshold, setThreshold] = useState("0.92");
   const [rawPairs, setRawPairs] = useState<DuplicatePair[] | null>(null);
   const [summaries, setSummaries] = useState<AssetSummary[] | null>(null);
@@ -169,23 +174,6 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
     setPendingKey(key);
     try {
       await client.deleteAsset(deleted.asset_id);
-      // Ticket 02 cascade removes accepted-pair rows for the deleted Asset;
-      // no separate clear call is needed or issued here.
-      removeRawPairsWithAsset(deleted.asset_id);
-      setSummaries((current) =>
-        current === null ? current : current.filter((asset) => asset.asset_id !== deleted.asset_id),
-      );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["app-state"] }),
-      ]);
-      setPairFailures((current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      });
-      setNotice(`Kept ${survivor.library_path} and deleted ${deleted.library_path}.`);
-      setConfirmation(null);
     } catch (error) {
       const action: PairAction = side === "left" ? "keep-left" : "keep-right";
       setPairFailures((current) => ({
@@ -196,9 +184,22 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
         },
       }));
       setConfirmation(null);
-    } finally {
       setPendingKey(null);
+      return;
     }
+    removeRawPairsWithAsset(deleted.asset_id);
+    setSummaries((current) =>
+      current === null ? current : current.filter((asset) => asset.asset_id !== deleted.asset_id),
+    );
+    setPairFailures((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setNotice(`Kept ${survivor.library_path} and deleted ${deleted.library_path}.`);
+    setConfirmation(null);
+    setPendingKey(null);
+    void reconcileDeletedAssets([deleted.asset_id]);
   };
 
   const retryPair = (pair: ComposedDuplicatePair, failure: PairFailure) => {

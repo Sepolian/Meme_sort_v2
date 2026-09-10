@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
-import type { AssetListResult, DuplicateScanResult } from "../../api/types";
+import type { AppState, AssetListResult, DuplicateScanResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
 import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
 
@@ -108,6 +108,31 @@ function appStateFixture() {
   };
 }
 
+function deleteResult(assetId: string) {
+  return {
+    library_root: "C:/Library",
+    asset_id: assetId,
+    removed_source_path: null,
+    asset_deleted: true,
+    removed_source_records: 1,
+    removed_jobs: 0,
+    removed_renditions: 0,
+    removed_embeddings: 0,
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let settled = false;
+  const promise = new Promise<T>((res) => {
+    resolve = (value: T) => {
+      settled = true;
+      res(value);
+    };
+  });
+  return { promise, resolve, get settled() { return settled; } };
+}
+
 function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType<typeof vi.fn>>> = {}) {
   const client = {
     getAppState: vi.fn(async () => appStateFixture()),
@@ -118,16 +143,7 @@ function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType
     }),
     revealAsset: vi.fn(async () => undefined),
     openLogDirectory: vi.fn(async () => undefined),
-    deleteAsset: vi.fn(async (assetId: string) => ({
-      library_root: "C:/Library",
-      asset_id: assetId,
-      removed_source_path: null,
-      asset_deleted: true,
-      removed_source_records: 1,
-      removed_jobs: 0,
-      removed_renditions: 0,
-      removed_embeddings: 0,
-    })),
+    deleteAsset: vi.fn(async (assetId: string) => deleteResult(assetId)),
     removeSourceRecord: vi.fn(async () => {
       throw new Error("not under test");
     }),
@@ -192,13 +208,14 @@ function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType
 
 function renderApp(route: string, client: MemeSortClient) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[route]}>
         <App client={client} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
 }
 
 async function scanDuplicates() {
@@ -361,6 +378,18 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     const failure = await screen.findByRole("alert", { name: /Action failed for originals\/left\.png/ });
     expect(failure.textContent).toContain("delete failed");
     expect(screen.getByRole("region", { name: "Duplicate pairs" })).toBeInTheDocument();
+    expect(client.deleteAsset).toHaveBeenCalledTimes(1);
+
+    // The failed delete kept the pair; retrying re-confirms and succeeds.
+    (client.deleteAsset as ReturnType<typeof vi.fn>).mockResolvedValueOnce(deleteResult(RIGHT_ID));
+    fireEvent.click(within(failure).getByRole("button", { name: "Retry" }));
+    const retryDialog = await screen.findByRole("alertdialog", { name: /keep originals\/left\.png/i });
+    fireEvent.click(within(retryDialog).getByRole("button", { name: "Keep Left" }));
+    expect(await screen.findByText(/Kept originals\/left\.png and deleted originals\/right\.png/)).toBeInTheDocument();
+    expect(client.deleteAsset).toHaveBeenCalledTimes(2);
+    expect(client.deleteAsset).toHaveBeenNthCalledWith(2, RIGHT_ID);
+    expect(client.acceptDuplicatePair).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Duplicate pairs" })).not.toBeInTheDocument();
   });
 
   it("retries a failed scan without losing the threshold", async () => {
@@ -429,5 +458,85 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan duplicates" }));
     await screen.findByRole("region", { name: "Duplicate pairs" });
     expect(screen.getByText("originals/left.png")).toBeInTheDocument();
+  });
+});
+
+describe("Duplicate Review deletion coordination (ticket 01)", () => {
+  beforeEach(() => {
+    resetRuntimeHealthForTesting();
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("closes the confirmation, shows success, and evicts the shared cache before the refresh settles", async () => {
+    const refresh = deferred<AppState>();
+    const client = createClient({
+      getAppState: vi.fn().mockResolvedValueOnce(appStateFixture()).mockReturnValue(refresh.promise),
+    });
+    const { queryClient } = renderApp("/duplicates", client);
+    queryClient.setQueryData(["assets"], assetsFixture());
+    await scanDuplicates();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep Left" }));
+    const dialog = await screen.findByRole("alertdialog", { name: /keep originals\/left\.png/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep Left" }));
+
+    expect(await screen.findByText(/Kept originals\/left\.png and deleted originals\/right\.png/)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Duplicate pairs" })).not.toBeInTheDocument();
+    expect(client.deleteAsset).toHaveBeenCalledTimes(1);
+    expect(client.acceptDuplicatePair).not.toHaveBeenCalled();
+    // The shared Asset list already dropped the deleted Asset while the
+    // background refresh is still pending.
+    expect((queryClient.getQueryData(["assets"]) as AssetListResult).assets.map((a) => a.asset_id)).toEqual([LEFT_ID]);
+    expect((client.getAppState as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(refresh.settled).toBe(false);
+
+    await act(async () => {
+      refresh.resolve(appStateFixture());
+    });
+    await waitFor(() => {
+      expect(refresh.settled).toBe(true);
+    });
+    expect((queryClient.getQueryData(["assets"]) as AssetListResult).assets.map((a) => a.asset_id)).toEqual([LEFT_ID]);
+    expect(client.deleteAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops the inactive detail cache of the deleted Asset after coordination", async () => {
+    const client = createClient();
+    const { queryClient } = renderApp("/duplicates", client);
+    queryClient.setQueryData(["asset-detail", RIGHT_ID], {
+      library_root: "C:/Library",
+      asset: assetsFixture().assets[1],
+    });
+    await scanDuplicates();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep Left" }));
+    const dialog = await screen.findByRole("alertdialog", { name: /keep originals\/left\.png/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep Left" }));
+
+    expect(await screen.findByText(/Kept originals\/left\.png and deleted originals\/right\.png/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(queryClient.getQueryData(["asset-detail", RIGHT_ID])).toBeUndefined();
+    });
+  });
+
+  it("never reports a failed background refresh as a delete failure", async () => {
+    const client = createClient({
+      getAppState: vi.fn().mockResolvedValueOnce(appStateFixture()).mockRejectedValueOnce(new Error("refresh failed")),
+    });
+    const { queryClient } = renderApp("/duplicates", client);
+    queryClient.setQueryData(["assets"], assetsFixture());
+    await scanDuplicates();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep Left" }));
+    const dialog = await screen.findByRole("alertdialog", { name: /keep originals\/left\.png/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep Left" }));
+
+    // Existing global interaction: a failed App State refresh disconnects the shell.
+    await screen.findByText("MemeSort cannot reach its sidecar");
+    expect(client.deleteAsset).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert", { name: /Action failed for originals\/left\.png/ })).not.toBeInTheDocument();
+    expect((queryClient.getQueryData(["assets"]) as AssetListResult).assets.map((a) => a.asset_id)).toEqual([LEFT_ID]);
   });
 });
