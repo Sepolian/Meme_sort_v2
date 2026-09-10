@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -48,6 +48,26 @@ function pendingJobFixture(overrides: Partial<PendingJob> = {}): PendingJob {
     updated_at: "2026-08-09T00:00:00Z",
     ...overrides,
   };
+}
+
+function dedupePendingJobFixture(): PendingJob {
+  return pendingJobFixture({
+    job_id: "job-2",
+    type: "dedupe_asset",
+    asset_path: "originals/second.png",
+    attempt_count: 1,
+    created_at: "2026-08-09T02:00:00Z",
+  });
+}
+
+function ocrPendingJobFixture(): PendingJob {
+  return pendingJobFixture({
+    job_id: "job-3",
+    type: "ocr_asset",
+    asset_path: "originals/third.png",
+    attempt_count: 2,
+    created_at: "2026-08-09T03:00:00Z",
+  });
 }
 
 function appStateSnapshot(options: { pendingJobs?: PendingJob[]; pendingCount?: number; paused?: boolean } = {}): AppState {
@@ -177,6 +197,15 @@ function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn
     }),
   } as unknown as MemeSortClient & Record<string, ReturnType<typeof vi.fn>>;
   return client;
+}
+
+function snapshotQueue(...states: AppState[]): () => Promise<AppState> {
+  let index = 0;
+  return async () => {
+    const state = states[Math.min(index, states.length - 1)];
+    index += 1;
+    return state;
+  };
 }
 
 function renderApp(route: string, client: MemeSortClient) {
@@ -462,4 +491,166 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(client.deleteAsset).not.toHaveBeenCalled();
   });
+});
+
+describe("Advanced Diagnostics selection follows the queue snapshot (ticket 03)", () => {
+  beforeEach(() => {
+    resetRuntimeHealthForTesting();
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("cancels selections that leave the snapshot, keeps the rest, and re-confirmation submits only the current selection", async () => {
+    const visibleJob = pendingJobFixture();
+    const disappearingJob = dedupePendingJobFixture();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>).mockImplementation(snapshotQueue(
+      appStateSnapshot({ pendingJobs: [visibleJob, disappearingJob], pendingCount: 2 }),
+      appStateSnapshot({ pendingJobs: [visibleJob], pendingCount: 1 }),
+    ));
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByLabelText("Select Pending Job dedupe_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 2 Pending Job(s)?" })).toBeInTheDocument();
+
+    // The five-second poll delivers the next snapshot; job-2 is no longer in
+    // the returned list, so it stops being selectable.
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Select Pending Job dedupe_asset")).not.toBeInTheDocument();
+    }, { timeout: 9_000 });
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Select Pending Job embed_asset")).toBeChecked();
+
+    // Re-initiating the deletion shows the surviving selection and submits only it.
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+    expect(client.deletePendingJobs).toHaveBeenCalledWith([visibleJob.job_id]);
+    expect(client.deleteAsset).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it("closes the confirmation, blocks an empty submission, and never restores cleared selections when the Jobs reappear", async () => {
+    const firstSelection = pendingJobFixture();
+    const secondSelection = dedupePendingJobFixture();
+    const newcomerJob = ocrPendingJobFixture();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>).mockImplementation(snapshotQueue(
+      appStateSnapshot({ pendingJobs: [firstSelection, secondSelection], pendingCount: 2 }),
+      // Both selected Jobs leave the returned list while the full queue count
+      // stays high: invisibility from the display limit counts too.
+      appStateSnapshot({ pendingJobs: [newcomerJob], pendingCount: 250 }),
+      appStateSnapshot({ pendingJobs: [firstSelection, secondSelection], pendingCount: 2 }),
+    ));
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByLabelText("Select Pending Job dedupe_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 2 Pending Job(s)?" })).toBeInTheDocument();
+
+    await screen.findByLabelText("Select Pending Job ocr_asset", {}, { timeout: 9_000 });
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(client.deletePendingJobs).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Select Pending Job ocr_asset")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Delete selected Pending Jobs" })).toBeDisabled();
+
+    // An empty selection cannot submit a deletion.
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(client.deletePendingJobs).not.toHaveBeenCalled();
+
+    // The same Job IDs return, but the cleared selections are not restored.
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Select Pending Job dedupe_asset")).toBeInTheDocument();
+    }, { timeout: 9_000 });
+    expect(screen.getByLabelText("Select Pending Job embed_asset")).not.toBeChecked();
+    expect(screen.getByLabelText("Select Pending Job dedupe_asset")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Delete selected Pending Jobs" })).toBeDisabled();
+    expect(client.deletePendingJobs).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("keeps the confirmation across unrelated queue updates and submits the unchanged scope", async () => {
+    const selectedJob = pendingJobFixture();
+    const removedUnselectedJob = dedupePendingJobFixture();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>).mockImplementation(snapshotQueue(
+      appStateSnapshot({ pendingJobs: [selectedJob, removedUnselectedJob], pendingCount: 2 }),
+      // Unselected Job removed, unselected Job added, order flipped, and the
+      // selected Job's metadata changed while its ID stayed the same.
+      appStateSnapshot({
+        pendingJobs: [
+          ocrPendingJobFixture(),
+          pendingJobFixture({ ...selectedJob, asset_path: "originals/renamed.png", attempt_count: 5, updated_at: "2026-08-09T04:00:00Z" }),
+        ],
+        pendingCount: 2,
+      }),
+    ));
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
+
+    await screen.findByLabelText("Select Pending Job ocr_asset", {}, { timeout: 9_000 });
+
+    // The confirmation survives: the delete scope is unchanged.
+    expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
+    expect(client.deletePendingJobs).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Select Pending Job embed_asset")).toBeChecked();
+    expect(screen.getByLabelText("Select Pending Job ocr_asset")).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+    expect(client.deletePendingJobs).toHaveBeenCalledWith([selectedJob.job_id]);
+  }, 20_000);
+
+  it("does not re-send the deletion when the queue changes after submission and reports the partial skip accurately", async () => {
+    const skippedJob = pendingJobFixture();
+    const deletedJob = dedupePendingJobFixture();
+    const newcomerJob = ocrPendingJobFixture();
+    const deleteCommand = deferred<unknown>();
+    const client = createClient();
+    (client.getAppState as ReturnType<typeof vi.fn>).mockImplementation(snapshotQueue(
+      appStateSnapshot({ pendingJobs: [skippedJob, deletedJob], pendingCount: 2 }),
+      // The Worker claims both Jobs while the delete command is still in
+      // flight; the polled snapshot no longer returns them.
+      appStateSnapshot({ pendingJobs: [newcomerJob], pendingCount: 1 }),
+    ));
+    (client.deletePendingJobs as ReturnType<typeof vi.fn>).mockImplementation(() => deleteCommand.promise);
+    renderApp("/settings", client);
+
+    fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
+    fireEvent.click(screen.getByLabelText("Select Pending Job dedupe_asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete 2 Pending Job(s)?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
+    expect(screen.getByRole("button", { name: "Working…" })).toBeInTheDocument();
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+    expect(client.deletePendingJobs).toHaveBeenCalledWith([skippedJob.job_id, deletedJob.job_id]);
+
+    // The polled queue change after submission does not cancel or re-send the
+    // in-flight command.
+    await screen.findByLabelText("Select Pending Job ocr_asset", {}, { timeout: 9_000 });
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      deleteCommand.resolve({
+        requested_job_ids: [skippedJob.job_id, deletedJob.job_id],
+        deleted_job_ids: [deletedJob.job_id],
+        skipped_job_ids: [skippedJob.job_id],
+      });
+    });
+    expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 1.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
+    expect(client.deleteAsset).not.toHaveBeenCalled();
+  }, 20_000);
 });

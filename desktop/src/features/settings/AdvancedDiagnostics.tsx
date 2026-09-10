@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import type { AppState } from "../../api/types";
@@ -25,12 +25,31 @@ interface AdvancedDiagnosticsProps {
  * actions, failed-Job retry, and Pending Job deletion refresh that same
  * snapshot through `onStateChanged`; the kept five-second polling then keeps
  * reflecting actual Worker progress.
+ *
+ * Ticket 03: selection follows the snapshot. Every App State update keeps
+ * only selections that are still visible in the current Pending Jobs list;
+ * a trimmed selection closes the open confirmation so the user re-confirms
+ * the exact delete scope. Cleared selections are never restored when a Job
+ * reappears. Invisibility only means absence from the returned list.
  */
 export function AdvancedDiagnostics({ client, appState, onStateChanged }: AdvancedDiagnosticsProps) {
   const [isWorking, setIsWorking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [selectedPendingJobIds, setSelectedPendingJobIds] = useState<Set<string>>(() => new Set());
   const [pendingJobDeleteConfirmation, setPendingJobDeleteConfirmation] = useState(false);
+
+  useEffect(() => {
+    const visibleJobIds = new Set(appState.pending_jobs.map((job) => job.job_id));
+    const kept = new Set<string>();
+    let trimmed = false;
+    for (const jobId of selectedPendingJobIds) {
+      if (visibleJobIds.has(jobId)) kept.add(jobId);
+      else trimmed = true;
+    }
+    if (!trimmed) return;
+    setSelectedPendingJobIds(kept);
+    setPendingJobDeleteConfirmation(false);
+  }, [appState.pending_jobs, selectedPendingJobIds]);
 
   const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setIsWorking(true);
