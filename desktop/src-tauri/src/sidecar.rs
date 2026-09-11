@@ -213,32 +213,49 @@ impl SidecarSession {
         ))
     }
 
-    fn app_state(&self) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::State)
+    fn app_state_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(origin, session_cookie, ApiRoute::State)
     }
 
     /// One Import Batch snapshot. Progress travels to the WebView without
     /// filesystem paths, so polling stays safe from any page.
-    fn import_status(&self) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::ImportStatus)
+    fn import_status_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(origin, session_cookie, ApiRoute::ImportStatus)
     }
 
-    fn assets(&self) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(&self.origin, &self.session_cookie, ApiRoute::Assets)
+    fn assets_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
+        authenticated_get_json(origin, session_cookie, ApiRoute::Assets)
     }
 
-    fn asset_detail(&self, asset_id: &str) -> Result<serde_json::Value, SidecarError> {
+    fn asset_detail_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
         authenticated_get_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             ApiRoute::AssetDetail(validate_asset_id(asset_id)?),
         )
     }
 
-    fn delete_asset(&self, asset_id: &str) -> Result<serde_json::Value, SidecarError> {
+    fn delete_asset_for_connection(
+        origin: &str,
+        session_cookie: &str,
+        asset_id: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::DeleteAsset,
             &AssetIdPayload {
                 asset_id: validate_asset_id(asset_id)?,
@@ -246,14 +263,15 @@ impl SidecarSession {
         )
     }
 
-    fn remove_source_record(
-        &self,
+    fn remove_source_record_for_connection(
+        origin: &str,
+        session_cookie: &str,
         asset_id: &str,
         source_path: &str,
     ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::RemoveSourceRecord,
             &RemoveSourceRecordPayload {
                 asset_id: validate_asset_id(asset_id)?,
@@ -262,14 +280,15 @@ impl SidecarSession {
         )
     }
 
-    fn batch_asset_action(
-        &self,
+    fn batch_asset_action_for_connection(
+        origin: &str,
+        session_cookie: &str,
         action: BatchAssetAction,
         asset_ids: &[String],
     ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::BatchAssetAction,
             &BatchAssetActionPayload {
                 action: action.as_api_value(),
@@ -278,14 +297,15 @@ impl SidecarSession {
         )
     }
 
-    fn start_import_batch(
-        &self,
+    fn start_import_batch_for_connection(
+        origin: &str,
+        session_cookie: &str,
         sources: Vec<String>,
         indexing_policy: IndexingPolicy,
     ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::StartImport,
             &StartImportPayload {
                 sources: validate_import_sources(&sources)?,
@@ -294,19 +314,25 @@ impl SidecarSession {
         )
     }
 
-    fn pause_import(&self) -> Result<serde_json::Value, SidecarError> {
+    fn pause_import_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::PauseImport,
             &EmptyPayload {},
         )
     }
 
-    fn resume_import(&self) -> Result<serde_json::Value, SidecarError> {
+    fn resume_import_for_connection(
+        origin: &str,
+        session_cookie: &str,
+    ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
-            &self.origin,
-            &self.session_cookie,
+            origin,
+            session_cookie,
             MutationRoute::ResumeImport,
             &EmptyPayload {},
         )
@@ -612,18 +638,12 @@ impl SidecarSession {
         match classify_managed_path(&path)? {
             ManagedCopyKind::StaticImage => {
                 let bytes = fs::read(&path).map_err(|error| {
-                    SidecarError::new(format!(
-                        "Could not read the Asset Library Copy: {error}"
-                    ))
+                    SidecarError::new(format!("Could not read the Asset Library Copy: {error}"))
                 })?;
-                build_static_image_payload(&bytes)
-                    .map(ClipboardPayload::StaticImage)
+                build_static_image_payload(&bytes).map(ClipboardPayload::StaticImage)
             }
-            ManagedCopyKind::GifFile => {
-                build_hdrop_payload(std::slice::from_ref(&path)).map(|hdrop| {
-                    ClipboardPayload::FileDrop { hdrop }
-                })
-            }
+            ManagedCopyKind::GifFile => build_hdrop_payload(std::slice::from_ref(&path))
+                .map(|hdrop| ClipboardPayload::FileDrop { hdrop }),
         }
     }
 
@@ -919,11 +939,41 @@ impl ApiRoute {
     }
 }
 
-fn authenticated_get_json(
+/// Network-failure wording kept per request path so existing diagnostics stay
+/// unchanged while the socket/header/read template is shared.
+#[derive(Clone, Copy)]
+enum SidecarRequestErrors {
+    State,
+    Response,
+}
+
+impl SidecarRequestErrors {
+    fn request(self, error: std::io::Error) -> SidecarError {
+        match self {
+            Self::State => SidecarError::new(format!("Could not request sidecar state: {error}")),
+            Self::Response => SidecarError::new(format!("Could not request sidecar: {error}")),
+        }
+    }
+
+    fn read(self, error: std::io::Error) -> SidecarError {
+        match self {
+            Self::State => SidecarError::new(format!("Could not read sidecar state: {error}")),
+            Self::Response => {
+                SidecarError::new(format!("Could not read sidecar response: {error}"))
+            }
+        }
+    }
+}
+
+fn authenticated_request(
     origin: &str,
     session_cookie: &str,
-    route: ApiRoute,
-) -> Result<serde_json::Value, SidecarError> {
+    method: &str,
+    path: &str,
+    accept: &str,
+    body: Option<&[u8]>,
+    errors: SidecarRequestErrors,
+) -> Result<Vec<u8>, SidecarError> {
     let port = loopback_port(origin)?;
     let mut stream = TcpStream::connect(("127.0.0.1", port))
         .map_err(|error| SidecarError::new(format!("Could not connect to sidecar: {error}")))?;
@@ -932,20 +982,44 @@ fn authenticated_get_json(
         .map_err(|error| {
             SidecarError::new(format!("Could not configure sidecar request: {error}"))
         })?;
+
+    let mut request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: {accept}\r\n"
+    );
+    if let Some(body) = body {
+        request.push_str(&format!(
+            "Content-Type: application/json\r\nContent-Length: {}\r\n",
+            body.len()
+        ));
+    }
+    request.push_str("Connection: close\r\n\r\n");
+
     stream
-        .write_all(
-            format!(
-                "GET {} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
-                route.path(),
-            )
-            .as_bytes(),
-        )
-        .map_err(|error| SidecarError::new(format!("Could not request sidecar state: {error}")))?;
+        .write_all(request.as_bytes())
+        .and_then(|_| stream.write_all(body.unwrap_or_default()))
+        .map_err(|error| errors.request(error))?;
 
     let mut response = Vec::new();
     stream
         .read_to_end(&mut response)
-        .map_err(|error| SidecarError::new(format!("Could not read sidecar state: {error}")))?;
+        .map_err(|error| errors.read(error))?;
+    Ok(response)
+}
+
+fn authenticated_get_json(
+    origin: &str,
+    session_cookie: &str,
+    route: ApiRoute,
+) -> Result<serde_json::Value, SidecarError> {
+    let response = authenticated_request(
+        origin,
+        session_cookie,
+        "GET",
+        &route.path(),
+        "application/json",
+        None,
+        SidecarRequestErrors::State,
+    )?;
     parse_json_response(&response)
 }
 
@@ -966,30 +1040,15 @@ fn authenticated_post_json(
 ) -> Result<serde_json::Value, SidecarError> {
     let body = serde_json::to_vec(payload)
         .map_err(|error| SidecarError::new(format!("Could not encode sidecar request: {error}")))?;
-    let port = loopback_port(origin)?;
-    let mut stream = TcpStream::connect(("127.0.0.1", port))
-        .map_err(|error| SidecarError::new(format!("Could not connect to sidecar: {error}")))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(15)))
-        .map_err(|error| {
-            SidecarError::new(format!("Could not configure sidecar request: {error}"))
-        })?;
-    stream
-        .write_all(
-            format!(
-                "POST {} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                route.path(),
-                body.len(),
-            )
-            .as_bytes(),
-        )
-        .and_then(|_| stream.write_all(&body))
-        .map_err(|error| SidecarError::new(format!("Could not request sidecar: {error}")))?;
-
-    let mut response = Vec::new();
-    stream
-        .read_to_end(&mut response)
-        .map_err(|error| SidecarError::new(format!("Could not read sidecar response: {error}")))?;
+    let response = authenticated_request(
+        origin,
+        session_cookie,
+        "POST",
+        route.path(),
+        "application/json",
+        Some(&body),
+        SidecarRequestErrors::Response,
+    )?;
     parse_json_response(&response)
 }
 
@@ -999,27 +1058,15 @@ fn authenticated_get(
     path: &str,
     accept: &str,
 ) -> Result<SidecarHttpResponse, SidecarError> {
-    let port = loopback_port(origin)?;
-    let mut stream = TcpStream::connect(("127.0.0.1", port))
-        .map_err(|error| SidecarError::new(format!("Could not connect to sidecar: {error}")))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(15)))
-        .map_err(|error| {
-            SidecarError::new(format!("Could not configure sidecar request: {error}"))
-        })?;
-    stream
-        .write_all(
-            format!(
-                "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: {session_cookie}\r\nAccept: {accept}\r\nConnection: close\r\n\r\n",
-            )
-            .as_bytes(),
-        )
-        .map_err(|error| SidecarError::new(format!("Could not request sidecar: {error}")))?;
-
-    let mut response = Vec::new();
-    stream
-        .read_to_end(&mut response)
-        .map_err(|error| SidecarError::new(format!("Could not read sidecar response: {error}")))?;
+    let response = authenticated_request(
+        origin,
+        session_cookie,
+        "GET",
+        path,
+        accept,
+        None,
+        SidecarRequestErrors::Response,
+    )?;
     parse_http_response(&response)
 }
 
@@ -1040,17 +1087,23 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
 
 #[tauri::command]
 pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.app_state())
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::app_state_for_connection(origin, session_cookie)
+    })
 }
 
 #[tauri::command]
 pub fn get_import_status(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.import_status())
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::import_status_for_connection(origin, session_cookie)
+    })
 }
 
 #[tauri::command]
 pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.assets())
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::assets_for_connection(origin, session_cookie)
+    })
 }
 
 #[tauri::command]
@@ -1058,12 +1111,16 @@ pub fn get_asset_detail(
     app: AppHandle,
     asset_id: String,
 ) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.asset_detail(&asset_id))
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::asset_detail_for_connection(origin, session_cookie, &asset_id)
+    })
 }
 
 #[tauri::command]
 pub fn delete_asset(app: AppHandle, asset_id: String) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.delete_asset(&asset_id))
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::delete_asset_for_connection(origin, session_cookie, &asset_id)
+    })
 }
 
 #[tauri::command]
@@ -1072,8 +1129,13 @@ pub fn remove_source_record(
     asset_id: String,
     source_path: String,
 ) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| {
-        session.remove_source_record(&asset_id, &source_path)
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::remove_source_record_for_connection(
+            origin,
+            session_cookie,
+            &asset_id,
+            &source_path,
+        )
     })
 }
 
@@ -1084,8 +1146,13 @@ pub fn batch_asset_action(
     asset_ids: Vec<String>,
 ) -> Result<serde_json::Value, SidecarError> {
     let action = BatchAssetAction::parse(&action)?;
-    with_sidecar_session(&app, |session| {
-        session.batch_asset_action(action, &asset_ids)
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::batch_asset_action_for_connection(
+            origin,
+            session_cookie,
+            action,
+            &asset_ids,
+        )
     })
 }
 
@@ -1100,8 +1167,13 @@ pub fn start_library_import(
         .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
     let entry = selection.take(&selection_id)?;
     let sources = validate_library_paths(entry.origin, &entry.paths)?;
-    with_sidecar_session(&app, |session| {
-        session.start_import_batch(sources, IndexingPolicy::IfReady)
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::start_import_batch_for_connection(
+            origin,
+            session_cookie,
+            sources,
+            IndexingPolicy::IfReady,
+        )
     })
 }
 
@@ -1117,12 +1189,16 @@ pub fn start_import_and_index(app: AppHandle) -> Result<serde_json::Value, Sidec
 
 #[tauri::command]
 pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.pause_import())
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::pause_import_for_connection(origin, session_cookie)
+    })
 }
 
 #[tauri::command]
 pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_session(&app, |session| session.resume_import())
+    with_sidecar_connection(&app, |origin, session_cookie| {
+        SidecarSession::resume_import_for_connection(origin, session_cookie)
+    })
 }
 
 #[tauri::command]
@@ -1346,13 +1422,18 @@ fn start_selected_import(
         .try_state::<ImportSelection>()
         .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
     let source_folder = selection.selected_path()?;
-    with_sidecar_session(app, |session| {
+    with_sidecar_connection(app, |origin, session_cookie| {
         let indexing_policy = if start_indexing {
             IndexingPolicy::Required
         } else {
             IndexingPolicy::Never
         };
-        session.start_import_batch(vec![source_folder], indexing_policy)
+        SidecarSession::start_import_batch_for_connection(
+            origin,
+            session_cookie,
+            vec![source_folder],
+            indexing_policy,
+        )
     })
 }
 
@@ -1386,23 +1467,6 @@ fn open_directory_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
         .spawn()
         .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
     Ok(())
-}
-
-fn with_sidecar_session<T>(
-    app: &AppHandle,
-    operation: impl FnOnce(&SidecarSession) -> Result<T, SidecarError>,
-) -> Result<T, SidecarError> {
-    let state = app
-        .try_state::<SidecarState>()
-        .ok_or_else(|| SidecarError::new("MemeSort sidecar is not available."))?;
-    let session = state
-        .0
-        .lock()
-        .map_err(|_| SidecarError::new("MemeSort sidecar state is unavailable."))?;
-    let session = session
-        .as_ref()
-        .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
-    operation(session)
 }
 
 fn with_sidecar_connection<T>(
@@ -2599,8 +2663,7 @@ mod tests {
                     break;
                 }
             }
-            let clear_request =
-                std::str::from_utf8(&clear_request).expect("request must be UTF-8");
+            let clear_request = std::str::from_utf8(&clear_request).expect("request must be UTF-8");
             assert!(clear_request.starts_with("POST /api/clear-accepted-pairs HTTP/1.1"));
             assert!(clear_request.contains("Cookie: memesort_session=test-token"));
             assert!(clear_request.contains("{}"));
@@ -2651,7 +2714,9 @@ mod tests {
             )
             .expect_err("malformed pair IDs must be rejected before connecting");
             assert!(
-                error.to_string().contains("Invalid MemeSort Asset identifier"),
+                error
+                    .to_string()
+                    .contains("Invalid MemeSort Asset identifier"),
                 "unexpected error for ({asset_a_id}, {asset_b_id}): {error}"
             );
         }
@@ -2667,11 +2732,8 @@ mod tests {
             MutationRoute::ClearAcceptedPairs.path(),
             "/api/clear-accepted-pairs"
         );
-        let lib_rs = std::fs::read_to_string(format!(
-            "{}/src/lib.rs",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("Tauri builder should be readable");
+        let lib_rs = std::fs::read_to_string(format!("{}/src/lib.rs", env!("CARGO_MANIFEST_DIR")))
+            .expect("Tauri builder should be readable");
         assert!(
             lib_rs.contains("sidecar::accept_duplicate_pair"),
             "accept_duplicate_pair must be registered in the Tauri builder"
@@ -3310,10 +3372,10 @@ mod tests {
         fs::write(
             path,
             vec![
-                0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00,
-                0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
-                0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3B,
+                0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C,
+                0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+                0x3B,
             ],
         )
         .expect("gif clipboard fixture should be written");
@@ -3381,13 +3443,9 @@ mod tests {
         let closed = "http://127.0.0.1:1";
 
         for invalid in ["", "not-a-uuid", "../library.sqlite"] {
-            let error = SidecarSession::copy_asset_with_writer(
-                closed,
-                CLIPBOARD_COOKIE,
-                invalid,
-                &fake,
-            )
-            .expect_err("invalid Asset ID must be rejected");
+            let error =
+                SidecarSession::copy_asset_with_writer(closed, CLIPBOARD_COOKIE, invalid, &fake)
+                    .expect_err("invalid Asset ID must be rejected");
             assert!(
                 error.to_string().contains("Invalid MemeSort Asset"),
                 "unexpected error: {error}"
@@ -3402,14 +3460,12 @@ mod tests {
             assert!(error.to_string().contains("Invalid MemeSort Asset"));
         }
 
-        let error = SidecarSession::copy_original_files_with_writer(
-            closed,
-            CLIPBOARD_COOKIE,
-            &[],
-            &fake,
-        )
-        .expect_err("empty batch must be rejected");
-        assert!(error.to_string().contains("Invalid MemeSort Asset selection"));
+        let error =
+            SidecarSession::copy_original_files_with_writer(closed, CLIPBOARD_COOKIE, &[], &fake)
+                .expect_err("empty batch must be rejected");
+        assert!(error
+            .to_string()
+            .contains("Invalid MemeSort Asset selection"));
 
         let oversized = vec![CLIPBOARD_ASSET_A.to_owned(); 1_001];
         let error = SidecarSession::copy_original_files_with_writer(
@@ -3419,7 +3475,9 @@ mod tests {
             &fake,
         )
         .expect_err("oversized batch must be rejected");
-        assert!(error.to_string().contains("Invalid MemeSort Asset selection"));
+        assert!(error
+            .to_string()
+            .contains("Invalid MemeSort Asset selection"));
 
         assert_eq!(
             fake.write_count(),
@@ -3514,7 +3572,10 @@ mod tests {
                         expected.1 as i32
                     );
                     let decoded = image::load_from_memory(png).expect("png round-trip");
-                    assert_eq!((decoded.width(), decoded.height()), (expected.0, expected.1));
+                    assert_eq!(
+                        (decoded.width(), decoded.height()),
+                        (expected.0, expected.1)
+                    );
                 }
                 FakeClipboardWrite::FileDrop { .. } => {
                     panic!("JPEG/WebP must publish image payloads")
@@ -3562,8 +3623,7 @@ mod tests {
         write_clipboard_png(&first, 2, 2);
         write_clipboard_png(&second, 2, 2);
 
-        let (single_origin, single_server) =
-            spawn_managed_copy_server(vec![first.clone()]);
+        let (single_origin, single_server) = spawn_managed_copy_server(vec![first.clone()]);
         let fake = FakeClipboardWriter::new();
         SidecarSession::copy_original_file_with_writer(
             &single_origin,
@@ -3578,7 +3638,10 @@ mod tests {
             let writes = fake.writes.lock().expect("fake clipboard lock");
             match &writes[0] {
                 FakeClipboardWrite::FileDrop { hdrop } => {
-                    assert_eq!(parse_hdrop_payload(hdrop).expect("round-trip"), vec![first.clone()]);
+                    assert_eq!(
+                        parse_hdrop_payload(hdrop).expect("round-trip"),
+                        vec![first.clone()]
+                    );
                 }
                 FakeClipboardWrite::StaticImage { .. } => {
                     panic!("original-file copy must be a file reference")
