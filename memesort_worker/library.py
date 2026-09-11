@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable
 
 from . import asset_catalog
 from . import ocr_artifacts
