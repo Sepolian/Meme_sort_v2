@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from io import BytesIO
 import tempfile
 import unittest
 from pathlib import Path
 
 from memesort_worker.webapp import create_app
+from tests import wsgi_request
 
 
 STATIC_ROOT = Path(__file__).resolve().parents[1] / "memesort_worker" / "web_static"
@@ -77,24 +77,10 @@ class AssetDetailStylesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             app = create_app(str(Path(temp_dir) / "library"))
             try:
-                response: dict[str, str] = {}
-
-                def start_response(status, _headers):
-                    response["status"] = status
-
-                body = b"".join(
-                    app(
-                        {
-                            "REQUEST_METHOD": "GET",
-                            "PATH_INFO": "/search/text",
-                            "QUERY_STRING": "",
-                            "CONTENT_LENGTH": "0",
-                            "wsgi.input": BytesIO(b""),
-                        },
-                        start_response,
-                    )
+                status, _headers, body = wsgi_request.call(
+                    app, "GET", "/search/text"
                 )
-                self.assertTrue(response["status"].startswith("200 "))
+                self.assertTrue(status.startswith("200 "))
                 self.assertIn(b'id="searchNavGroup"', body)
             finally:
                 app.shutdown()
@@ -140,24 +126,10 @@ class AssetDetailStylesTests(unittest.TestCase):
             try:
                 for path in ("/api/runtime-settings", "/api/first-run"):
                     with self.subTest(path=path):
-                        response: dict[str, str] = {}
-
-                        def start_response(status, _headers):
-                            response["status"] = status
-
-                        body = b"".join(
-                            app(
-                                {
-                                    "REQUEST_METHOD": "POST",
-                                    "PATH_INFO": path,
-                                    "QUERY_STRING": "",
-                                    "CONTENT_LENGTH": "2",
-                                    "wsgi.input": BytesIO(b"{}"),
-                                },
-                                start_response,
-                            )
+                        status, _headers, body = wsgi_request.call(
+                            app, "POST", path, body=b"{}"
                         )
-                        self.assertTrue(response["status"].startswith("404 "))
+                        self.assertTrue(status.startswith("404 "))
                         self.assertIn(b"Unknown API endpoint", body)
             finally:
                 app.shutdown()

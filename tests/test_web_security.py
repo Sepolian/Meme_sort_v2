@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from io import BytesIO
 from pathlib import Path
 
 from memesort_worker.web_security import SESSION_COOKIE_NAME, SessionGate
 from memesort_worker.webapp import create_app
+from tests import wsgi_request
 
 
 ORIGIN_HOST = "127.0.0.1:8765"
@@ -16,25 +16,9 @@ SESSION_TOKEN = "session-token-value"
 
 
 def _call(app, method, path, *, query="", headers=None, body=b""):
-    environ = {
-        "REQUEST_METHOD": method,
-        "PATH_INFO": path,
-        "QUERY_STRING": query,
-        "CONTENT_LENGTH": str(len(body)),
-        "wsgi.input": BytesIO(body),
-        "HTTP_HOST": ORIGIN_HOST,
-    }
-    for key, value in (headers or {}).items():
-        environ[key] = value
-    captured: dict[str, object] = {}
-
-    def start_response(status, response_headers):
-        captured["status"] = status
-        captured["headers"] = response_headers
-
-    payload = b"".join(app(environ, start_response))
-    header_map = {name: value for name, value in captured["headers"]}
-    return str(captured["status"]), header_map, payload
+    return wsgi_request.call(
+        app, method, path, query=query, headers=headers, body=body, host=ORIGIN_HOST
+    )
 
 
 class WebSecurityTests(unittest.TestCase):

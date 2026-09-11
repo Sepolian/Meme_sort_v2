@@ -9,7 +9,6 @@ import time
 import unittest
 import uuid
 from contextlib import redirect_stdout
-from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -47,6 +46,7 @@ from memesort_worker.webapp import (
     ThreadedWSGIServer,
     create_app,
 )
+from tests import wsgi_request
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):
@@ -165,25 +165,7 @@ class LibraryTests(unittest.TestCase):
         path: str,
         payload: dict[str, object] | None = None,
     ) -> tuple[str, dict[str, object]]:
-        body = json.dumps(payload or {}).encode("utf-8")
-        captured: dict[str, str] = {}
-
-        def start_response(status: str, _headers: object) -> None:
-            captured["status"] = status
-
-        response_body = b"".join(
-            app(
-                {
-                    "REQUEST_METHOD": method,
-                    "PATH_INFO": path,
-                    "QUERY_STRING": "",
-                    "CONTENT_LENGTH": str(len(body)),
-                    "wsgi.input": BytesIO(body),
-                },
-                start_response,
-            )
-        )
-        return captured["status"], json.loads(response_body.decode("utf-8"))
+        return wsgi_request.call_json(app, method, path, payload=payload)
 
     def _http_json(
         self,

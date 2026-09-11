@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import tempfile
 import unittest
-from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
@@ -21,6 +19,7 @@ from memesort_worker.library import (
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.webapp import create_app
 from runtime_fakes import FakeIndexingRuntime
+from tests import wsgi_request
 
 
 class AcceptedDuplicatePairTests(unittest.TestCase):
@@ -44,25 +43,7 @@ class AcceptedDuplicatePairTests(unittest.TestCase):
         return [str(asset["asset_id"]) for asset in list_assets(library_root).assets]
 
     def _request(self, app, method: str, path: str, payload=None, query: str = ""):
-        body = json.dumps(payload or {}).encode("utf-8")
-        captured: dict[str, str] = {}
-
-        def start_response(status: str, _headers: object) -> None:
-            captured["status"] = status
-
-        response_body = b"".join(
-            app(
-                {
-                    "REQUEST_METHOD": method,
-                    "PATH_INFO": path,
-                    "QUERY_STRING": query,
-                    "CONTENT_LENGTH": str(len(body)),
-                    "wsgi.input": BytesIO(body),
-                },
-                start_response,
-            )
-        )
-        return captured["status"], json.loads(response_body.decode("utf-8"))
+        return wsgi_request.call_json(app, method, path, payload=payload, query=query)
 
     def _pair_rows(self, library_root: Path) -> list[tuple[str, str]]:
         conn = asset_catalog.connect(
