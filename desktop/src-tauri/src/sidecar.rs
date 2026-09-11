@@ -22,7 +22,7 @@ use crate::clipboard::{
     ClipboardPayload, ClipboardWriter, ManagedCopyKind, WindowsClipboardWriter,
 };
 use crate::native_selection::{
-    validate_library_paths, ImportSelection, LibraryImportSelection, SearchImageSelection,
+    validate_library_paths, LibraryImportSelection, SearchImageSelection,
 };
 
 #[cfg(test)]
@@ -1178,16 +1178,6 @@ pub fn start_library_import(
 }
 
 #[tauri::command]
-pub fn start_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    start_selected_import(&app, false)
-}
-
-#[tauri::command]
-pub fn start_import_and_index(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    start_selected_import(&app, true)
-}
-
-#[tauri::command]
 pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::pause_import_for_connection(origin, session_cookie)
@@ -1410,29 +1400,6 @@ pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(),
             session_cookie,
             &asset_ids,
             &WindowsClipboardWriter,
-        )
-    })
-}
-
-fn start_selected_import(
-    app: &AppHandle,
-    start_indexing: bool,
-) -> Result<serde_json::Value, SidecarError> {
-    let selection = app
-        .try_state::<ImportSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
-    let source_folder = selection.selected_path()?;
-    with_sidecar_connection(app, |origin, session_cookie| {
-        let indexing_policy = if start_indexing {
-            IndexingPolicy::Required
-        } else {
-            IndexingPolicy::Never
-        };
-        SidecarSession::start_import_batch_for_connection(
-            origin,
-            session_cookie,
-            vec![source_folder],
-            indexing_policy,
         )
     })
 }
@@ -1949,10 +1916,10 @@ mod tests {
         validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
         validate_import_sources, validate_library_paths, validate_search_query,
         validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
-        BatchAssetActionPayload, EmptyPayload, ImportSelection, IndexingPolicy,
-        LibraryImportSelection, LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute,
-        NativeDragContext, NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload,
-        SearchImageSelection, SidecarSession, StartImportPayload,
+        BatchAssetActionPayload, EmptyPayload, IndexingPolicy, LibraryImportSelection,
+        LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute, NativeDragContext,
+        NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload, SearchImageSelection,
+        SidecarSession, StartImportPayload,
     };
     use std::sync::Mutex;
     use tauri::http::{Method, Request, StatusCode};
@@ -2745,22 +2712,6 @@ mod tests {
     }
 
     #[test]
-    fn keeps_import_paths_in_the_native_selection_state() {
-        let selection = ImportSelection::new();
-        assert!(selection.selected_path().is_err());
-
-        let selected = selection
-            .replace(Some(PathBuf::from("C:/Source/Memes")))
-            .expect("selection should be stored");
-
-        assert_eq!(selected.as_deref(), Some("C:/Source/Memes"));
-        assert_eq!(
-            selection.selected_path().expect("path should be available"),
-            "C:/Source/Memes"
-        );
-    }
-
-    #[test]
     fn validates_library_native_selections_against_existing_regular_entries() {
         let root = std::env::temp_dir().join(format!(
             "memesort-library-selection-validation-{}",
@@ -3210,14 +3161,10 @@ mod tests {
     }
 
     #[test]
-    fn processes_native_drops_into_one_time_ids_without_setup_changes() {
+    fn processes_native_drops_into_one_time_ids() {
         let (root, file, folder) = native_drop_fixture("memesort-native-drag-process");
         let paths = vec![file.clone(), folder.clone()];
         let selections = LibraryImportSelection::new();
-        let setup_selection = ImportSelection::new();
-        setup_selection
-            .replace(Some(PathBuf::from("C:/Source/Setup-folder")))
-            .expect("Setup selection should be stored");
         let slot = Mutex::new(None::<NativeDragContext>);
         let mut emitted: Vec<(NativeDragPhase, bool, Option<String>)> = Vec::new();
 
@@ -3258,14 +3205,6 @@ mod tests {
         assert!(
             selections.take(&drop_id).is_err(),
             "duplicate drop events for one ID cannot start a second import"
-        );
-
-        assert_eq!(
-            setup_selection
-                .selected_path()
-                .expect("Setup selection should remain"),
-            "C:/Source/Setup-folder",
-            "native drops must not alter Setup selection"
         );
 
         let remaining = selections.0.lock().expect("registry").len();

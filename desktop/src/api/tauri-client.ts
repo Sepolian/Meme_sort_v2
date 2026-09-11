@@ -13,13 +13,10 @@ export interface MemeSortClient {
   deleteAsset(assetId: string): Promise<AssetMutationResult>;
   removeSourceRecord(assetId: string, sourcePath: string): Promise<AssetMutationResult>;
   batchAssetAction(action: "delete" | "rebuild-active-index", assetIds: string[]): Promise<BatchAssetActionResult>;
-  chooseImportFolder(): Promise<FolderSelection>;
   chooseSearchImage(): Promise<FolderSelection>;
   chooseLibraryFiles(): Promise<LibrarySelectionSummary | null>;
   chooseLibraryFolder(): Promise<LibrarySelectionSummary | null>;
   startLibraryImport(selectionId: string): Promise<ImportTask>;
-  startImport(): Promise<ImportTask>;
-  startImportAndIndex(): Promise<ImportTask>;
   pauseImport(): Promise<ImportTask>;
   resumeImport(): Promise<ImportTask>;
   searchText(query: string, requestId: string): Promise<SearchResult>;
@@ -52,13 +49,10 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     deleteAsset: (assetId) => invokeCommand<AssetMutationResult>("delete_asset", { assetId }),
     removeSourceRecord: (assetId, sourcePath) => invokeCommand<AssetMutationResult>("remove_source_record", { assetId, sourcePath }),
     batchAssetAction: (action, assetIds) => invokeCommand<BatchAssetActionResult>("batch_asset_action", { action, assetIds }),
-    chooseImportFolder: () => invokeCommand<FolderSelection>("choose_import_folder"),
     chooseSearchImage: () => invokeCommand<FolderSelection>("choose_search_image"),
     chooseLibraryFiles: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_files"),
     chooseLibraryFolder: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_folder"),
     startLibraryImport: (selectionId) => invokeCommand<ImportTask>("start_library_import", { selectionId }),
-    startImport: () => invokeCommand<ImportTask>("start_import"),
-    startImportAndIndex: () => invokeCommand<ImportTask>("start_import_and_index"),
     pauseImport: () => invokeCommand<ImportTask>("pause_import"),
     resumeImport: () => invokeCommand<ImportTask>("resume_import"),
     searchText: (query, requestId) => invokeCommand<SearchResult>("search_text", { query, requestId }),

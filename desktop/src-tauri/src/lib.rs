@@ -31,7 +31,6 @@ pub fn run() {
         .setup(|app| {
             let sidecar = sidecar::SidecarSession::start(app.handle())?;
             app.manage(sidecar::SidecarState::new(sidecar));
-            app.manage(native_selection::ImportSelection::new());
             app.manage(native_selection::LibraryImportSelection::new());
             app.manage(native_selection::SearchImageSelection::new());
             app.manage(native_drag::NativeDragState::new());
@@ -45,13 +44,10 @@ pub fn run() {
             sidecar::delete_asset,
             sidecar::remove_source_record,
             sidecar::batch_asset_action,
-            native_selection::choose_import_folder,
             native_selection::choose_search_image,
             native_selection::choose_library_files,
             native_selection::choose_library_folder,
             sidecar::start_library_import,
-            sidecar::start_import,
-            sidecar::start_import_and_index,
             sidecar::pause_import,
             sidecar::resume_import,
             sidecar::search_text,

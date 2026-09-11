@@ -21,10 +21,6 @@ const MAX_LIBRARY_SELECTIONS: usize = 16;
 #[cfg(windows)]
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 
-/// A source folder selected through the native dialog for this desktop session.
-/// The WebView never supplies this path to an import command.
-pub struct ImportSelection(Mutex<Option<PathBuf>>);
-
 /// An image file selected through the native dialog for one later Search Request.
 /// The WebView never supplies this path to an image-search command.
 pub struct SearchImageSelection(Mutex<Option<PathBuf>>);
@@ -48,31 +44,6 @@ pub(crate) struct LibrarySelectionEntry {
 /// Temporary native Library selections. Each entry is origin-tagged, one-time,
 /// time-bounded, and never exposed to the WebView as filesystem paths.
 pub struct LibraryImportSelection(pub(crate) Mutex<Vec<LibrarySelectionEntry>>);
-
-impl ImportSelection {
-    pub fn new() -> Self {
-        Self(Mutex::new(None))
-    }
-
-    pub(crate) fn replace(&self, path: Option<PathBuf>) -> Result<Option<String>, SidecarError> {
-        let selected_path = path.as_ref().map(|path| path.display().to_string());
-        let mut selection = self
-            .0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?;
-        *selection = path;
-        Ok(selected_path)
-    }
-
-    pub(crate) fn selected_path(&self) -> Result<String, SidecarError> {
-        self.0
-            .lock()
-            .map_err(|_| SidecarError::new("MemeSort import selection is unavailable."))?
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .ok_or_else(|| SidecarError::new("Choose a source folder before importing."))
-    }
-}
 
 impl LibraryImportSelection {
     pub fn new() -> Self {
@@ -158,26 +129,6 @@ pub struct NativePathSelection {
 pub struct LibrarySelectionSummary {
     pub(crate) selection_id: String,
     pub(crate) count: usize,
-}
-
-#[tauri::command]
-pub fn choose_import_folder(app: AppHandle) -> Result<NativePathSelection, SidecarError> {
-    let path = app
-        .dialog()
-        .file()
-        .set_title("Choose a folder to import into MemeSort")
-        .blocking_pick_folder();
-    let path = path
-        .map(|path| {
-            path.into_path()
-                .map_err(|error| SidecarError::new(error.to_string()))
-        })
-        .transpose()?;
-    let selection = app
-        .try_state::<ImportSelection>()
-        .ok_or_else(|| SidecarError::new("MemeSort import selection is unavailable."))?;
-    let selected_path = selection.replace(path)?;
-    Ok(NativePathSelection { selected_path })
 }
 
 #[tauri::command]

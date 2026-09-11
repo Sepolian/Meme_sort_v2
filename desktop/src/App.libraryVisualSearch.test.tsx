@@ -152,9 +152,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     batchAssetAction: async () => {
       throw new Error("not under test");
     },
-    chooseImportFolder: async () => {
-      throw new Error("not under test");
-    },
     chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
     chooseLibraryFiles: async () => {
       throw new Error("not under test");
@@ -163,12 +160,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
       throw new Error("not under test");
     },
     startLibraryImport: async () => {
-      throw new Error("not under test");
-    },
-    startImport: async () => {
-      throw new Error("not under test");
-    },
-    startImportAndIndex: async () => {
       throw new Error("not under test");
     },
     pauseImport: async () => {

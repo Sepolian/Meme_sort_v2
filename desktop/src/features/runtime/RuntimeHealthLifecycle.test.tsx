@@ -79,15 +79,12 @@ function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & {
     batchAssetAction: async () => {
       throw new Error("not under test");
     },
-    chooseImportFolder: async () => ({ selected_path: null }),
     chooseSearchImage: async () => ({ selected_path: null }),
     chooseLibraryFiles: async () => null,
     chooseLibraryFolder: async () => null,
     startLibraryImport: async () => {
       throw new Error("not under test");
     },
-    startImport: async () => importSnapshot(),
-    startImportAndIndex: async () => importSnapshot(),
     pauseImport: async () => importSnapshot(),
     resumeImport: async () => importSnapshot(),
     searchText: async () => {

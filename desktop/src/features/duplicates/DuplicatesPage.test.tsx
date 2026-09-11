@@ -150,15 +150,12 @@ function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType
     batchAssetAction: vi.fn(async () => {
       throw new Error("not under test");
     }),
-    chooseImportFolder: vi.fn(async () => ({ selected_path: null })),
     chooseSearchImage: vi.fn(async () => ({ selected_path: null })),
     chooseLibraryFiles: vi.fn(async () => null),
     chooseLibraryFolder: vi.fn(async () => null),
     startLibraryImport: vi.fn(async () => {
       throw new Error("not under test");
     }),
-    startImport: vi.fn(async () => importSnapshot()),
-    startImportAndIndex: vi.fn(async () => importSnapshot()),
     pauseImport: vi.fn(async () => importSnapshot()),
     resumeImport: vi.fn(async () => importSnapshot()),
     searchText: vi.fn(async () => {

@@ -158,13 +158,10 @@ const client = {
     removed_embeddings: 0,
     reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
   })),
-  chooseImportFolder: vi.fn(async () => ({ selected_path: "C:/Source/Memes" })),
   chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
   chooseLibraryFiles: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 })),
   chooseLibraryFolder: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 })),
   startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174020", status: "scanning", running: true, started_at: 1 })),
-  startImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "scanning", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
-  startImportAndIndex: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174022", status: "scanning", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
   pauseImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "pausing", running: true, pause_requested: true, source_folder: "C:/Source/Memes", started_at: 1 })),
   resumeImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174021", status: "importing", running: true, source_folder: "C:/Source/Memes", started_at: 1 })),
   searchText: vi.fn(async (query: string) => ({
