@@ -2,7 +2,6 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   DEFAULT_THEME_PREFERENCE,
   THEME_PREFERENCE_KEY,
-  applyResolvedTheme,
   getSystemDark,
   isThemePreference,
   loadThemePreference,
@@ -94,13 +93,6 @@ describe("theme preference contract", () => {
   it("resolves system through the OS appearance", () => {
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");
-  });
-
-  it("applies only dark or light to <html>", () => {
-    applyResolvedTheme("dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    applyResolvedTheme("light");
-    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("reads the OS appearance without throwing when matchMedia is missing", () => {

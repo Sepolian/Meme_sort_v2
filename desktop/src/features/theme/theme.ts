@@ -103,16 +103,3 @@ export function getSystemDark(
     return false;
   }
 }
-
-/** Apply the resolved theme to `<html>` (never writes `system`). */
-export function applyResolvedTheme(
-  resolved: ResolvedTheme,
-  doc?: Document,
-): void {
-  const target =
-    doc ?? (typeof document !== "undefined" ? document : null);
-  if (!target?.documentElement) return;
-  target.documentElement.dataset.theme = resolved;
-}
-
-export default THEME_PREFERENCE_KEY;
