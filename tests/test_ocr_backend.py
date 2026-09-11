@@ -41,7 +41,7 @@ class PaddleOcrWorkerBackendTests(unittest.TestCase):
             return_value=Path(temp_dir) / "missing-python.exe",
         ):
             with self.assertRaisesRegex(RuntimeError, "Pinned OCR environment is missing"):
-                get_ocr_backend(Path(temp_dir), "llama.cpp")
+                get_ocr_backend()
 
     def test_portable_ocr_paths_are_under_meme_sort_data_and_portable_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -139,8 +139,7 @@ def _ocr_model_cache_path() -> Path:
     return _project_root() / ".models" / "paddleocr"
 
 
-def get_ocr_backend(library_root: Path, _embedding_backend_name: str) -> OcrBackend:
-    del library_root
+def get_ocr_backend() -> OcrBackend:
     python_executable = _ocr_python_path()
     worker_script = _ocr_worker_path()
     if not python_executable.is_file():

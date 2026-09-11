@@ -131,7 +131,6 @@ def import_and_start_indexing(
 
 
 def start_import_batch(
-    library_root: Path | str,
     sources: Sequence[str],
     import_controller: ImportTaskController,
     worker_loop: WorkerLoop,

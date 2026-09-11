@@ -175,7 +175,7 @@ class PinnedRuntime:
         self._require_open()
         from .ocr_backend import get_ocr_backend
 
-        return get_ocr_backend(self.library_root, "llama.cpp")
+        return get_ocr_backend()
 
     def close(self) -> None:
         with self._lock:

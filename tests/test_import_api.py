@@ -175,7 +175,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "runtime is not ready"):
             start_import_batch(
-                Path("C:/Library"),
                 ["C:/Memes"],
                 controller,
                 worker,
@@ -193,7 +192,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ImportBatchConflictError, "already running"):
             start_import_batch(
-                Path("C:/Library"),
                 ["C:/Memes"],
                 controller,
                 worker,
@@ -209,7 +207,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
         worker = RecordingWorkerLoop()
 
         start_import_batch(
-            Path("C:/Library"),
             ["C:/Memes"],
             controller,
             worker,
@@ -232,7 +229,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
             with self.subTest(policy=policy):
                 controller = StubImportController()
                 start_import_batch(
-                    Path("C:/Library"),
                     ["C:/Private/Memes"],
                     controller,
                     RecordingWorkerLoop(),
@@ -247,7 +243,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
         worker = RecordingWorkerLoop()
 
         start_import_batch(
-            Path("C:/Library"),
             ["C:/Memes"],
             controller,
             worker,
@@ -269,7 +264,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
                 controller = StubImportController()
                 worker = RecordingWorkerLoop()
                 start_import_batch(
-                    Path("C:/Library"),
                     ["C:/Memes"],
                     controller,
                     worker,
@@ -283,7 +277,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
         controller = StubImportController()
         worker = RecordingWorkerLoop()
         start_import_batch(
-            Path("C:/Library"),
             ["C:/Memes"],
             controller,
             worker,
@@ -304,7 +297,6 @@ class StartImportBatchPolicyTests(unittest.TestCase):
         worker = RecordingWorkerLoop()
 
         start_import_batch(
-            Path("C:/Library"),
             ["C:/Memes"],
             controller,
             worker,
@@ -356,7 +348,7 @@ class ImportStartEndpointTests(unittest.TestCase):
                 self.assertTrue(status.startswith("202 "))
                 self.assertEqual(
                     ["C:/Memes/a.png", "C:/Memes/b.png"],
-                    start_mock.call_args.args[1],
+                    start_mock.call_args.args[0],
                 )
                 self.assertEqual(
                     IndexingPolicy.IF_READY,
