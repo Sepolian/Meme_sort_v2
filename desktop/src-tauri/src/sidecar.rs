@@ -1087,21 +1087,21 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
 
 #[tauri::command]
 pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::app_state_for_connection(origin, session_cookie)
     })
 }
 
 #[tauri::command]
 pub fn get_import_status(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::import_status_for_connection(origin, session_cookie)
     })
 }
 
 #[tauri::command]
 pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::assets_for_connection(origin, session_cookie)
     })
 }
@@ -1111,14 +1111,14 @@ pub fn get_asset_detail(
     app: AppHandle,
     asset_id: String,
 ) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::asset_detail_for_connection(origin, session_cookie, &asset_id)
     })
 }
 
 #[tauri::command]
 pub fn delete_asset(app: AppHandle, asset_id: String) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::delete_asset_for_connection(origin, session_cookie, &asset_id)
     })
 }
@@ -1129,7 +1129,7 @@ pub fn remove_source_record(
     asset_id: String,
     source_path: String,
 ) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::remove_source_record_for_connection(
             origin,
             session_cookie,
@@ -1146,7 +1146,7 @@ pub fn batch_asset_action(
     asset_ids: Vec<String>,
 ) -> Result<serde_json::Value, SidecarError> {
     let action = BatchAssetAction::parse(&action)?;
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::batch_asset_action_for_connection(
             origin,
             session_cookie,
@@ -1167,7 +1167,7 @@ pub fn start_library_import(
         .ok_or_else(|| SidecarError::new("MemeSort Library selection is unavailable."))?;
     let entry = selection.take(&selection_id)?;
     let sources = validate_library_paths(entry.origin, &entry.paths)?;
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::start_import_batch_for_connection(
             origin,
             session_cookie,
@@ -1179,14 +1179,14 @@ pub fn start_library_import(
 
 #[tauri::command]
 pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::pause_import_for_connection(origin, session_cookie)
     })
 }
 
 #[tauri::command]
 pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
+    with_sidecar_session(&app, |origin, session_cookie| {
         SidecarSession::resume_import_for_connection(origin, session_cookie)
     })
 }
@@ -1436,6 +1436,30 @@ fn open_directory_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
     Ok(())
 }
 
+/// Runs `operation` while holding the `SidecarState` mutex for the entire
+/// call. The lock is deliberately held across the HTTP request so requests
+/// stay serialized and `shutdown_managed_sidecar` waits for in-flight work
+/// before taking the session.
+fn with_sidecar_session<T>(
+    app: &AppHandle,
+    operation: impl FnOnce(&str, &str) -> Result<T, SidecarError>,
+) -> Result<T, SidecarError> {
+    let state = app
+        .try_state::<SidecarState>()
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar is not available."))?;
+    let session = state
+        .0
+        .lock()
+        .map_err(|_| SidecarError::new("MemeSort sidecar state is unavailable."))?;
+    let session = session
+        .as_ref()
+        .ok_or_else(|| SidecarError::new("MemeSort sidecar has already stopped."))?;
+    operation(&session.origin, &session.session_cookie)
+}
+
+/// Runs `operation` against a snapshot of the session's origin and cookie
+/// without holding the `SidecarState` mutex during the request. Use this
+/// non-blocking path for long-running calls such as search.
 fn with_sidecar_connection<T>(
     app: &AppHandle,
     operation: impl FnOnce(&str, &str) -> Result<T, SidecarError>,

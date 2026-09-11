@@ -86,6 +86,17 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(2, "cancel_search", { requestId });
   });
 
+  it("uses a fixed path-free command to choose a native-selected image", async () => {
+    const selection = { selected_path: "C:/Source/query.png" };
+    const invokeCommand = vi.fn().mockResolvedValue(selection);
+    const client = createMemeSortClient(invokeCommand);
+
+    const result = await client.chooseSearchImage();
+
+    expect(invokeCommand).toHaveBeenCalledWith("choose_search_image");
+    expect(result).toEqual(selection);
+  });
+
   it("uses a path-free command for a native-selected image Search Request", async () => {
     const invokeCommand = vi.fn().mockResolvedValue({ results: [] });
     const client = createMemeSortClient(invokeCommand);
