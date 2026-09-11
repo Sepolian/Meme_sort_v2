@@ -420,21 +420,6 @@ def delete_asset_ocr_results(conn: sqlite3.Connection, asset_id: str) -> None:
     conn.execute("DELETE FROM ocr_result_fts WHERE asset_id = ?", (asset_id,))
 
 
-def collect_asset_ocr_rows(conn: sqlite3.Connection, asset_id: str) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-        SELECT ocr.id, ocr.engine, ocr.text, ocr.searchable_text, ocr.confidence, ocr.language_hint,
-               ocr.line_json, ocr.bbox_json, ocr.created_at,
-               recipe.engine_version, recipe.model_key, recipe.preprocess_version, recipe.min_confidence
-        FROM ocr_result ocr
-        JOIN ocr_recipe recipe ON recipe.id = ocr.ocr_recipe_id
-        WHERE ocr.asset_id = ?
-        ORDER BY ocr.created_at DESC, ocr.id DESC
-        """,
-        (asset_id,),
-    ).fetchall()
-
-
 def collect_ocr_rows_for_assets(
     conn: sqlite3.Connection,
     asset_ids: list[str],

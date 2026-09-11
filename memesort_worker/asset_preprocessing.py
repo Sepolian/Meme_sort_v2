@@ -8,17 +8,10 @@ or touch the database.
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
 
 from PIL import Image, ImageOps
 
 from .recipe_provider import PreprocessSpec
-
-
-@dataclass(frozen=True)
-class ImageDimensions:
-    width: int | None
-    height: int | None
 
 
 class ImportImageValidationError(ValueError):
@@ -27,21 +20,6 @@ class ImportImageValidationError(ValueError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
-
-
-def image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int, int]:
-    """Read image dimensions from raw bytes."""
-    with Image.open(io.BytesIO(image_bytes)) as image:
-        width, height = image.size
-    return int(width), int(height)
-
-
-def safe_image_dimensions_from_bytes(image_bytes: bytes) -> tuple[int | None, int | None]:
-    """Read image dimensions, returning (None, None) on failure."""
-    try:
-        return image_dimensions_from_bytes(image_bytes)
-    except Exception:
-        return None, None
 
 
 def validate_import_image_bytes(

@@ -359,18 +359,6 @@ def has_incomplete_job(
     return conn.execute(query, tuple(params)).fetchone() is not None
 
 
-def collect_asset_job_rows(conn: sqlite3.Connection, asset_id: str) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-        SELECT id, type, status, recipe_id, attempt_count
-        FROM job
-        WHERE asset_id = ?
-        ORDER BY created_at ASC, id ASC
-        """,
-        (asset_id,),
-    ).fetchall()
-
-
 def collect_job_rows_for_assets(
     conn: sqlite3.Connection,
     asset_ids: list[str],

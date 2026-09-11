@@ -182,25 +182,6 @@ def start_import_batch(
     )
 
 
-def start_background_import(
-    library_root: Path | str,
-    import_path: str,
-    import_controller: ImportTaskController,
-    worker_loop: WorkerLoop,
-    runtime: RuntimeGate,
-    start_indexing: bool,
-):
-    """Legacy single-path wrapper mapping a boolean to an Indexing Policy."""
-    return start_import_batch(
-        library_root,
-        [import_path],
-        import_controller,
-        worker_loop,
-        runtime,
-        IndexingPolicy.REQUIRED if start_indexing else IndexingPolicy.NEVER,
-    )
-
-
 def _parse_indexing_policy(raw: object) -> IndexingPolicy:
     if not isinstance(raw, str):
         raise ImportRequestError("indexing_policy must be a string.")

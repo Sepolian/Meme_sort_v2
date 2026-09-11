@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -96,13 +95,6 @@ def pick_file(
         raise RuntimeError(stderr or "File picker failed")
     selected = (result.stdout or "").strip()
     return selected or None
-
-
-def open_path(path: Path | str) -> None:
-    candidate = Path(path).expanduser().resolve()
-    if not candidate.exists():
-        raise ValueError(f"Path does not exist: {candidate}")
-    os.startfile(str(candidate))  # type: ignore[attr-defined]
 
 
 def reveal_path_in_file_explorer(path: Path | str) -> None:

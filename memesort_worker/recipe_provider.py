@@ -117,12 +117,6 @@ def default_provider() -> RuntimeRecipeProvider:
     return _default_provider
 
 
-def reset_default_provider() -> None:
-    """Clear the cached default provider (for testing)."""
-    global _default_provider
-    _default_provider = None
-
-
 def resolve_gif_frame_count(
     raw_value: int | None,
     recipe_id: str,
