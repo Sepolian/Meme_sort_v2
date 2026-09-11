@@ -759,14 +759,8 @@ def activate_manifest_recipe(
 
 
 def compute_sha256(file_path: Path) -> str:
-    digest = hashlib.sha256()
     with file_path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def _checked_processing_metadata(file_path: Path) -> os.stat_result:

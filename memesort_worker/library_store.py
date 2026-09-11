@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -83,11 +84,6 @@ def _project_asset_status(
 
 
 _BULK_QUERY_CHUNK_SIZE = 500
-
-
-def _chunked(values: list[str]) -> Iterator[list[str]]:
-    for start in range(0, len(values), _BULK_QUERY_CHUNK_SIZE):
-        yield values[start : start + _BULK_QUERY_CHUNK_SIZE]
 
 
 @dataclass
@@ -307,7 +303,7 @@ class LibraryStore:
         include_ocr: bool,
     ) -> "_AssetRelatedRows":
         groups = _AssetRelatedRows()
-        for chunk in _chunked(asset_ids):
+        for chunk in itertools.batched(asset_ids, _BULK_QUERY_CHUNK_SIZE):
             placeholders = ", ".join("?" for _ in chunk)
             for row in self._conn.execute(
                 f"""
@@ -332,7 +328,7 @@ class LibraryStore:
                 tuple(chunk),
             ):
                 groups.embeddings.setdefault(str(row["asset_id"]), []).append(row)
-            for row in job_queue.collect_job_rows_for_assets(self._conn, chunk):
+            for row in job_queue.collect_job_rows_for_assets(self._conn, list(chunk)):
                 groups.jobs.setdefault(str(row["asset_id"]), []).append(row)
             for row in self._conn.execute(
                 f"""
@@ -345,7 +341,7 @@ class LibraryStore:
             ):
                 groups.renditions.setdefault(str(row["asset_id"]), []).append(row)
             if include_ocr:
-                for row in ocr_artifacts.collect_ocr_rows_for_assets(self._conn, chunk):
+                for row in ocr_artifacts.collect_ocr_rows_for_assets(self._conn, list(chunk)):
                     groups.ocr.setdefault(str(row["asset_id"]), []).append(row)
         return groups
 
