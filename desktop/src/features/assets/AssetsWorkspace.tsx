@@ -11,7 +11,7 @@ import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import { importBatchBlockedMessage } from "../import/import-status";
 import { useOptionalRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { AssetWaterfall } from "./AssetWaterfall";
-import { buildAssetSummaryMap, composeSearchItems } from "../../api/result-models";
+import { buildAssetSummaryMap, composeSearchItems, type ComposedSearchItem } from "../../api/result-models";
 import { filterLocalAssets } from "../library/librarySearch";
 import {
   DEFAULT_LIBRARY_DENSITY,
@@ -93,6 +93,25 @@ function mutationSummary(request: BatchMutationRequest, result: Awaited<ReturnTy
   return request.action === "delete"
     ? `Deleted ${result.affected_asset_ids.length} Asset(s).`
     : `Queued ${result.reindex_jobs_created} Active Index rebuild(s); skipped ${result.skipped_running_asset_ids.length} running Asset(s).`;
+}
+
+function AdvancedDetails({ items }: { items: readonly ComposedSearchItem[] }) {
+  return (
+    <details>
+      <summary>Advanced details</summary>
+      <ul className="detail-list">
+        {items.map((item) => (
+          <li key={item.summary.asset_id}>
+            <span className="mono">{item.summary.asset_id}</span>
+            <span>
+              score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
+              {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export function AssetsWorkspace({
@@ -369,6 +388,17 @@ export function AssetsWorkspace({
       ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { action, assetIds } }
       : { title: `Rebuild ${assetIds.length} selected Asset(s)?`, detail: "This clears their active-recipe embeddings and queues new indexing work. Running Asset jobs are skipped.", confirmLabel: "Queue rebuild", request: { action, assetIds } });
   };
+  const waterfallProps = {
+    density,
+    checkedIds: selectedIds,
+    onOpenAsset: onSelectAsset,
+    onToggleChecked: toggleAsset,
+    onFindSimilar,
+    onCopyImage: runCardClipboardCopy,
+    onCopyOriginal: runCardCopyOriginal,
+    sectionRef: wallRef,
+    accepting: Boolean(dragPreview),
+  };
 
   return <>
     <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span></div></section>
@@ -423,22 +453,7 @@ export function AssetsWorkspace({
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasResults && indexedItems.length ? (
-          <details>
-            <summary>Advanced details</summary>
-            <ul className="detail-list">
-              {indexedItems.map((item) => (
-                <li key={item.summary.asset_id}>
-                  <span className="mono">{item.summary.asset_id}</span>
-                  <span>
-                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
-                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
+        {hasResults && indexedItems.length ? <AdvancedDetails items={indexedItems} /> : null}
         {onClearSearch ? (
           <div className="import-actions">
             <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
@@ -470,22 +485,7 @@ export function AssetsWorkspace({
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasResults && indexedItems.length ? (
-          <details>
-            <summary>Advanced details</summary>
-            <ul className="detail-list">
-              {indexedItems.map((item) => (
-                <li key={item.summary.asset_id}>
-                  <span className="mono">{item.summary.asset_id}</span>
-                  <span>
-                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
-                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
+        {hasResults && indexedItems.length ? <AdvancedDetails items={indexedItems} /> : null}
         {onClearSearch ? (
           <div className="import-actions">
             <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
@@ -517,22 +517,7 @@ export function AssetsWorkspace({
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
-        {hasResults && indexedItems.length ? (
-          <details>
-            <summary>Advanced details</summary>
-            <ul className="detail-list">
-              {indexedItems.map((item) => (
-                <li key={item.summary.asset_id}>
-                  <span className="mono">{item.summary.asset_id}</span>
-                  <span>
-                    score {item.score.toFixed(3)} &middot; {item.matchSources.join(" + ") || "no match source"}
-                    {item.ocrSnippet ? ` \u00B7 ${item.ocrSnippet}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
+        {hasResults && indexedItems.length ? <AdvancedDetails items={indexedItems} /> : null}
         {onClearSearch ? (
           <div className="import-actions">
             <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
@@ -551,18 +536,7 @@ export function AssetsWorkspace({
         </div>
       ) : isLocalMode ? (
         localMatches.length ? (
-          <AssetWaterfall
-            assets={localMatches}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={localMatches} {...waterfallProps} />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches for &ldquo;{localDisplayQuery}&rdquo;</h2>
@@ -579,18 +553,7 @@ export function AssetsWorkspace({
         )
       ) : isSemanticMode ? (
         hasResults && searchSummaries.length ? (
-          <AssetWaterfall
-            assets={searchSummaries}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No semantic matches" ref={wallRef}>
             <h2>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
@@ -607,18 +570,7 @@ export function AssetsWorkspace({
         ) : localMatches.length ? (
           // In-progress or failed semantic request keeps the Library visible
           // through instant local matches instead of discarding browsing.
-          <AssetWaterfall
-            assets={localMatches}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={localMatches} {...waterfallProps} />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
@@ -635,18 +587,7 @@ export function AssetsWorkspace({
         )
       ) : isImageMode ? (
         hasResults && searchSummaries.length ? (
-          <AssetWaterfall
-            assets={searchSummaries}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No image matches" ref={wallRef}>
             <h2>No image matches</h2>
@@ -663,18 +604,7 @@ export function AssetsWorkspace({
         ) : localMatches.length ? (
           // In-progress or failed image request keeps the Library visible
           // through local matches instead of discarding browsing.
-          <AssetWaterfall
-            assets={localMatches}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={localMatches} {...waterfallProps} />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches</h2>
@@ -691,18 +621,7 @@ export function AssetsWorkspace({
         )
       ) : isSimilarMode ? (
         hasResults && searchSummaries.length ? (
-          <AssetWaterfall
-            assets={searchSummaries}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
             <h2>No similar Assets</h2>
@@ -719,18 +638,7 @@ export function AssetsWorkspace({
         ) : localMatches.length ? (
           // In-progress or failed similar request keeps the Library visible
           // through local matches instead of discarding browsing.
-          <AssetWaterfall
-            assets={localMatches}
-            density={density}
-            checkedIds={selectedIds}
-            onOpenAsset={onSelectAsset}
-            onToggleChecked={toggleAsset}
-            onFindSimilar={onFindSimilar}
-            onCopyImage={runCardClipboardCopy}
-            onCopyOriginal={runCardCopyOriginal}
-            sectionRef={wallRef}
-            accepting={Boolean(dragPreview)}
-          />
+          <AssetWaterfall assets={localMatches} {...waterfallProps} />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches</h2>
@@ -746,18 +654,7 @@ export function AssetsWorkspace({
           </div>
         )
       ) : orderedAssets.length ? (
-        <AssetWaterfall
-          assets={orderedAssets}
-          density={density}
-          checkedIds={selectedIds}
-          onOpenAsset={onSelectAsset}
-          onToggleChecked={toggleAsset}
-          onFindSimilar={onFindSimilar}
-          onCopyImage={runCardClipboardCopy}
-          onCopyOriginal={runCardCopyOriginal}
-          sectionRef={wallRef}
-          accepting={Boolean(dragPreview)}
-        />
+        <AssetWaterfall assets={orderedAssets} {...waterfallProps} />
       ) : (
         <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
           <h2>No Assets match these filters</h2>
