@@ -444,5 +444,3 @@ export function AssetWaterfall({
     </section>
   );
 }
-
-export default AssetWaterfall;

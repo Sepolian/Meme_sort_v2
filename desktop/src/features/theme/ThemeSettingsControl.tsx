@@ -56,5 +56,3 @@ export function ThemeSettingsControl() {
     </div>
   );
 }
-
-export default ThemeSettingsControl;

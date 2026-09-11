@@ -330,5 +330,3 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
     </main>
   );
 }
-
-export default DuplicatesPage;

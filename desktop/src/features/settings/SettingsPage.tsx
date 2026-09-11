@@ -21,7 +21,7 @@ function SettingsSection({ id, title, children }: SettingsSectionProps) {
   );
 }
 
-function RuntimeHealthSection({ appState }: { appState: AppState | null }) {
+function RuntimeHealthSection({ appState }: { appState: AppState }) {
   const health = useRuntimeHealth();
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -37,15 +37,11 @@ function RuntimeHealthSection({ appState }: { appState: AppState | null }) {
   return (
     <>
       <p>MemeSort uses the manifest-pinned llama.cpp Vulkan0 runtime. Runtime selection is not configurable.</p>
-      {appState ? (
-        <section className="surface import-card" aria-labelledby="settings-runtime-descriptor-title">
-          <h3 id="settings-runtime-descriptor-title">Runtime Descriptor</h3>
-          <p>{appState.runtime.model_label ?? "Manifest-pinned model"} · {appState.runtime.output_dimension ?? "unknown"}d · {appState.runtime.storage_dtype ?? "unknown"}</p>
-          <p>{appState.runtime.backend_name} / {appState.runtime.device}; this descriptor is read-only.</p>
-        </section>
-      ) : (
-        <p>Runtime descriptor is unavailable until the Library state loads.</p>
-      )}
+      <section className="surface import-card" aria-labelledby="settings-runtime-descriptor-title">
+        <h3 id="settings-runtime-descriptor-title">Runtime Descriptor</h3>
+        <p>{appState.runtime.model_label ?? "Manifest-pinned model"} · {appState.runtime.output_dimension ?? "unknown"}d · {appState.runtime.storage_dtype ?? "unknown"}</p>
+        <p>{appState.runtime.backend_name} / {appState.runtime.device}; this descriptor is read-only.</p>
+      </section>
       {health.status === "checking" || health.status === "idle" ? (
         <p role="status" aria-label="Runtime health">
           Preparing search…
@@ -126,11 +122,10 @@ export function SettingsPage({
   appState,
   onStateChanged,
 }: {
-  client?: MemeSortClient;
-  appState?: AppState | null;
-  onStateChanged?: () => void;
+  client: MemeSortClient;
+  appState: AppState;
+  onStateChanged: () => void;
 }) {
-  const diagnosticsReady = client && appState && onStateChanged;
   return (
     <>
       <SettingsSection id="settings-appearance" title="Appearance">
@@ -141,36 +136,17 @@ export function SettingsPage({
         <ThemeSettingsControl />
       </SettingsSection>
       <SettingsSection id="settings-accepted-pairs" title="Accepted Duplicate Pairs">
-        {client ? (
-          <AcceptedPairsSection client={client} onStateChanged={onStateChanged} />
-        ) : (
-          <>
-            <p>
-              Accepted Duplicate Pair management lives here. Pairs are unordered, excluded from
-              future duplicate review, and removed when either Asset is deleted.
-            </p>
-            <p>Diagnostics load with the Library state. If this message persists, return to Library and reopen Settings.</p>
-          </>
-        )}
+        <AcceptedPairsSection client={client} onStateChanged={onStateChanged} />
       </SettingsSection>
       <SettingsSection id="settings-runtime" title="Runtime">
-        <RuntimeHealthSection appState={appState ?? null} />
+        <RuntimeHealthSection appState={appState} />
       </SettingsSection>
       <SettingsSection id="settings-installation" title="Installation">
         <InstallationSection />
       </SettingsSection>
       <SettingsSection id="settings-diagnostics" title="Advanced Diagnostics">
-        {diagnosticsReady ? (
-          <AdvancedDiagnostics client={client} appState={appState} onStateChanged={onStateChanged} />
-        ) : (
-          <>
-            <p>Worker Loop pause, resume, and tick, failed-Job retry, Pending Job inspection, Recent Jobs, Worker events, and log-directory actions live here.</p>
-            <p>Diagnostics load with the Library state. If this message persists, return to Library and reopen Settings.</p>
-          </>
-        )}
+        <AdvancedDiagnostics client={client} appState={appState} onStateChanged={onStateChanged} />
       </SettingsSection>
     </>
   );
 }
-
-export default SettingsPage;

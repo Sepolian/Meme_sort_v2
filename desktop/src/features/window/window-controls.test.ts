@@ -6,7 +6,6 @@ function desktopWindow(overrides: Partial<DesktopWindow> = {}): DesktopWindow {
     minimize: vi.fn(async () => undefined),
     toggleMaximize: vi.fn(async () => undefined),
     close: vi.fn(async () => undefined),
-    startDragging: vi.fn(async () => undefined),
     isMaximized: vi.fn(async () => false),
     onResized: vi.fn(async () => () => undefined),
     ...overrides,
@@ -21,12 +20,10 @@ describe("window controller", () => {
     await expect(controller.minimize()).resolves.toBe(true);
     await expect(controller.toggleMaximize()).resolves.toBe(true);
     await expect(controller.close()).resolves.toBe(true);
-    await expect(controller.startDragging()).resolves.toBe(true);
 
     expect(window.minimize).toHaveBeenCalledOnce();
     expect(window.toggleMaximize).toHaveBeenCalledOnce();
     expect(window.close).toHaveBeenCalledOnce();
-    expect(window.startDragging).toHaveBeenCalledOnce();
   });
 
   it("fails safely without a native desktop window", async () => {
@@ -35,7 +32,6 @@ describe("window controller", () => {
     await expect(controller.minimize()).resolves.toBe(false);
     await expect(controller.toggleMaximize()).resolves.toBe(false);
     await expect(controller.close()).resolves.toBe(false);
-    await expect(controller.startDragging()).resolves.toBe(false);
     expect(controller.isNative).toBe(false);
   });
 

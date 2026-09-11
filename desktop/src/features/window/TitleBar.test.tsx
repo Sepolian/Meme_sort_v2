@@ -10,7 +10,6 @@ function controls(overrides: Partial<WindowControls> = {}): WindowControls {
     minimize: vi.fn(async () => true),
     toggleMaximize: vi.fn(async () => true),
     close: vi.fn(async () => true),
-    startDragging: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -25,7 +24,6 @@ describe("TitleBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Maximize window" }));
     fireEvent.click(screen.getByRole("button", { name: "Close window" }));
 
-    expect(windowControls.startDragging).not.toHaveBeenCalled();
     expect(windowControls.minimize).toHaveBeenCalledOnce();
     expect(windowControls.toggleMaximize).toHaveBeenCalledOnce();
     expect(windowControls.close).toHaveBeenCalledOnce();
@@ -40,7 +38,6 @@ describe("TitleBar", () => {
     fireEvent.doubleClick(dragRegion);
 
     expect(dragRegion).toHaveAttribute("data-tauri-drag-region", "deep");
-    expect(windowControls.startDragging).not.toHaveBeenCalled();
     expect(windowControls.toggleMaximize).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Restore window" })).toBeInTheDocument();
   });

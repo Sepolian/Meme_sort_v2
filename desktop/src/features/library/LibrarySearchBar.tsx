@@ -146,5 +146,3 @@ export function LibrarySearchBar({
     </div>
   );
 }
-
-export default LibrarySearchBar;

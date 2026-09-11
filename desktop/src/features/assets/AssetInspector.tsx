@@ -712,5 +712,3 @@ function InspectorBody({
     </div>
   );
 }
-
-export default AssetInspector;

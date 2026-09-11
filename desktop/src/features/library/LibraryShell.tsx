@@ -33,5 +33,3 @@ export function LibraryShell({ toolbar, content, inspector }: LibraryShellProps)
     </section>
   );
 }
-
-export default LibraryShell;

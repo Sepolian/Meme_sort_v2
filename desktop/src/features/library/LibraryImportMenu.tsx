@@ -144,5 +144,3 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
     </div>
   );
 }
-
-export default LibraryImportMenu;

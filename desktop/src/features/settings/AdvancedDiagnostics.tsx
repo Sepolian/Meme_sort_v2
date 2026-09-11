@@ -168,5 +168,3 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
     </>
   );
 }
-
-export default AdvancedDiagnostics;

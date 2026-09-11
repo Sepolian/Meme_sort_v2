@@ -6,7 +6,6 @@ export interface DesktopWindow {
   minimize(): Promise<void>;
   toggleMaximize(): Promise<void>;
   close(): Promise<void>;
-  startDragging(): Promise<void>;
   isMaximized(): Promise<boolean>;
   onResized(listener: () => void): Promise<() => void>;
 }
@@ -17,7 +16,6 @@ export interface WindowControls {
   minimize(): Promise<boolean>;
   toggleMaximize(): Promise<boolean>;
   close(): Promise<boolean>;
-  startDragging(): Promise<boolean>;
 }
 
 export interface WindowController extends Omit<WindowControls, "isMaximized"> {
@@ -57,7 +55,6 @@ export function createWindowController(getWindow: WindowProvider): WindowControl
     minimize: () => invoke((window) => window.minimize()),
     toggleMaximize: () => invoke((window) => window.toggleMaximize()),
     close: () => invoke((window) => window.close()),
-    startDragging: () => invoke((window) => window.startDragging()),
     subscribeMaximized(listener) {
       const window = getNativeWindow();
       if (!window) return () => undefined;
@@ -105,6 +102,5 @@ export function useWindowControls(controller = desktopWindowController): WindowC
     minimize: controller.minimize,
     toggleMaximize: controller.toggleMaximize,
     close: controller.close,
-    startDragging: controller.startDragging,
   };
 }

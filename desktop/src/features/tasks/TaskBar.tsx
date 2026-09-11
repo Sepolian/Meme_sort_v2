@@ -82,5 +82,3 @@ export function TaskBar({ appState }: { appState: AppState | null }) {
     </section>
   );
 }
-
-export default TaskBar;

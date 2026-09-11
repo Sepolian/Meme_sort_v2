@@ -91,5 +91,3 @@ export function LibraryControls({
     </div>
   );
 }
-
-export default LibraryControls;

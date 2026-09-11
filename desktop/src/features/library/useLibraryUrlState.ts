@@ -39,7 +39,6 @@ export interface LibraryUrlStateApi {
   clearAssetId: () => void;
   clearFilters: () => void;
   setResultMode: (mode: LibraryResultMode) => void;
-  resetResultMode: () => void;
 }
 
 function resolveStorage(explicit: Storage | null | undefined): Storage | null {
@@ -215,13 +214,6 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
     setResultModeState(mode);
   }, []);
 
-  const resetResultMode = useCallback(() => {
-    setResultModeState((current) => {
-      if (current.kind === "local" || current.kind === "browse") return current;
-      return { kind: "browse" };
-    });
-  }, []);
-
   return {
     q: effective.q,
     sort: effective.sort,
@@ -241,8 +233,5 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
     clearAssetId,
     clearFilters,
     setResultMode,
-    resetResultMode,
   };
 }
-
-export default useLibraryUrlState;

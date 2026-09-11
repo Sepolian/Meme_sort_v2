@@ -83,5 +83,3 @@ export function AcceptedPairsSection({
     </>
   );
 }
-
-export default AcceptedPairsSection;

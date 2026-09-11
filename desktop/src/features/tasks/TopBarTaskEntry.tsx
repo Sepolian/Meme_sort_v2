@@ -33,5 +33,3 @@ export function TopBarTaskEntry({ appState }: { appState: AppState | null }) {
     </span>
   );
 }
-
-export default TopBarTaskEntry;
