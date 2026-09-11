@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { mediaUrl } from "../../api/media-url";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { getAssetDisplayName } from "../library/libraryOrdering";
 import { AssetContextMenu } from "./AssetContextMenu";
 import { useAssetContextMenu } from "./useAssetContextMenu";
@@ -686,89 +687,27 @@ function InspectorBody({
       ) : null}
 
       {confirmDelete ? (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={isDeleting ? undefined : onCancelDelete}
-        >
-          <section
-            className="dialog confirm-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="inspector-delete-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <p className="eyebrow">Confirm change</p>
-            <h2 id="inspector-delete-title">Delete this Asset?</h2>
-            <p>
-              This deletes its Library Copy, Source Records, and Derived
-              Artifacts. This cannot be undone.
-            </p>
-            <div className="dialog-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                disabled={isDeleting}
-                onClick={onCancelDelete}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-danger"
-                type="button"
-                autoFocus
-                disabled={isDeleting}
-                onClick={onConfirmDelete}
-              >
-                {isDeleting ? "Working…" : "Delete Asset"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <ConfirmDialog
+          titleId="inspector-delete-title"
+          title="Delete this Asset?"
+          detail="This deletes its Library Copy, Source Records, and Derived Artifacts. This cannot be undone."
+          confirmLabel="Delete Asset"
+          pending={isDeleting}
+          onCancel={onCancelDelete}
+          onConfirm={onConfirmDelete}
+        />
       ) : null}
 
       {confirmRemoveSource ? (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={isRemovingSource ? undefined : onCancelRemoveSource}
-        >
-          <section
-            className="dialog confirm-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="inspector-remove-source-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <p className="eyebrow">Confirm change</p>
-            <h2 id="inspector-remove-source-title">
-              Remove this Source Record?
-            </h2>
-            <p>
-              If this is the final Source Record, MemeSort deletes the resulting
-              Orphan Asset and its Derived Artifacts.
-            </p>
-            <div className="dialog-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                disabled={isRemovingSource}
-                onClick={onCancelRemoveSource}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-danger"
-                type="button"
-                autoFocus
-                disabled={isRemovingSource}
-                onClick={() => onConfirmRemoveSource(confirmRemoveSource)}
-              >
-                {isRemovingSource ? "Working…" : "Remove Source Record"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <ConfirmDialog
+          titleId="inspector-remove-source-title"
+          title="Remove this Source Record?"
+          detail="If this is the final Source Record, MemeSort deletes the resulting Orphan Asset and its Derived Artifacts."
+          confirmLabel="Remove Source Record"
+          pending={isRemovingSource}
+          onCancel={onCancelRemoveSource}
+          onConfirm={() => onConfirmRemoveSource(confirmRemoveSource)}
+        />
       ) : null}
     </div>
   );

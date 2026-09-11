@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import {
   subscribeNativeDrag,
   type NativeDragSubscribe,
@@ -66,27 +67,6 @@ interface ConfirmAction {
   detail: string;
   confirmLabel: string;
   request: BatchMutationRequest;
-}
-
-function ConfirmDialog({ action, onCancel, onConfirm, pending }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void; pending: boolean }) {
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (!pending) onCancel();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onCancel, pending]);
-  return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={pending ? undefined : onCancel}>
-      <section className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onMouseDown={(event) => event.stopPropagation()}>
-        <p className="eyebrow">Confirm change</p><h2 id="confirm-title">{action.title}</h2><p>{action.detail}</p>
-        <div className="dialog-actions"><button className="button button-secondary" type="button" disabled={pending} onClick={onCancel}>Cancel</button><button className="button button-danger" type="button" autoFocus disabled={pending} onClick={onConfirm}>{pending ? "Working…" : action.confirmLabel}</button></div>
-      </section>
-    </div>
-  );
 }
 
 function mutationSummary(request: BatchMutationRequest, result: Awaited<ReturnType<MemeSortClient["batchAssetAction"]>>): string {
@@ -676,6 +656,17 @@ export function AssetsWorkspace({
         </div>
       ) : null}
     </div>
-    {confirmation ? <ConfirmDialog action={confirmation} pending={mutation.isPending} onCancel={() => setConfirmation(null)} onConfirm={() => mutation.mutate(confirmation.request)} /> : null}
+    {confirmation ? (
+      <ConfirmDialog
+        titleId="confirm-title"
+        title={confirmation.title}
+        detail={confirmation.detail}
+        confirmLabel={confirmation.confirmLabel}
+        pending={mutation.isPending}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => mutation.mutate(confirmation.request)}
+        onEscape={() => setConfirmation(null)}
+      />
+    ) : null}
   </>;
 }

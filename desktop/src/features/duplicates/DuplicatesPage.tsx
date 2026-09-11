@@ -10,6 +10,7 @@ import {
 } from "../../api/result-models";
 import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { useDeletedAssetReconciliation } from "../assets/useDeletedAssetReconciliation";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/States";
 
 /**
@@ -316,17 +317,15 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
         <EmptyState title="No duplicate pairs found" detail="Lower the threshold or index more Assets, then scan again." />
       )}
       {confirmation && confirmationDetail ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={pendingKey ? undefined : () => setConfirmation(null)}>
-          <section className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="duplicate-keep-title" onMouseDown={(event) => event.stopPropagation()}>
-            <p className="eyebrow">Confirm change</p>
-            <h2 id="duplicate-keep-title">{confirmationDetail.title}</h2>
-            <p>{confirmationDetail.detail}</p>
-            <div className="dialog-actions">
-              <button className="button button-secondary" type="button" disabled={pendingKey !== null} onClick={() => setConfirmation(null)}>Cancel</button>
-              <button className="button button-danger" type="button" autoFocus disabled={pendingKey !== null} onClick={() => void runConfirmedDelete()}>{pendingKey ? "Working…" : confirmationDetail.confirmLabel}</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmDialog
+          titleId="duplicate-keep-title"
+          title={confirmationDetail.title}
+          detail={confirmationDetail.detail}
+          confirmLabel={confirmationDetail.confirmLabel}
+          pending={pendingKey !== null}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void runConfirmedDelete()}
+        />
       ) : null}
     </main>
   );

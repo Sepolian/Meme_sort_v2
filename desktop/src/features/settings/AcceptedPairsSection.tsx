@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 /**
  * Settings > Accepted Duplicate Pairs reset (ticket 16).
@@ -69,17 +70,15 @@ export function AcceptedPairsSection({
         </section>
       ) : null}
       {confirming ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={isWorking ? undefined : () => setConfirming(false)}>
-          <section className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="clear-accepted-pairs-title" onMouseDown={(event) => event.stopPropagation()}>
-            <p className="eyebrow">Confirm change</p>
-            <h2 id="clear-accepted-pairs-title">Clear all Accepted Duplicate Pairs?</h2>
-            <p>This clears every Keep Both decision without deleting Assets or Derived Artifacts. Cleared pairs may appear in a later duplicate scan.</p>
-            <div className="dialog-actions">
-              <button className="button button-secondary" type="button" disabled={isWorking} onClick={() => setConfirming(false)}>Cancel</button>
-              <button className="button button-danger" type="button" autoFocus disabled={isWorking} onClick={() => void clear()}>{isWorking ? "Working…" : "Clear accepted pairs"}</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmDialog
+          titleId="clear-accepted-pairs-title"
+          title="Clear all Accepted Duplicate Pairs?"
+          detail="This clears every Keep Both decision without deleting Assets or Derived Artifacts. Cleared pairs may appear in a later duplicate scan."
+          confirmLabel="Clear accepted pairs"
+          pending={isWorking}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => void clear()}
+        />
       ) : null}
     </>
   );

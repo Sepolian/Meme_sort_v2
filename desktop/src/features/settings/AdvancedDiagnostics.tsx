@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import type { AppState } from "../../api/types";
 
 interface AdvancedDiagnosticsProps {
@@ -137,14 +138,15 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
         ) : <p>No Pending Jobs are waiting to be claimed.</p>}
       </section>
       {pendingJobDeleteConfirmation ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={isWorking ? undefined : () => setPendingJobDeleteConfirmation(false)}>
-          <section className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="diagnostics-pending-job-delete-title" onMouseDown={(event) => event.stopPropagation()}>
-            <p className="eyebrow">Confirm change</p>
-            <h2 id="diagnostics-pending-job-delete-title">Delete {selectedPendingJobIds.size} Pending Job(s)?</h2>
-            <p>This deletes only unclaimed queue records. Assets and generated files remain unchanged.</p>
-            <div className="dialog-actions"><button className="button button-secondary" type="button" disabled={isWorking} onClick={() => setPendingJobDeleteConfirmation(false)}>Cancel</button><button className="button button-danger" type="button" autoFocus disabled={isWorking} onClick={() => void deleteSelectedPendingJobs()}>{isWorking ? "Working…" : "Delete Pending Jobs"}</button></div>
-          </section>
-        </div>
+        <ConfirmDialog
+          titleId="diagnostics-pending-job-delete-title"
+          title={`Delete ${selectedPendingJobIds.size} Pending Job(s)?`}
+          detail="This deletes only unclaimed queue records. Assets and generated files remain unchanged."
+          confirmLabel="Delete Pending Jobs"
+          pending={isWorking}
+          onCancel={() => setPendingJobDeleteConfirmation(false)}
+          onConfirm={() => void deleteSelectedPendingJobs()}
+        />
       ) : null}
       <section className="surface import-card" aria-labelledby="diagnostics-recent-jobs-title">
         <h2 id="diagnostics-recent-jobs-title">Recent Jobs</h2>
