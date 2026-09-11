@@ -221,99 +221,17 @@ class SetupStateResult:
         return asdict(self)
 
 
-def initialize_library(
-    root: Path | str,
-    provider: RuntimeRecipeProvider | None = None,
-) -> LibraryInitResult:
-    return asset_catalog.initialize_library(root, provider)
-
-
-def import_folder(
-    library_root: Path | str,
-    source_folder: Path | str,
-    wait_for_permission: Callable[[], None] | None = None,
-    provider: RuntimeRecipeProvider | None = None,
-) -> ImportFolderResult:
-    """Import supported files, optionally waiting at each file boundary.
-
-    ``wait_for_permission`` is deliberately checked before a file is read or
-    copied.  This lets a UI pause a long import without leaving a partly
-    committed asset: a file already being processed finishes atomically, and
-    the next file waits.
-    """
-    return asset_catalog.import_folder(
-        library_root,
-        source_folder,
-        wait_for_permission=wait_for_permission,
-        provider=provider,
-    )
-
-
-def import_sources(
-    library_root: Path | str,
-    sources: Sequence[Path | str],
-    wait_for_permission: Callable[[], None] | None = None,
-    provider: RuntimeRecipeProvider | None = None,
-    progress_callback: Callable[[ImportProgress], None] | None = None,
-) -> ImportBatchResult:
-    """Import files and directories through the multi-source batch seam."""
-    return asset_catalog.import_sources(
-        library_root,
-        sources,
-        wait_for_permission=wait_for_permission,
-        provider=provider,
-        progress_callback=progress_callback,
-    )
-
-
-def remove_source_record(
-    library_root: Path | str,
-    asset_id: str,
-    source_path: str,
-) -> AssetMutationResult:
-    return asset_catalog.remove_source_record(library_root, asset_id, source_path)
-
-
-def delete_asset(
-    library_root: Path | str,
-    asset_id: str,
-) -> AssetMutationResult:
-    return asset_catalog.delete_asset(library_root, asset_id)
-
-
-def delete_assets(library_root: Path | str, asset_ids: list[str]) -> BatchAssetActionResult:
-    return asset_catalog.delete_assets(library_root, asset_ids)
-
-
-def rebuild_active_indexes(library_root: Path | str, asset_ids: list[str]) -> BatchAssetActionResult:
-    return asset_catalog.rebuild_active_indexes(library_root, asset_ids)
-
-
-def retry_failed_jobs(library_root: Path | str) -> RetryJobsResult:
-    return asset_catalog.retry_failed_jobs(library_root)
-
-
-def delete_pending_jobs(library_root: Path | str, job_ids: list[str]) -> DeletePendingJobsResult:
-    """Delete only queue records that have not been claimed by a worker.
-
-    Assets and generated library files are intentionally untouched.  A Job
-    that becomes running after the user selected it is reported as skipped.
-    """
-    return asset_catalog.delete_pending_jobs(library_root, job_ids)
-
-
-def accept_duplicate_pair(
-    library_root: Path | str,
-    asset_a_id: object,
-    asset_b_id: object,
-) -> AcceptDuplicatePairResult:
-    """Persist a Keep Both decision as an Accepted Duplicate Pair."""
-    return asset_catalog.accept_duplicate_pair(library_root, asset_a_id, asset_b_id)
-
-
-def clear_accepted_pairs(library_root: Path | str) -> ClearAcceptedPairsResult:
-    """Clear all Accepted Duplicate Pairs without deleting Assets."""
-    return asset_catalog.clear_accepted_pairs(library_root)
+initialize_library = asset_catalog.initialize_library
+import_folder = asset_catalog.import_folder
+import_sources = asset_catalog.import_sources
+remove_source_record = asset_catalog.remove_source_record
+delete_asset = asset_catalog.delete_asset
+delete_assets = asset_catalog.delete_assets
+rebuild_active_indexes = asset_catalog.rebuild_active_indexes
+retry_failed_jobs = asset_catalog.retry_failed_jobs
+delete_pending_jobs = asset_catalog.delete_pending_jobs
+accept_duplicate_pair = asset_catalog.accept_duplicate_pair
+clear_accepted_pairs = asset_catalog.clear_accepted_pairs
 
 
 def list_assets(library_root: Path | str) -> AssetListResult:
