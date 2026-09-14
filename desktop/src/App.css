@@ -1,30 +1,17 @@
-/* Theme tokens and visual polish (ticket 18).
- *
- * Canonical tokens are `--color-*`. Legacy `--canvas/--surface/...` names are
- * kept as aliases only so older surfaces keep resolving to the same palette;
- * no second palette is introduced. All redesigned surfaces use `--color-*`.
- *
- * Color contract:
- * - Dark: bg #0f1115, surface #171a21, raised #1e232d, text #f4f6f8,
- *   muted #9aa4b2, border #2c3340, accent #7c8cff, pending #e0a43b,
- *   failed #e25f5f.
- * - Light: bg #f5f6f8, surface #ffffff, raised #ffffff, text #171a21,
- *   muted #687384, border #d9dee7, accent #5265d8, pending #9a6500,
- *   failed #bf3e45.
- * Geometry/type/motion follow the ticket 18 token table. Spacing uses only
- * 4/8/12/16/24/32px. No gradients, glass, page/waterfall/bulk/bounce or
- * decorative motion.
+/* Shared desktop palette. Native controls, restrained surfaces, and immediate
+ * feedback keep the library content in focus. Legacy aliases share these tokens.
  */
 
 :root,
 :root[data-theme="dark"] {
-  --color-bg: #0f1115;
-  --color-surface: #171a21;
-  --color-surface-raised: #1e232d;
+  --color-bg: #141518;
+  color-scheme: dark;
+  --color-surface: #1c1d21;
+  --color-surface-raised: #282a30;
   --color-text: #f4f6f8;
   --color-text-muted: #9aa4b2;
-  --color-border: #2c3340;
-  --color-accent: #02b6ff;
+  --color-border: #35373e;
+  --color-accent: #78b7ff;
   --color-pending: #e0a43b;
   --color-failed: #e25f5f;
   --color-on-accent: #0c0e12;
@@ -45,19 +32,21 @@
   --danger: var(--color-failed);
   color: var(--color-text);
   background: var(--color-bg);
-  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-optical-sizing: auto;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 :root[data-theme="light"] {
-  --color-bg: #f5f6f8;
+  --color-bg: #f5f5f7;
+  color-scheme: light;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-text: #171a21;
+  --color-text: #1d1d1f;
   --color-text-muted: #687384;
   --color-border: #d9dee7;
-  --color-accent: #5265d8;
+  --color-accent: #0066cc;
   --color-pending: #9a6500;
   --color-failed: #bf3e45;
   --color-on-accent: #ffffff;
@@ -85,9 +74,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -97,7 +86,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
-.app-shell { display: grid; height: 100vh; min-height: 0; overflow: hidden; grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); }
+.app-shell { display: grid; height: 100vh; min-height: 0; overflow: hidden; grid-template-columns: 13rem minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); }
 .titlebar { grid-column: 1 / -1; display: flex; min-width: 0; min-height: 40px; align-items: stretch; justify-content: space-between; border-bottom: 1px solid var(--color-border); background: var(--color-surface); user-select: none; }
 .titlebar-drag-region { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 0 12px; cursor: default; }
 .titlebar-brand-mark { display: block; width: 22px; height: 22px; flex: 0 0 auto; object-fit: contain; }
@@ -114,15 +103,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brand { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--color-text); font-size: 16px; font-weight: 600; line-height: 1.35; text-decoration: none; }
 .brand-mark { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); font-size: 14px; font-weight: 600; }
 .sidebar nav { display: grid; gap: 4px; }
-.nav-link { padding: 8px 12px; border-radius: 6px; color: var(--color-text-muted); font-size: 14px; font-weight: 500; line-height: 1.35; text-decoration: none; transition: background-color 120ms ease-out, color 120ms ease-out; }
+.nav-link { display: flex; align-items: center; min-height: 40px; padding: 8px 12px; border-radius: 10px; color: var(--color-text-muted); font-size: 14px; font-weight: 500; line-height: 1.35; text-decoration: none; transition: background-color 120ms ease-out, color 120ms ease-out; }
 .nav-link:hover { background: var(--color-surface-raised); color: var(--color-text); }
-.nav-link-active { background: var(--color-surface-raised); color: var(--color-text); box-shadow: inset 3px 0 var(--color-accent); }
+.nav-link-active { background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)); color: var(--color-accent); font-weight: 600; }
 .sidebar-footer { display: grid; gap: 8px; margin-top: auto; }
 .sidebar-footer nav { display: grid; gap: 4px; }
 .sidebar-theme { display: grid; gap: 4px; color: var(--color-text-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
 .sidebar-theme select { min-height: 32px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); }
 .text-button { padding: 8px; border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer; text-align: left; font-size: 14px; font-weight: 500; transition: color 120ms ease-out, opacity 120ms ease-out; }
-.text-button:active { transform: scale(0.98); transition: transform 80ms ease-out; }
+.text-button:active:not(:disabled) { transform: scale(0.98); transition: transform 80ms ease-out; }
 .library-shell { display: grid; flex: 1 1 auto; gap: 16px; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .library-toolbar { display: grid; gap: 12px; min-width: 0; }
 .library-toolbar .metric-grid { margin-bottom: 0; }
@@ -144,9 +133,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Ticket 11: single Library search bar with instant local filtering and
    explicit semantic submit. No page/layout animation; short feedback only. */
 .library-search-bar { display: grid; gap: 8px; min-width: 0; }
+.library-search-bar form { display: grid; gap: 8px; }
 .library-search-bar label { color: var(--color-text-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
 .library-search-row { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.library-search-row input { min-width: 0; flex: 1 1 220px; min-height: 32px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
+.library-search-row input { min-width: 0; flex: 1 1 220px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
 .library-search-bar p[role="note"] { margin: 0; font-size: 12px; }
 .library-body { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: stretch; }
 .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
@@ -238,9 +228,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .route-content > .page { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .page-library { display: flex; width: 100%; max-width: none; min-height: 0; flex-direction: column; overflow: hidden !important; padding-bottom: 0; }
 .page-heading { margin-bottom: 24px; }
-.eyebrow { margin: 0 0 8px; color: var(--color-accent); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.eyebrow { margin: 0 0 8px; color: var(--color-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 h1, h2, p { margin-top: 0; }
-h1 { margin-bottom: 8px; font-size: 20px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+h1 { margin-bottom: 8px; font-size: 2rem; font-weight: 650; line-height: 1.15; letter-spacing: -0.035em; }
 h2 { margin-bottom: 8px; font-size: 16px; font-weight: 600; line-height: 1.35; }
 p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 
@@ -288,11 +278,11 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 /* One primary action per local context: `.button` is the single accent
    primary; `.button-secondary` is neutral; `.button-danger` appears only in
    overflow/confirmation UI (inspector overflow, delete confirms). */
-.button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 4px 12px; border: 1px solid var(--color-accent); border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); cursor: pointer; font-size: 14px; font-weight: 500; line-height: 1.35; text-decoration: none; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out, opacity 120ms ease-out; }
-.button:hover { opacity: 0.92; }
-.button:active { transform: scale(0.98); transition: transform 80ms ease-out; }
+.button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 6px 14px; border: 1px solid var(--color-accent); border-radius: 8px; background: var(--color-accent); color: var(--color-on-accent); cursor: pointer; font-size: 14px; font-weight: 500; line-height: 1.35; text-decoration: none; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out, opacity 120ms ease-out; }
+.button:hover:not(:disabled) { opacity: 0.92; }
+.button:active:not(:disabled) { transform: scale(0.98); transition: transform 80ms ease-out; }
 .button-secondary { border-color: var(--color-border); background: transparent; color: var(--color-text); }
-.button-secondary:hover { border-color: var(--color-accent); color: var(--color-text); opacity: 1; }
+.button-secondary:hover:not(:disabled) { background: var(--color-surface-raised); border-color: var(--color-border); color: var(--color-text); opacity: 1; }
 .button-danger { border-color: var(--color-failed); background: var(--color-failed); color: var(--color-on-accent); }
 .button-danger:hover { opacity: 0.92; }
 .button:disabled, .text-button:disabled { cursor: not-allowed; opacity: 0.56; }
@@ -333,7 +323,8 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 .import-drop-card-hint { color: var(--color-text-muted); font-size: 14px; }
 .import-drop-card-accepting { border-color: var(--color-accent); }
 .asset-card { position: relative; display: grid; min-width: 0; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-surface); transition: border-color 120ms ease-out, background-color 120ms ease-out; }
-.asset-card:hover { border-color: var(--color-accent); }
+.asset-card:hover { border-color: var(--color-text-muted); }
+.asset-card:focus-within { border-color: var(--color-accent); }
 .asset-card-open { display: block; width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .asset-card-open:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 /* Ticket 09: the wrapper always reserves the aspect ratio via an inline style
@@ -399,12 +390,43 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
   .library-inspector { position: absolute; z-index: 10; top: 0; right: 0; bottom: 0; width: min(360px, 100%); padding: 16px; border: 1px solid var(--color-border); border-radius: 10px 0 0 10px; background: var(--color-surface); box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
 }
 
+/* Summaries support browsing without competing with the search field. */
+.library-toolbar .metric-grid { gap: 0; padding: 12px 0; border-block: 1px solid var(--color-border); }
+.library-toolbar .metric { gap: 4px; padding: 0 16px; border: 0; border-radius: 0; background: transparent; }
+.library-toolbar .metric:first-child { padding-left: 0; }
+.library-toolbar .metric + .metric { border-left: 1px solid var(--color-border); }
+.library-toolbar .metric dd { font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.library-control select, .sidebar-theme select { min-height: 36px; border-radius: 8px; }
+.library-content { padding-bottom: 24px; }
+.library-import-dropdown { transform-origin: top left; }
+.library-import-dropdown, .asset-context-menu {
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+.nav-link:active, .asset-context-menu-item:active { background: var(--color-surface-raised); }
+input::placeholder { color: var(--color-text-muted); opacity: 1; }
+
+@media (hover: none) {
+  .asset-card-hover { position: static; opacity: 1; pointer-events: auto; }
+  .button, .text-button, .library-control select, .sidebar-theme select { min-height: 44px; }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .library-import-dropdown, .asset-context-menu { background: var(--color-surface); backdrop-filter: none; }
+}
+
+@media (prefers-contrast: more) {
+  :root, :root[data-theme] { --color-text-muted: var(--color-text); --color-border: var(--color-text); }
+  .nav-link-active { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 @media (max-width: 760px) {
-  .app-shell { display: block; }
+  .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 40px auto minmax(0, 1fr); }
+  .workspace { grid-column: 1; grid-row: 3; }
   .titlebar { position: sticky; z-index: 3; top: 0; }
   .sidebar { position: sticky; z-index: 2; top: 40px; display: flex; flex-direction: row; align-items: center; gap: 8px; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); overflow-x: auto; overflow-y: visible; }
   .sidebar nav { display: flex; gap: 4px; }
@@ -415,7 +437,7 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
   .brand { padding: 0; }
   .brand > span:last-child, .sidebar-footer .text-button { display: none; }
   .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr); }
-  .library-inspector { border-left: 0; border-top: 1px solid var(--color-border); padding-left: 0; padding-top: 16px; }
+  .library-inspector { padding: 16px; }
   .library-inspector > .inspector { animation: none; }
   .topbar { min-height: 48px; padding: 0 16px; }
   .topbar-detail { display: none; }
@@ -424,4 +446,15 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
   .page-library { padding-bottom: 0; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .asset-toolbar { align-items: start; flex-direction: column; }
+  .library-toolbar .metric-grid { row-gap: 12px; }
+  .library-toolbar .metric:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .library-controls { gap: 8px; }
+  .library-control { flex: 1 1 40%; }
+  .topbar { flex-wrap: wrap; padding-block: 8px; }
+}
+
+@media (max-height: 700px), (max-width: 760px) {
+  .page-library { overflow-y: auto !important; }
+  .library-shell { flex: 1 0 auto; }
+  .library-body { min-height: 240px; }
 }
