@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+export type LibrarySearchMode = "meaning" | "filename";
+
 interface LibrarySearchBarProps {
   query: string;
   isSearching: boolean;
@@ -8,6 +10,7 @@ interface LibrarySearchBarProps {
   onQueryChange: (query: string) => void;
   onSubmit: (query: string) => void;
   onClear: () => void;
+  onModeChange?: (mode: LibrarySearchMode, draft: string) => void;
   /** Attachment action beside the search bar: `chooseSearchImage` then `searchImage(requestId)` (ticket 12). */
   onImageSearch?: () => void;
 }
@@ -15,8 +18,10 @@ interface LibrarySearchBarProps {
 /**
  * Single Library search bar (ticket 11) with image attachment (ticket 12).
  *
- * - Typing updates `q` only (instant local filtering); it never calls
- *   `searchText` directly.
+ * - By filename, typing updates `q` for instant local filtering; By meaning
+ *   keeps typing in a draft and never calls `searchText` directly.
+ * - Switching modes preserves the draft while the parent owns committed
+ *   query/result transitions.
  * - IME composition stays in a local draft and commits only when composition
  *   ends, so URL-backed rerenders cannot disturb Pinyin input.
  * - Enter or the explicit Search button starts one UUID-scoped semantic
@@ -33,27 +38,46 @@ export function LibrarySearchBar({
   onQueryChange,
   onSubmit,
   onClear,
+  onModeChange,
   onImageSearch,
 }: LibrarySearchBarProps) {
   const [draft, setDraft] = useState(query);
+  const [mode, setMode] = useState<LibrarySearchMode>(() =>
+    query === "" ? "meaning" : "filename",
+  );
   const [isComposing, setIsComposing] = useState(false);
   const isComposingRef = useRef(false);
   const lastCommittedRef = useRef(query);
+  const preserveDraftRef = useRef(false);
+  const preserveModeRef = useRef(false);
+  const preserveModeQueryRef = useRef<string | null>(null);
 
   useEffect(() => {
     lastCommittedRef.current = query;
-    if (!isComposingRef.current) setDraft(query);
+    const preserveDraft = preserveDraftRef.current;
+    const preserveMode = preserveModeRef.current && preserveModeQueryRef.current === query;
+    preserveDraftRef.current = false;
+    preserveModeRef.current = false;
+    preserveModeQueryRef.current = null;
+    if (!isComposingRef.current && !preserveDraft) setDraft(query);
+    if (!preserveMode) setMode(query === "" ? "meaning" : "filename");
   }, [query]);
+
+  const preserveModeForQuery = (nextQuery: string) => {
+    preserveModeRef.current = true;
+    preserveModeQueryRef.current = nextQuery;
+  };
 
   const commitQuery = (next: string) => {
     lastCommittedRef.current = next;
     setDraft(next);
+    if (mode === "filename") preserveModeForQuery(next);
     onQueryChange(next);
   };
 
   const handleChange = (next: string, nativeIsComposing: boolean) => {
     setDraft(next);
-    if (isComposingRef.current || nativeIsComposing) return;
+    if (mode !== "filename" || isComposingRef.current || nativeIsComposing) return;
     if (next === lastCommittedRef.current) return;
     commitQuery(next);
   };
@@ -61,7 +85,7 @@ export function LibrarySearchBar({
   const handleCompositionEnd = (next: string) => {
     isComposingRef.current = false;
     setIsComposing(false);
-    if (next === lastCommittedRef.current) {
+    if (mode !== "filename" || next === lastCommittedRef.current) {
       setDraft(next);
       return;
     }
@@ -73,7 +97,18 @@ export function LibrarySearchBar({
     setIsComposing(false);
     lastCommittedRef.current = "";
     setDraft("");
+    if (mode === "filename") preserveModeForQuery("");
     onClear();
+  };
+
+  const handleModeChange = (nextMode: LibrarySearchMode) => {
+    setMode(nextMode);
+    const queryWillChange = nextMode === "filename" ? query !== draft : query !== "";
+    if (queryWillChange) {
+      preserveDraftRef.current = true;
+      preserveModeForQuery(nextMode === "filename" ? draft : "");
+    }
+    onModeChange?.(nextMode, draft);
   };
 
   const trimmed = draft.trim();
@@ -82,7 +117,8 @@ export function LibrarySearchBar({
   // Only empty queries and health-blocked semantic work disable submit.
   // Ticket 12: the image attachment stays available during searching for the
   // same cancel-oldest reason; only health-blocked work disables it.
-  const submitDisabled = trimmed === "" || semanticBlocked || isComposing;
+  const submitDisabled =
+    mode !== "meaning" || trimmed === "" || semanticBlocked || isComposing;
   const imageDisabled = semanticBlocked || isChoosingImage;
 
   return (
@@ -92,7 +128,13 @@ export function LibrarySearchBar({
         aria-label="Library search"
         onSubmit={(event) => {
           event.preventDefault();
-          if (trimmed === "" || semanticBlocked || isComposingRef.current) return;
+          if (
+            mode !== "meaning" ||
+            trimmed === "" ||
+            semanticBlocked ||
+            isComposingRef.current
+          ) return;
+          if (query !== trimmed) preserveModeForQuery(trimmed);
           onSubmit(draft);
         }}
       >
@@ -112,9 +154,24 @@ export function LibrarySearchBar({
               setIsComposing(true);
             }}
             onCompositionEnd={(event) => handleCompositionEnd(event.currentTarget.value)}
-            placeholder="Filter by name or source path, Enter for semantic search"
+            placeholder={
+              mode === "meaning"
+                ? "Describe the reaction to search by meaning"
+                : "Filter by filename or primary source path"
+            }
             autoComplete="off"
           />
+          <select
+            className="library-search-mode"
+            aria-label="Search mode"
+            value={mode}
+            onChange={(event) =>
+              handleModeChange(event.target.value as LibrarySearchMode)
+            }
+          >
+            <option value="meaning">By meaning</option>
+            <option value="filename">By filename</option>
+          </select>
           <button className="button" type="submit" disabled={submitDisabled}>
             {isSearching ? "Searching…" : "Search"}
           </button>
@@ -140,7 +197,9 @@ export function LibrarySearchBar({
       {semanticBlocked ? (
         <p role="note">
           Semantic search is unavailable until the current session passes the Runtime health
-          check. Typing still filters the loaded Library locally.
+          check. {mode === "filename"
+            ? "By filename still filters the loaded Library locally."
+            : "By meaning keeps your draft local without filtering the Library."}
         </p>
       ) : null}
     </div>

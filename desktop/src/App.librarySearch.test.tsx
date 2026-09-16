@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import type { AssetListResult, SearchAsset } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
@@ -214,12 +214,45 @@ function renderApp(route: string | string[], client: ReturnType<typeof makeClien
   return { ...utils, queryClient };
 }
 
+function AppHistoryProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="app-location">{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>App back</button>
+      <button type="button" onClick={() => navigate(1)}>App forward</button>
+    </>
+  );
+}
+
+function renderAppWithHistory(
+  routes: string[],
+  initialIndex: number,
+  client: ReturnType<typeof makeClient>,
+) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const utils = render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={routes} initialIndex={initialIndex}>
+        <App client={client as never} />
+        <AppHistoryProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  return { ...utils, queryClient };
+}
+
 function cardOrder(): string[] {
   const buttons = screen.getAllByRole("button", { name: /^Open / });
   return buttons.map((b) => b.getAttribute("aria-label") ?? "");
 }
 
-async function typeQuery(value: string) {
+async function typeQuery(value: string, mode: "meaning" | "filename" = "meaning") {
+  const modeSelect = await screen.findByLabelText("Search mode");
+  if ((modeSelect as HTMLSelectElement).value !== mode) {
+    fireEvent.change(modeSelect, { target: { value: mode } });
+  }
   const input = await screen.findByLabelText("Search Library");
   fireEvent.change(input, { target: { value } });
   return input;
@@ -236,12 +269,161 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps a fresh meaning draft local while both mode switches preserve it", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    const input = screen.getByLabelText("Search Library");
+    const mode = screen.getByLabelText("Search mode");
+    expect(mode).toHaveValue("meaning");
+
+    fireEvent.change(input, { target: { value: "CAT" } });
+    expect(client.searchText).not.toHaveBeenCalled();
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+
+    fireEvent.change(mode, { target: { value: "filename" } });
+    expect(mode).toHaveValue("filename");
+    expect(input).toHaveValue("CAT");
+    expect(await screen.findByText(/Local matches for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+
+    fireEvent.change(mode, { target: { value: "meaning" } });
+    expect(mode).toHaveValue("meaning");
+    expect(input).toHaveValue("CAT");
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+    expect(client.searchText).not.toHaveBeenCalled();
+  });
+
+  it("keeps filename filtering active after clearing the committed query", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    const input = screen.getByLabelText("Search Library");
+    const mode = screen.getByLabelText("Search mode");
+    fireEvent.change(mode, { target: { value: "filename" } });
+    fireEvent.change(input, { target: { value: "cat" } });
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(input).toHaveValue("");
+    expect(mode).toHaveValue("filename");
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+
+    fireEvent.change(input, { target: { value: "dog" } });
+    expect(mode).toHaveValue("filename");
+    expect(cardOrder()).toEqual(["Open dog-park.png"]);
+    expect(client.searchText).not.toHaveBeenCalled();
+  });
+
+  it("keeps IME input local in the App until filename composition commits", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    const input = screen.getByLabelText("Search Library");
+    fireEvent.change(screen.getByLabelText("Search mode"), { target: { value: "filename" } });
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "do" } });
+    fireEvent.change(input, { target: { value: "dog" } });
+    expect(input).toHaveValue("dog");
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+
+    fireEvent.compositionEnd(input, { data: "dog" });
+    fireEvent.change(input, { target: { value: "dog" } });
+    expect(await screen.findByText(/Local matches for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open dog-park.png"]);
+    expect(client.searchText).not.toHaveBeenCalled();
+  });
+
+  it("cancels pending meaning retrieval when switching to filename mode", async () => {
+    const gate = deferred<{ results: SearchAsset[] } & Record<string, unknown>>();
+    const client = makeClient({
+      searchText: vi.fn(async () => gate.promise as never),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await typeQuery("cat");
+    await submitSearch();
+    const requestId = (client.searchText as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    fireEvent.change(screen.getByLabelText("Search mode"), { target: { value: "filename" } });
+
+    expect(client.cancelSearch).toHaveBeenCalledWith(requestId);
+    expect(await screen.findByText(/Local matches for/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Search mode")).toHaveValue("filename");
+    expect(screen.getByLabelText("Search Library")).toHaveValue("cat");
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+
+    await act(async () => {
+      gate.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
+    });
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+  });
+
+  it("restores App search modes through history without duplicate same-mode entries", async () => {
+    const client = makeClient();
+    renderAppWithHistory(["/", "/?q=dog"], 1, client);
+    await screen.findByRole("button", { name: /dog-park\.png/ });
+
+    const mode = screen.getByLabelText("Search mode");
+    const input = screen.getByLabelText("Search Library");
+    expect(mode).toHaveValue("filename");
+    expect(input).toHaveValue("dog");
+
+    // Re-selecting the active mode must not push a duplicate q entry.
+    fireEvent.change(mode, { target: { value: "filename" } });
+    fireEvent.click(screen.getByRole("button", { name: "App back" }));
+    await waitFor(() => expect(screen.getByTestId("app-location")).toHaveTextContent(/^$/));
+    expect(mode).toHaveValue("meaning");
+    expect(client.searchText).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "App forward" }));
+    await waitFor(() => expect(screen.getByTestId("app-location")).toHaveTextContent("q=dog"));
+    expect(mode).toHaveValue("filename");
+    expect(input).toHaveValue("dog");
+    expect(screen.getByRole("button", { name: /dog-park\.png/ })).toBeInTheDocument();
+
+    fireEvent.change(mode, { target: { value: "meaning" } });
+    await waitFor(() => expect(screen.getByTestId("app-location")).toHaveTextContent(/^$/));
+    expect(input).toHaveValue("dog");
+    expect(mode).toHaveValue("meaning");
+    fireEvent.click(screen.getByRole("button", { name: "App back" }));
+    await waitFor(() => expect(screen.getByTestId("app-location")).toHaveTextContent("q=dog"));
+    expect(mode).toHaveValue("filename");
+    fireEvent.click(screen.getByRole("button", { name: "App forward" }));
+    await waitFor(() => expect(screen.getByTestId("app-location")).toHaveTextContent(/^$/));
+    expect(mode).toHaveValue("meaning");
+    expect(client.searchText).not.toHaveBeenCalled();
+  });
+
   it("typing filters locally without calling searchText (case-insensitive name match)", async () => {
     const client = makeClient();
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
-    await typeQuery("CAT");
+    await typeQuery("CAT", "filename");
     expect(client.searchText).not.toHaveBeenCalled();
     expect(await screen.findByText(/Local matches for/)).toBeInTheDocument();
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
@@ -252,7 +434,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
-    await typeQuery("dog-park");
+    await typeQuery("dog-park", "filename");
     expect(client.searchText).not.toHaveBeenCalled();
     expect(cardOrder()).toEqual(["Open dog-park.png"]);
   });
@@ -262,10 +444,10 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
-    await typeQuery("dog");
+    await typeQuery("dog", "filename");
     expect(cardOrder()).toEqual(["Open dog-park.png"]);
 
-    await typeQuery("bird-photo");
+    await typeQuery("bird-photo", "filename");
     expect(cardOrder()).toEqual(["Open bird-photo.png"]);
 
     expect(screen.getByText(/includes Pending and Failed/i)).toBeInTheDocument();
@@ -278,7 +460,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     // Status and media-type substrings must not match anything.
-    await typeQuery("indexed");
+    await typeQuery("indexed", "filename");
     expect(await screen.findByText(/No local matches for/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Open / })).not.toBeInTheDocument();
     expect(client.searchText).not.toHaveBeenCalled();
@@ -710,10 +892,10 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     ]);
 
     await typeQuery("cat");
-    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
     await submitSearch();
     const activeId = (client.searchText as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(await screen.findByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(client.cancelSearch).toHaveBeenCalledWith(activeId);

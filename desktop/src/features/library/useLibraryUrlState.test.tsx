@@ -22,6 +22,7 @@ function Probe({ storage, initialMode }: { storage?: Storage | null; initialMode
       <button type="button" onClick={() => state.setMedia("gif")}>set-media-gif</button>
       <button type="button" onClick={() => state.setQuery("hello")}>set-query</button>
       <button type="button" onClick={() => state.setQuery("other")}>set-other-query</button>
+      <button type="button" onClick={() => state.clearQuery()}>clear-query</button>
       <button type="button" onClick={() => state.setAssetId("asset-1")}>set-asset</button>
       <button type="button" onClick={() => state.clearAssetId()}>clear-asset</button>
       <button type="button" onClick={() => state.setDensity("compact")}>set-density</button>
@@ -140,6 +141,30 @@ describe("useLibraryUrlState", () => {
       screen.getByRole("button", { name: "set-media-gif" }).click();
     });
     act(() => {
+      screen.getByRole("button", { name: "go-back" }).click();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=cat");
+  });
+
+  it("removes an explicitly empty query parameter when clearing the query", () => {
+    renderProbe("/?q=", storage);
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=");
+    act(() => {
+      screen.getByRole("button", { name: "clear-query" }).click();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("?");
+  });
+
+  it("does not add a history entry when the query parameter is absent", () => {
+    render(
+      <MemoryRouter initialEntries={["/?q=cat", "/?sort=oldest"]} initialIndex={1}>
+        <Probe storage={storage} />
+        <BackProbe />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+    act(() => {
+      screen.getByRole("button", { name: "clear-query" }).click();
       screen.getByRole("button", { name: "go-back" }).click();
     });
     expect(screen.getByTestId("location")).toHaveTextContent("?q=cat");

@@ -9,7 +9,7 @@ import { AssetInspector } from "./features/assets/AssetInspector";
 import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
 import { LibraryControls } from "./features/library/LibraryControls";
 import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
-import { LibrarySearchBar } from "./features/library/LibrarySearchBar";
+import { LibrarySearchBar, type LibrarySearchMode } from "./features/library/LibrarySearchBar";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
 import { useLibrarySearch } from "./features/library/useLibrarySearch";
@@ -78,11 +78,11 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   // `aside` so the waterfall stays mounted with scroll preserved. Clipboard
   // Copy / Copy original file / Delete call ticket 05 client methods with
   // Asset IDs only; Find Similar exposes the ticket 12 action point.
-  // Ticket 11: single Library search bar with instant local filtering
-  // (typing updates `q`) and explicit UUID-scoped semantic submit via
-  // `searchText(query, requestId)`. Cancellation calls
-  // `cancelSearch(previous)` before new work; clear/unmount cancel; only the
-  // latest request identity may commit (best-effort latest-wins).
+  // The Library search bar keeps a By meaning draft transient until explicit
+  // submit, while By filename commits `q` for instant local filtering. Search
+  // requests remain UUID-scoped; cancellation calls `cancelSearch(previous)`
+  // before new work, clear/unmount cancel, and only the latest request identity
+  // may commit (best-effort latest-wins).
   // Ticket 12: image attachment (`chooseSearchImage` then
   // `searchImage(requestId)`) and Find Similar (`findSimilar(assetId)`) reuse
   // the same composed, cancellable waterfall. Image/similar state stays
@@ -131,10 +131,27 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
       if (!trimmed || semanticBlocked) return;
       const requestId = submitSearch(trimmed);
       if (requestId) {
+        setQuery(trimmed);
         setResultMode({ kind: "semantic", query: trimmed, requestId });
       }
     },
-    [submitSearch, setResultMode, semanticBlocked],
+    [submitSearch, setQuery, setResultMode, semanticBlocked],
+  );
+
+  const handleSearchModeChange = useCallback(
+    (mode: LibrarySearchMode, draft: string) => {
+      clearSearch();
+      if (mode === "filename") {
+        setQuery(draft);
+        setResultMode(
+          draft.trim() ? { kind: "local", query: draft } : { kind: "browse" },
+        );
+        return;
+      }
+      clearQuery();
+      setResultMode({ kind: "browse" });
+    },
+    [clearQuery, clearSearch, setQuery, setResultMode],
   );
 
   const handleImageSearch = useCallback(async () => {
@@ -227,6 +244,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               onQueryChange={handleQueryChange}
               onSubmit={handleSemanticSubmit}
               onClear={handleClearSearch}
+              onModeChange={handleSearchModeChange}
               onImageSearch={() => void handleImageSearch()}
             />
             <LibraryControls

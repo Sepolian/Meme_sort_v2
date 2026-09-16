@@ -118,19 +118,21 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
 
   const setQuery = useCallback(
     (query: string) => {
+      if (urlState.q === query) return;
       updateParams((next) => {
         if (query === "") next.delete("q");
         else next.set("q", query);
       });
     },
-    [updateParams],
+    [updateParams, urlState.q],
   );
 
   const clearQuery = useCallback(() => {
+    if (!searchParams.has("q")) return;
     updateParams((next) => {
       next.delete("q");
     });
-  }, [updateParams]);
+  }, [searchParams, updateParams]);
 
   const persistAndReflect = useCallback(
     (key: "sort" | "media" | "status", param: string, value: string, isDefault: boolean) => {
