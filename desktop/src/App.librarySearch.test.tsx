@@ -259,7 +259,8 @@ async function typeQuery(value: string, mode: "meaning" | "filename" = "meaning"
 }
 
 async function submitSearch() {
-  fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+  const searchForm = screen.getByRole("search", { name: "Library search" });
+  fireEvent.click(searchForm.querySelector('button[type="submit"]')!);
 }
 
 describe("Library local filtering and semantic text search (ticket 11)", () => {
@@ -991,7 +992,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
-    expect(screen.getByRole("button", { name: /^Search/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
     expect(client.searchText).not.toHaveBeenCalled();
   });
 });

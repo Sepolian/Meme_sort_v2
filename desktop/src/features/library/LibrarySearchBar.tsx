@@ -180,12 +180,12 @@ export function LibrarySearchBar({
             <button
               className="button button-secondary"
               type="button"
-              aria-label="Image search"
+              aria-label="Search by image"
               title="Choose an image to search with"
               disabled={imageDisabled}
               onClick={onImageSearch}
             >
-              {isChoosingImage ? "Choosing…" : "Image"}
+              {isChoosingImage ? "Choosing…" : "Search by image"}
             </button>
           ) : null}
           {draft !== "" ? (

@@ -72,4 +72,23 @@ describe("LibrarySearchBar", () => {
       "By filename still filters the loaded Library locally.",
     );
   });
+
+  it("exposes the image picker as Search by image", () => {
+    const onImageSearch = vi.fn();
+    render(
+      <LibrarySearchBar
+        query=""
+        isSearching={false}
+        onQueryChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+        onImageSearch={onImageSearch}
+      />,
+    );
+
+    const action = screen.getByRole("button", { name: "Search by image" });
+    expect(action).toHaveTextContent("Search by image");
+    fireEvent.click(action);
+    expect(onImageSearch).toHaveBeenCalledOnce();
+  });
 });

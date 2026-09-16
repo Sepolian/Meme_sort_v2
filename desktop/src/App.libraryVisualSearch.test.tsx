@@ -245,13 +245,12 @@ async function typeQuery(value: string) {
 }
 
 async function submitTextSearch() {
-  // `/^Search/` matches both "Search" and "Searching…" while excluding the
-  // "Image search" attachment (starts with "Image").
-  fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+  const searchForm = screen.getByRole("search", { name: "Library search" });
+  fireEvent.click(searchForm.querySelector('button[type="submit"]')!);
 }
 
 async function clickImageSearch() {
-  fireEvent.click(screen.getByRole("button", { name: "Image search" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search by image" }));
 }
 
 function flush() {
@@ -448,7 +447,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     await typeQuery("first");
-    fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+    await submitTextSearch();
     const firstId = (client.searchText as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
 
     await clickImageSearch();
@@ -491,7 +490,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     await typeQuery("meme");
-    fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+    await submitTextSearch();
     await clickImageSearch();
 
     await act(async () => {
@@ -540,7 +539,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     const imageId = (client.searchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
 
     await typeQuery("meme");
-    fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+    await submitTextSearch();
     // Starting text cancels the waiting image request.
     expect(client.cancelSearch).toHaveBeenCalledWith(imageId);
 
@@ -584,7 +583,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await screen.findByRole("button", { name: /cat-meme\.png/ });
 
     await typeQuery("meme");
-    fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+    await submitTextSearch();
     const textId = (client.searchText as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
 
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
