@@ -354,7 +354,6 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 .asset-card-name { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .asset-card-meta { overflow: hidden; color: var(--color-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .asset-card-quick-actions { display: flex; gap: 8px; }
-.asset-card-quick-view { min-height: 32px; padding: 4px 8px; font-size: 12px; }
 .asset-select { padding: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
 .asset-select input { margin-right: 8px; accent-color: var(--color-accent); }
 .status-pill { display: inline-flex; justify-self: start; padding: 4px 8px; border-radius: 999px; background: var(--color-surface-raised); color: var(--color-text-muted); font-size: 12px; font-weight: 500; }

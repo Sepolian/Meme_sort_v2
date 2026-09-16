@@ -212,14 +212,14 @@ describe("AssetWaterfall layout and lazy media (ticket 09)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open hover-me.png" }));
     expect(onOpenAsset).toHaveBeenCalledWith("hover-me");
 
-    // Hover content carries the visible name, one quick action, and the card
-    // checkbox without touching inspector/selection-ticket scope.
+    // The media button is the single named open target; hover content carries
+    // selection without adding a duplicate inspector action.
     expect(screen.getByText("hover-me.png")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Quick actions for hover-me.png"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "View" }));
-    expect(onOpenAsset).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
+    expect(onOpenAsset).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByLabelText("Select hover-me.png"));
     expect(onToggleChecked).toHaveBeenCalledWith("hover-me");

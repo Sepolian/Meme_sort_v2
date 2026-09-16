@@ -250,13 +250,6 @@ function AssetWaterfallCard({
           className="asset-card-quick-actions"
           aria-label={`Quick actions for ${name}`}
         >
-          <button
-            className="button button-secondary asset-card-quick-view"
-            type="button"
-            onClick={() => onOpen(asset.asset_id)}
-          >
-            View
-          </button>
           {onFindSimilar ? (
             <button
               className="button button-secondary asset-card-quick-similar"

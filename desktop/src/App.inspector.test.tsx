@@ -240,6 +240,11 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     const { container, getLocation } = renderApp("/", client);
 
     await screen.findByText("Pending Asset");
+    const firstCard = container.querySelector<HTMLElement>(
+      `article[data-asset-id="${FIRST_ASSET}"]`,
+    );
+    expect(firstCard).not.toBeNull();
+    expect(within(firstCard as HTMLElement).queryByRole("button", { name: "View" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
 
     const inspector = await screen.findByRole("complementary", { name: "Inspector" });
