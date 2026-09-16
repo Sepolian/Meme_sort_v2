@@ -14,6 +14,8 @@ type IntersectCallback = (
 ) => void;
 
 let intersectCallbacks: IntersectCallback[] = [];
+type ResizeCallback = (entries: Array<{ contentRect: { width: number } }>) => void;
+let resizeCallbacks: ResizeCallback[] = [];
 
 class MockIntersectionObserver {
   constructor(callback: IntersectCallback) {
@@ -23,6 +25,16 @@ class MockIntersectionObserver {
   observe(): void {}
 
   unobserve(): void {}
+
+  disconnect(): void {}
+}
+
+class MockResizeObserver {
+  constructor(callback: ResizeCallback) {
+    resizeCallbacks.push(callback);
+  }
+
+  observe(): void {}
 
   disconnect(): void {}
 }
@@ -362,14 +374,18 @@ describe("AssetWaterfall large-Library stability (ticket 09)", () => {
 describe("AssetWaterfall scroll preservation (ticket 09)", () => {
   beforeEach(() => {
     intersectCallbacks = [];
+    resizeCallbacks = [];
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, "elementFromPoint");
   });
 
-  it("restores the Library scroll position when surrounding state changes in place", () => {
+  it("does not correct scroll on a geometry-neutral hover rerender", () => {
     const assets = [makeGif("gif-scroll"), makeAsset({ asset_id: "still-scroll" })];
     // Scroll preservation reads the parent-owned wall ref, exactly as
     // AssetsWorkspace provides it for native-drag hit-testing.
@@ -395,13 +411,251 @@ describe("AssetWaterfall scroll preservation (ticket 09)", () => {
 
     scroller.scrollTop = 100;
     fireEvent.scroll(scroller);
-    // Simulate DOM churn resetting the container without a route replacement
-    // (route changes unmount the waterfall and intentionally drop the slot).
-    scroller.scrollTop = 0;
 
-    // Any surrounding in-place state change (here: GIF hover) re-renders and
-    // restores the saved position instead of stranding the user at the top.
+    // A GIF source swap preserves reserved geometry; it must not run a
+    // corrective layout pass or move the user's existing scroll position.
     fireEvent.mouseEnter(cardById(container, "gif-scroll"));
     expect(scroller.scrollTop).toBe(100);
+  });
+
+  it("keeps the visible Asset anchored when measured width reflows the waterfall", () => {
+    const assets = [
+      makeAsset({ asset_id: "anchor-one" }),
+      makeAsset({ asset_id: "anchor-two" }),
+      makeAsset({ asset_id: "anchor-three" }),
+    ];
+    let layout: "before" | "after" = "before";
+    const sectionRef: RefObject<HTMLDivElement | null> = { current: null };
+    const { container } = render(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={assets}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    const scroller = container.querySelector(".library-content") as HTMLElement;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    scroller.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
+    const positions = {
+      before: [
+        { top: -260, bottom: -160 },
+        { top: 40, bottom: 140 },
+        { top: 180, bottom: 280 },
+      ],
+      after: [
+        { top: -380, bottom: -280 },
+        { top: 160, bottom: 260 },
+        { top: 300, bottom: 400 },
+      ],
+    };
+    for (const [index, asset] of assets.entries()) {
+      const card = cardById(container, asset.asset_id);
+      card.getBoundingClientRect = () => positions[layout][index] as DOMRect;
+    }
+    const anchorCard = cardById(container, "anchor-two");
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => anchorCard,
+    });
+
+    scroller.scrollTop = 260;
+    fireEvent.scroll(scroller);
+    expect(resizeCallbacks).toHaveLength(1);
+
+    act(() => {
+      layout = "after";
+      // ResizeObserver fires after the browser has applied the new layout.
+      // The callback must use the cached pre-resize anchor rather than
+      // measuring the already-shifted card.
+      resizeCallbacks[0]([{ contentRect: { width: 420 } }]);
+    });
+
+    // The second Asset moved down by 120px during reflow; scroll follows it
+    // instead of leaving the viewport at the old pixel offset.
+    expect(scroller.scrollTop).toBe(380);
+  });
+
+  it("finds a visible card near the bottom of the wall viewport", () => {
+    const assets = [
+      makeAsset({ asset_id: "upper-card" }),
+      makeAsset({ asset_id: "lower-card" }),
+    ];
+    let layout: "before" | "after" = "before";
+    let lowerCard: HTMLElement | null = null;
+    const sectionRef: RefObject<HTMLDivElement | null> = { current: null };
+    const { container } = render(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={assets}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    const scroller = container.querySelector(".library-content") as HTMLElement;
+    lowerCard = cardById(container, "lower-card");
+    scroller.getBoundingClientRect = () =>
+      ({ top: 10, bottom: 210, left: 0, right: 400 } as DOMRect);
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    lowerCard.getBoundingClientRect = () =>
+      (layout === "before"
+        ? { top: 170, bottom: 210 }
+        : { top: 230, bottom: 270 }) as DOMRect;
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: (_x: number, y: number) => (y >= 200 ? lowerCard : null),
+    });
+
+    scroller.scrollTop = 260;
+    fireEvent.scroll(scroller);
+    expect(resizeCallbacks).toHaveLength(1);
+
+    act(() => {
+      layout = "after";
+      resizeCallbacks[0]([{ contentRect: { width: 420 } }]);
+    });
+
+    expect(scroller.scrollTop).toBe(320);
+  });
+
+  it("captures the anchor before density changes mutate card geometry", () => {
+    const assets = [
+      makeAsset({ asset_id: "density-one" }),
+      makeAsset({ asset_id: "density-two" }),
+      makeAsset({ asset_id: "density-three" }),
+    ];
+    const sectionRef: RefObject<HTMLDivElement | null> = { current: null };
+    const { container, rerender } = render(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={assets}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    const scroller = container.querySelector(".library-content") as HTMLElement;
+    const section = container.querySelector(".asset-grid") as HTMLElement;
+    const anchorCard = cardById(container, "density-two");
+    scroller.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
+    anchorCard.getBoundingClientRect = () =>
+      (section.dataset.density === "compact"
+        ? { top: 160, bottom: 260 }
+        : { top: 40, bottom: 140 }) as DOMRect;
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => anchorCard,
+    });
+
+    scroller.scrollTop = 260;
+    fireEvent.scroll(scroller);
+
+    rerender(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={assets}
+          density="compact"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+
+    expect(scroller.scrollTop).toBe(380);
+  });
+
+  it("uses pre-change order for filtering and resets an empty wall", () => {
+    const assets = [
+      makeAsset({ asset_id: "neighbor-one" }),
+      makeAsset({ asset_id: "neighbor-two" }),
+      makeAsset({ asset_id: "removed-anchor" }),
+      makeAsset({ asset_id: "neighbor-four" }),
+      makeAsset({ asset_id: "neighbor-five" }),
+    ];
+    const sectionRef: RefObject<HTMLDivElement | null> = { current: null };
+    const { container, rerender } = render(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={assets}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    const scroller = container.querySelector(".library-content") as HTMLElement;
+    const removedCard = cardById(container, "removed-anchor");
+    const survivingCard = cardById(container, "neighbor-four");
+    scroller.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
+    removedCard.getBoundingClientRect = () => ({ top: 40, bottom: 140 } as DOMRect);
+    survivingCard.getBoundingClientRect = () =>
+      (container.querySelector('[data-asset-id="removed-anchor"]')
+        ? { top: -100, bottom: 0 }
+        : { top: 160, bottom: 260 }) as DOMRect;
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () =>
+        container.querySelector('[data-asset-id="removed-anchor"]') ?? survivingCard,
+    });
+
+    scroller.scrollTop = 260;
+    fireEvent.scroll(scroller);
+
+    rerender(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={[assets[3], assets[2], assets[4], assets[0]]}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    expect(scroller.scrollTop).toBe(260);
+
+    rerender(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={[assets[3], assets[4], assets[0]]}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    expect(scroller.scrollTop).toBe(380);
+
+    rerender(
+      <div className="library-content">
+        <AssetWaterfall
+          assets={[]}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          sectionRef={sectionRef}
+        />
+      </div>,
+    );
+    expect(scroller.scrollTop).toBe(0);
   });
 });

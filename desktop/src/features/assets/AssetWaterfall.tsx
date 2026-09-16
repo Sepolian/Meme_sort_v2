@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useInsertionEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -142,6 +143,7 @@ function LazyAssetMedia({
 
 interface AssetWaterfallCardProps {
   asset: AssetSummary;
+  assetIndex: number;
   columnIndex: number;
   checked: boolean;
   gifActive: boolean;
@@ -171,6 +173,7 @@ interface AssetWaterfallCardProps {
  */
 function AssetWaterfallCard({
   asset,
+  assetIndex,
   columnIndex,
   checked,
   gifActive,
@@ -201,6 +204,7 @@ function AssetWaterfallCard({
     <article
       className="asset-card"
       data-asset-id={asset.asset_id}
+      data-asset-index={assetIndex}
       data-column={columnIndex}
       data-gif={gif ? "true" : "false"}
       data-gif-active={gif && gifActive ? "true" : "false"}
@@ -296,49 +300,208 @@ function AssetWaterfallCard({
   );
 }
 
+type LibraryScrollPosition = {
+  top: number;
+  left: number;
+};
+
+type LibraryScrollAnchor = {
+  assetId: string;
+  index: number;
+  offsetTop: number;
+  order: readonly string[];
+};
+
+function libraryScroller(
+  sectionRef: React.RefObject<HTMLDivElement | null> | undefined,
+): HTMLElement | null {
+  return sectionRef?.current?.closest(".library-content") as HTMLElement | null;
+}
+
+function cardAtPoint(scroller: HTMLElement, x: number, y: number): HTMLElement | null {
+  const element = document.elementFromPoint?.(x, y);
+  const card = element instanceof HTMLElement
+    ? element.closest<HTMLElement>(".asset-card")
+    : null;
+  return card && scroller.contains(card) ? card : null;
+}
+
+function visibleLibraryCard(scroller: HTMLElement): HTMLElement | null {
+  const rect = scroller.getBoundingClientRect();
+  const width = scroller.clientWidth || rect.width;
+  const height = scroller.clientHeight || rect.height;
+  const x = [
+    rect.left + Math.max(1, width / 2),
+    rect.left + Math.max(1, width / 4),
+    rect.right - 1,
+  ];
+  const y = [
+    rect.top + 1,
+    rect.top + Math.min(48, Math.max(1, height / 2)),
+    rect.bottom - 1,
+  ];
+  for (const pointY of y) {
+    for (const pointX of x) {
+      const card = cardAtPoint(scroller, pointX, pointY);
+      if (card) return card;
+    }
+  }
+  // jsdom and older WebViews may not expose elementFromPoint. This fallback
+  // is only for those environments; real scrolling keeps the bounded point path.
+  return typeof document.elementFromPoint === "function"
+    ? null
+    : scroller.querySelector<HTMLElement>(".asset-card");
+}
+
+function assetIndex(card: HTMLElement, fallback: number): number {
+  const index = Number(card.dataset.assetIndex);
+  return Number.isInteger(index) && index >= 0 ? index : fallback;
+}
+
+function captureLibraryScroll(
+  scroller: HTMLElement,
+  assetOrder: readonly string[],
+  savedScrollRef: React.MutableRefObject<LibraryScrollPosition | null>,
+  anchorRef: React.MutableRefObject<LibraryScrollAnchor | null>,
+): void {
+  const saved = { top: scroller.scrollTop, left: scroller.scrollLeft };
+  const previous = savedScrollRef.current;
+  const card = visibleLibraryCard(scroller);
+  const scrollerTop = scroller.getBoundingClientRect().top;
+  if (card) {
+    const rect = card.getBoundingClientRect();
+    anchorRef.current = {
+      assetId: card.dataset.assetId ?? "",
+      index: assetIndex(card, anchorRef.current?.index ?? 0),
+      offsetTop: rect.top - scrollerTop,
+      order: assetOrder,
+    };
+  } else if (anchorRef.current && previous) {
+    // Keep the cached card's viewport offset coherent when a point probe
+    // misses a gap between columns during a scroll.
+    anchorRef.current.offsetTop -= saved.top - previous.top;
+  }
+  savedScrollRef.current = saved;
+}
+
+function restoreLibraryScroll(
+  scroller: HTMLElement,
+  assetOrder: readonly string[],
+  savedScrollRef: React.MutableRefObject<LibraryScrollPosition | null>,
+  anchorRef: React.MutableRefObject<LibraryScrollAnchor | null>,
+): void {
+  const saved = savedScrollRef.current;
+  const anchor = anchorRef.current;
+  if (!saved || !anchor) return;
+
+  const cards = [...scroller.querySelectorAll<HTMLElement>(".asset-card")];
+  if (!cards.length) {
+    scroller.scrollTop = 0;
+    scroller.scrollLeft = 0;
+    savedScrollRef.current = null;
+    anchorRef.current = null;
+    return;
+  }
+
+  const cardsById = new Map(cards.map((card) => [card.dataset.assetId, card]));
+  let target = cardsById.get(anchor.assetId);
+  if (!target) {
+    const anchorPosition = anchor.order.indexOf(anchor.assetId);
+    if (anchorPosition >= 0) {
+      for (let distance = 1; distance < anchor.order.length; distance += 1) {
+        const before = anchor.order[anchorPosition - distance];
+        const after = anchor.order[anchorPosition + distance];
+        target = (before ? cardsById.get(before) : undefined)
+          ?? (after ? cardsById.get(after) : undefined);
+        if (target) break;
+      }
+    }
+  }
+  if (!target) {
+    scroller.scrollTop = 0;
+    scroller.scrollLeft = 0;
+    savedScrollRef.current = null;
+    anchorRef.current = null;
+    return;
+  }
+
+  const scrollerTop = scroller.getBoundingClientRect().top;
+  const offsetTop = target.getBoundingClientRect().top - scrollerTop;
+  const delta = offsetTop - anchor.offsetTop;
+  if (Number.isFinite(delta) && delta !== 0) scroller.scrollTop += delta;
+  scroller.scrollLeft = saved.left;
+  const restoredOffsetTop = target.getBoundingClientRect().top - scrollerTop;
+  anchorRef.current = {
+    assetId: target.dataset.assetId ?? "",
+    index: assetIndex(target, 0),
+    offsetTop: restoredOffsetTop,
+    order: assetOrder,
+  };
+  savedScrollRef.current = {
+    top: scroller.scrollTop,
+    left: scroller.scrollLeft,
+  };
+}
+
 /**
- * Remember the nearest `.library-content` scroll position and restore it when
- * a re-render without a route replacement resets the container (route changes
- * unmount this component, dropping the saved position by design). Combined
- * with stable `asset_id` keys and reserved card geometry, surrounding Library
- * state changes (selection, drag cues, import feedback) keep scroll position.
+ * Cache one visible Asset and restore it only for a pending geometry/list
+ * change. A missing anchor uses the nearest surviving input-order neighbor.
  */
 function usePreserveLibraryScroll(
   sectionRef: React.RefObject<HTMLDivElement | null> | undefined,
-) {
-  const savedScrollRef = useRef<{ top: number; left: number } | null>(null);
+  assets: readonly AssetSummary[],
+  assetOrder: readonly string[],
+  density: LibraryDensity,
+  measuredWidth: number,
+): void {
+  const savedScrollRef = useRef<LibraryScrollPosition | null>(null);
+  const anchorRef = useRef<LibraryScrollAnchor | null>(null);
+  const pendingRestoreRef = useRef(false);
+  const previousAssetsRef = useRef(assets);
+  const previousDensityRef = useRef(density);
+  const previousMeasuredWidthRef = useRef(measuredWidth);
+  const assetOrderRef = useRef(assetOrder);
+  assetOrderRef.current = assetOrder;
+  const captureScroll = useCallback(() => {
+    const scroller = libraryScroller(sectionRef);
+    if (scroller) {
+      captureLibraryScroll(scroller, assetOrderRef.current, savedScrollRef, anchorRef);
+    }
+  }, [sectionRef]);
+
+  useInsertionEffect(() => {
+    const assetsChanged = previousAssetsRef.current !== assets;
+    const densityChanged = previousDensityRef.current !== density;
+    const widthChanged = previousMeasuredWidthRef.current !== measuredWidth;
+    if (assetsChanged || densityChanged || widthChanged) {
+      pendingRestoreRef.current = true;
+    }
+    previousAssetsRef.current = assets;
+    previousDensityRef.current = density;
+    previousMeasuredWidthRef.current = measuredWidth;
+  }, [assets, density, measuredWidth]);
 
   useEffect(() => {
-    const scroller = sectionRef?.current?.closest(
-      ".library-content",
-    ) as HTMLElement | null;
+    const scroller = libraryScroller(sectionRef);
     if (!scroller) return;
-    const onScroll = () => {
-      savedScrollRef.current = {
-        top: scroller.scrollTop,
-        left: scroller.scrollLeft,
-      };
-    };
+    const onScroll = () =>
+      captureLibraryScroll(scroller, assetOrderRef.current, savedScrollRef, anchorRef);
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
   }, [sectionRef]);
 
   useLayoutEffect(() => {
-    const scroller = sectionRef?.current?.closest(
-      ".library-content",
-    ) as HTMLElement | null;
-    const saved = savedScrollRef.current;
-    if (
-      scroller &&
-      saved &&
-      saved.top !== 0 &&
-      scroller.scrollTop === 0 &&
-      scroller.scrollTop !== saved.top
-    ) {
-      scroller.scrollTop = saved.top;
-      scroller.scrollLeft = saved.left;
+    if (!savedScrollRef.current) {
+      captureScroll();
     }
-  });
+  }, [captureScroll]);
+
+  useLayoutEffect(() => {
+    const scroller = libraryScroller(sectionRef);
+    if (!scroller || !pendingRestoreRef.current) return;
+    pendingRestoreRef.current = false;
+    restoreLibraryScroll(scroller, assetOrderRef.current, savedScrollRef, anchorRef);
+  }, [assets, density, measuredWidth, sectionRef]);
 }
 
 export function AssetWaterfall({
@@ -371,12 +534,19 @@ export function AssetWaterfall({
     : null;
 
   const [measuredWidth, setMeasuredWidth] = useState(0);
+  const measuredWidthRef = useRef(0);
+  const assetOrder = useMemo(
+    () => assets.map((asset) => asset.asset_id),
+    [assets],
+  );
+  usePreserveLibraryScroll(sectionRef, assets, assetOrder, density, measuredWidth);
   // Measure synchronously after mount so the first paint already uses the
   // real column count (no 1-column flash). Unmeasurable containers (width 0,
   // jsdom) stay single-column so DOM order preserves input order there.
   useLayoutEffect(() => {
     const element = sectionRef?.current;
-    if (element && element.clientWidth > 0) {
+    if (element && element.clientWidth > 0 && measuredWidthRef.current !== element.clientWidth) {
+      measuredWidthRef.current = element.clientWidth;
       setMeasuredWidth(element.clientWidth);
     }
   }, [sectionRef]);
@@ -385,13 +555,14 @@ export function AssetWaterfall({
     if (!element || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? element.clientWidth;
-      if (width > 0) setMeasuredWidth(width);
+      if (width > 0 && width !== measuredWidthRef.current) {
+        measuredWidthRef.current = width;
+        setMeasuredWidth(width);
+      }
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, [sectionRef]);
-
-  usePreserveLibraryScroll(sectionRef);
 
   const resolvedColumnCount =
     columnCount ??
@@ -405,6 +576,10 @@ export function AssetWaterfall({
         estimateWaterfallItemHeight(item),
       ),
     [assets, resolvedColumnCount],
+  );
+  const assetIndices = useMemo(
+    () => new Map(assetOrder.map((assetId, index) => [assetId, index] as const)),
+    [assetOrder],
   );
 
   return (
@@ -425,6 +600,7 @@ export function AssetWaterfall({
             <AssetWaterfallCard
               key={asset.asset_id}
               asset={asset}
+              assetIndex={assetIndices.get(asset.asset_id) ?? 0}
               columnIndex={columnIndex}
               checked={checkedIds.has(asset.asset_id)}
               gifActive={effectiveActiveGifId === asset.asset_id}
