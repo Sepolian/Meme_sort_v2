@@ -176,11 +176,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .workspace { grid-column: 2; grid-row: 2; display: flex; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; }
 .workspace-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
-.workspace-status { display: grid; min-width: 0; max-height: 50%; overflow-y: auto; flex: 0 1 auto; }
 .route-content { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 32px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
-.topbar[data-visible="false"] { display: none; }
-.runtime-health-preparing { color: var(--color-text-muted); font-size: 14px; font-weight: 500; }
 /* Compact Activity entry for actionable background work. */
 .task-bar { min-width: 0; flex: 0 0 auto; padding: 12px 32px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .task-bar[data-tone="attention"] { border-top-color: var(--color-pending); }
@@ -451,14 +447,12 @@ input::placeholder { color: var(--color-text-muted); opacity: 1; }
   .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr); }
   .library-inspector { padding: 16px; }
   .library-inspector > .inspector { animation: none; }
-  .topbar { min-height: 48px; padding: 0 16px; }
   .task-bar { padding: 12px 16px; }
   .page, .state-panel { padding: 24px 16px; }
   .page-library { padding: 16px 16px 0; }
   .asset-toolbar { align-items: start; flex-direction: column; }
   .library-controls { gap: 8px; }
   .library-control { flex: 1 1 40%; }
-  .topbar { flex-wrap: wrap; padding-block: 8px; }
 }
 
 @media (max-height: 700px), (max-width: 760px) {

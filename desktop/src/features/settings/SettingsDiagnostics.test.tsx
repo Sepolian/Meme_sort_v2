@@ -90,6 +90,10 @@ function diagnosticsAppState(): AppState {
       output_dimension: 2048,
       storage_dtype: "float32",
     },
+    asset_summary: {
+      active_recipe_id: "recipe-1",
+      active_recipe_label: "Vulkan0 recipe",
+    },
     setup_state: { health_check_ok: false },
     library_status: {
       total_assets: 3,
@@ -223,7 +227,7 @@ describe("Settings Runtime and installation (ticket 15)", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the read-only Runtime descriptor, health, Retry, and external setup-script guidance", async () => {
+  it("shows the read-only Runtime descriptor and external setup-script guidance", async () => {
     const client = createClient();
     renderApp("/settings", client);
 
@@ -232,9 +236,11 @@ describe("Settings Runtime and installation (ticket 15)", () => {
     expect(screen.getByText("Qwen3-VL · 2048d · float32")).toBeInTheDocument();
     expect(screen.getByText("llama.cpp / Vulkan0; this descriptor is read-only.")).toBeInTheDocument();
 
-    // Health authorizes indexing in this session; Retry remains available.
-    await screen.findByText("Runtime ready in this app session", { exact: false });
-    expect(screen.getByRole("button", { name: "Retry health check" })).toBeInTheDocument();
+    const recipe = screen.getByRole("region", { name: "Active Index Recipe" });
+    expect(recipe).toHaveTextContent("Active recipe: Vulkan0 recipe");
+    expect(recipe).toHaveTextContent("Recipe ID: recipe-1");
+    expect(recipe).toHaveTextContent("read-only");
+    expect(recipe.querySelector("button, input, select, textarea")).not.toBeInTheDocument();
 
     // External installer guidance names the setup scripts and never offers an in-app installer.
     expect(screen.getByText("setup_windows_llama.ps1", { exact: false })).toBeInTheDocument();

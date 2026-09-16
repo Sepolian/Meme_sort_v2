@@ -7,6 +7,10 @@ export interface AppState {
     output_dimension?: number;
     storage_dtype?: string;
   };
+  asset_summary?: {
+    active_recipe_id: string;
+    active_recipe_label: string;
+  };
   setup_state: {
     health_check_ok: boolean;
     runtime_readiness?: {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, NavLink, Route, Routes, useLocation, useMatch } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, SidecarDisconnected } from "./components/States";
@@ -18,8 +18,7 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { TaskBar } from "./features/tasks/TaskBar";
 import { RuntimeHealthProvider } from "./features/runtime/RuntimeHealthProvider";
-import { useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/useRuntimeHealth";
-import { RuntimeHealthBanner, RuntimeHealthCompactIndicator } from "./features/runtime/RuntimeHealthBanner";
+import { useOptionalRuntimeHealth } from "./features/runtime/useRuntimeHealth";
 import { useTheme } from "./features/theme/ThemeContext";
 import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
@@ -58,7 +57,7 @@ function selectedImageLabel(path: string): string {
 
 function Page({ title, eyebrow, children, className, headingActions, headingMeta }: PageProps) {
   return (
-    <main className={`page${className ? ` ${className}` : ""}`} aria-labelledby="page-title">
+    <main className={`page${className ? ` ${className}` : ""}`} tabIndex={-1} aria-labelledby="page-title">
       <div className={`page-heading${headingActions || headingMeta ? " page-heading-with-actions" : ""}`}>
         <div className="page-heading-copy">
           <p className="eyebrow">{eyebrow}</p>
@@ -454,8 +453,6 @@ function AppShell({ client }: { client: MemeSortClient }) {
     });
   }, []);
   const windowControls = useWindowControls();
-  const settingsMatch = useMatch("/settings");
-  const health = useRuntimeHealth();
   const stateQuery = useQuery({
     queryKey: ["app-state"],
     queryFn: () => client.getAppState(),
@@ -486,17 +483,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
         </div>
       </aside>
       <div className="workspace">
-        <header
-          className="topbar"
-          data-visible={health.status === "checking" ? "true" : "false"}
-          aria-hidden={health.status !== "checking"}
-        >
-          <RuntimeHealthCompactIndicator />
-        </header>
         <div className="workspace-main">
-          <div className="workspace-status">
-            {settingsMatch ? null : <RuntimeHealthBanner />}
-          </div>
           {stateQuery.isPending ? <LoadingState /> : null}
           {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
           {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}

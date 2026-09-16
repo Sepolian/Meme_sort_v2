@@ -224,7 +224,7 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
     : null;
 
   return (
-    <main className="page" aria-labelledby="page-title">
+    <main className="page" tabIndex={-1} aria-labelledby="page-title">
       <div className="page-heading">
         <p className="eyebrow">Library maintenance</p>
         <h1 id="page-title">Duplicate assets</h1>

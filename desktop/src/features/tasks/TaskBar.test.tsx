@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -31,6 +31,14 @@ function failedResult(): RuntimeHealthResult {
 
 let currentImportStatus: ImportTask;
 let currentAppState: AppState;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 function baseAppState(): AppState {
   return {
@@ -196,8 +204,7 @@ describe("Activity entry", () => {
     await screen.findByRole("heading", { name: "Your library" });
     await waitFor(() => expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
 
-    expect(container.querySelector(".workspace")?.firstElementChild).toHaveClass("topbar");
-    expect(container.querySelector(".topbar")).toHaveAttribute("data-visible", "false");
+    expect(container.querySelector(".topbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument();
   });
@@ -207,7 +214,7 @@ describe("Activity entry", () => {
     const { container, queryClient } = renderApp("/", client);
 
     await screen.findByRole("heading", { name: "Your library" });
-    await waitFor(() => expect(container.querySelector(".topbar")).toHaveAttribute("data-visible", "false"));
+    await waitFor(() => expect(container.querySelector(".topbar")).not.toBeInTheDocument());
     const workspaceMain = container.querySelector(".workspace-main");
 
     currentAppState = {
@@ -450,6 +457,22 @@ describe("Activity entry", () => {
     expect(activity).toHaveAttribute("data-tone", "attention");
   });
 
+  it("keeps Runtime recovery visible when collapsed and diagnostics when expanded", async () => {
+    const client = createClient({ runRuntimeHealthCheck: vi.fn(async () => failedResult()) });
+    renderApp("/", client);
+
+    const activity = await screen.findByRole("region", { name: "Activity" });
+    expect(within(activity).getByRole("button", { name: "Retry health check" })).toBeVisible();
+
+    fireEvent.click(within(activity).getByRole("button", { name: "Collapse Activity" }));
+    expect(within(activity).getByRole("button", { name: "Retry health check" })).toBeVisible();
+    expect(activity.querySelector("#activity-details")).toHaveAttribute("hidden");
+
+    fireEvent.click(within(activity).getByRole("button", { name: "Expand Activity" }));
+    expect(within(activity).getByRole("alert", { name: "Runtime health failure" })).toHaveTextContent("Vulkan0 unavailable.");
+    expect(within(activity).getByText("image-embedding-smoke · ok · Image embedding passed.")).toBeInTheDocument();
+  });
+
   it("shows Runtime failure in the task bar while keeping browsing usable and supporting Retry", async () => {
     const runRuntimeHealthCheck = vi.fn(async () => failedResult());
     const client = createClient({ runRuntimeHealthCheck });
@@ -471,5 +494,75 @@ describe("Activity entry", () => {
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument(),
     );
+  });
+
+  it("keeps a keyboard-focused Retry control mounted and restores workspace focus after success", async () => {
+    const retryResult = deferred<RuntimeHealthResult>();
+    const runRuntimeHealthCheck = vi.fn()
+      .mockResolvedValueOnce(failedResult())
+      .mockReturnValueOnce(retryResult.promise);
+    const client = createClient({ runRuntimeHealthCheck });
+    const { container } = renderApp("/", client);
+
+    const activity = await screen.findByRole("region", { name: "Activity" });
+    const retryButton = within(activity).getByRole("button", { name: "Retry health check" });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+
+    const retryingButton = await screen.findByRole("button", { name: "Retrying…" });
+    expect(retryingButton).toBeDisabled();
+    expect(activity).toHaveTextContent("Retrying Runtime health…");
+    expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      retryResult.resolve(healthyResult());
+      await retryResult.promise;
+    });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument());
+    expect(container.querySelector(".library-content")).toHaveFocus();
+  });
+
+  it("restores focus to a failed Retry control and renders one canonical error", async () => {
+    const retryResult = deferred<RuntimeHealthResult>();
+    const runRuntimeHealthCheck = vi.fn()
+      .mockResolvedValueOnce(failedResult())
+      .mockReturnValueOnce(retryResult.promise);
+    const client = createClient({ runRuntimeHealthCheck });
+    renderApp("/", client);
+
+    const activity = await screen.findByRole("region", { name: "Activity" });
+    const retryButton = within(activity).getByRole("button", { name: "Retry health check" });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+    expect(await screen.findByRole("button", { name: "Retrying…" })).toBeDisabled();
+
+    await act(async () => {
+      retryResult.resolve(failedResult());
+      await retryResult.promise;
+    });
+    const failedRetryButton = await screen.findByRole("button", { name: "Retry health check" });
+    await waitFor(() => expect(failedRetryButton).toHaveFocus());
+
+    const failure = screen.getByRole("alert", { name: "Runtime health failure" });
+    expect(within(failure).getAllByText("Vulkan0 unavailable.", { exact: true })).toHaveLength(1);
+    expect(within(activity).getByRole("link", { name: "Open diagnostics" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("restores focus to the Duplicates page after a successful Runtime retry", async () => {
+    const runRuntimeHealthCheck = vi.fn()
+      .mockResolvedValueOnce(failedResult())
+      .mockResolvedValueOnce(healthyResult());
+    const client = createClient({ runRuntimeHealthCheck });
+    renderApp("/duplicates", client);
+
+    await screen.findByRole("heading", { name: "Duplicate assets" });
+    const activity = await screen.findByRole("region", { name: "Activity" });
+    const retryButton = within(activity).getByRole("button", { name: "Retry health check" });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+
+    await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument());
+    expect(screen.getByRole("main")).toHaveFocus();
   });
 });
