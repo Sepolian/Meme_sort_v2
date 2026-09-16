@@ -83,6 +83,7 @@ function LazyAssetMedia({
   alt: string;
 }) {
   const [isNearViewport, setIsNearViewport] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | undefined>();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const reservation = useMemo(
     () => getAssetAspectRatioStyle(asset),
@@ -111,6 +112,8 @@ function LazyAssetMedia({
     return () => observer.disconnect();
   }, []);
 
+  const showMedia = isNearViewport && src !== undefined && failedSrc !== src;
+
   return (
     <div
       ref={hostRef}
@@ -118,13 +121,14 @@ function LazyAssetMedia({
       style={reservation}
       data-asset-id={asset.asset_id}
     >
-      {isNearViewport && src ? (
+      {showMedia ? (
         <img
           className="asset-card-media"
           src={src}
           alt={alt}
           loading="lazy"
           decoding="async"
+          onError={() => setFailedSrc(src)}
         />
       ) : (
         <div

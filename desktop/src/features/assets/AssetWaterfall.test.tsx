@@ -238,6 +238,24 @@ describe("AssetWaterfall layout and lazy media (ticket 09)", () => {
       "http://memesort-media.localhost/media/thumbnails/tall.jpg",
     );
   });
+
+  it("keeps the reserved placeholder when media fails to load", () => {
+    const assets = [makeAsset({ asset_id: "broken", width: 320, height: 180 })];
+    const { container } = renderWaterfall({ assets, columnCount: 1 });
+    intersectAll(true);
+
+    const card = cardById(container, "broken");
+    const wrap = card.querySelector(".asset-card-media-wrap") as HTMLElement;
+    const image = card.querySelector("img.asset-card-media");
+    expect(image).not.toBeNull();
+    expect(wrap.style.aspectRatio).toBe("320 / 180");
+
+    fireEvent.error(image!);
+
+    expect(card.querySelector("img.asset-card-media")).toBeNull();
+    expect(card.querySelector(".asset-card-media-placeholder")).not.toBeNull();
+    expect(wrap.style.aspectRatio).toBe("320 / 180");
+  });
 });
 
 describe("AssetWaterfall singleton GIF hover (ticket 09)", () => {
