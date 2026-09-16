@@ -6,7 +6,7 @@ import type { LibraryResultMode } from "./libraryUrlState";
 
 type SearchTarget =
   | { kind: "text"; query: string }
-  | { kind: "image" }
+  | { kind: "image"; selectionId: string; label: string }
   | { kind: "similar"; assetId: string };
 
 type RetrievalRequest = SearchTarget & { id: string };
@@ -14,7 +14,7 @@ type RetrievalRequest = SearchTarget & { id: string };
 type CurrentSearch =
   | { status: "idle"; request: null; error: null }
   | { status: "loading" | "success"; request: RetrievalRequest; error: null }
-  | { status: "error"; request: RetrievalRequest; error: string };
+  | { status: "error"; request: RetrievalRequest; error: string; retryable: boolean };
 
 interface CommittedResult {
   request: RetrievalRequest;
@@ -51,7 +51,7 @@ function visibleResult(mode: LibraryResultMode, committed: SearchState["committe
     }
     case "image": {
       const result = committed.image;
-      return result && result.request.id === mode.selectionId ? result : null;
+      return result?.request.kind === "image" && result.request.selectionId === mode.selectionId ? result : null;
     }
     case "similar": {
       const result = committed.similar;
@@ -131,9 +131,14 @@ export function useLibrarySearch({ client, resultMode }: {
           const message = tauriErrorDetail(error, request.kind === "similar"
             ? "MemeSort could not find similar Assets."
             : "MemeSort could not complete this Search Request.");
+          const retryable = !(
+            typeof error === "object"
+            && error !== null
+            && (error as { retryable?: unknown }).retryable === false
+          );
           setState((previous) => ({
             ...previous,
-            current: { status: "error", request, error: message },
+            current: { status: "error", request, error: message, retryable },
           }));
         }
       } finally {
@@ -147,15 +152,32 @@ export function useLibrarySearch({ client, resultMode }: {
     const trimmed = query.trim();
     return trimmed ? execute({ kind: "text", query: trimmed }) : null;
   }, [execute]);
-  const submitImageSearch = useCallback(() => execute({ kind: "image" }), [execute]);
+  const submitImageSearch = useCallback((selectionId: string, label: string) => {
+    const trimmedId = selectionId.trim();
+    if (!trimmedId) return null;
+    return execute({ kind: "image", selectionId: trimmedId, label: label.trim() || "selected image" });
+  }, [execute]);
   const submitSimilarSearch = useCallback((assetId: string) => {
     const trimmed = assetId.trim();
     return trimmed ? execute({ kind: "similar", assetId: trimmed }) : null;
   }, [execute]);
+  const retrySearch = useCallback(() => {
+    const current = state.current;
+    if (current.status !== "error" || !current.retryable) return null;
+    switch (current.request.kind) {
+      case "text": return execute({ kind: "text", query: current.request.query });
+      case "image": return execute({
+        kind: "image",
+        selectionId: current.request.selectionId,
+        label: current.request.label,
+      });
+      case "similar": return execute({ kind: "similar", assetId: current.request.assetId });
+    }
+  }, [execute, state]);
 
   const search: LibrarySearchView = {
     current: state.current,
     result: visibleResult(resultMode, state.committed),
   };
-  return { search, submitSearch, submitImageSearch, submitSimilarSearch, clearSearch };
+  return { search, submitSearch, submitImageSearch, submitSimilarSearch, retrySearch, clearSearch };
 }

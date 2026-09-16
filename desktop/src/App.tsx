@@ -50,6 +50,15 @@ const primaryNavigation = [
 
 const settingsNavigation = [{ to: "/settings", label: "Settings" }];
 
+function selectedImageLabel(path: string): string {
+  const segments = path.split(/[\\/]/);
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]?.trim() ?? "";
+    if (segment) return segment;
+  }
+  return "selected image";
+}
+
 function Page({ title, eyebrow, children, className, headingActions, headingMeta }: PageProps) {
   return (
     <main className={`page${className ? ` ${className}` : ""}`} aria-labelledby="page-title">
@@ -111,9 +120,11 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     submitSearch,
     submitImageSearch,
     submitSimilarSearch,
+    retrySearch,
     clearSearch,
   } = useLibrarySearch({ client, resultMode });
   const [isChoosingImage, setIsChoosingImage] = useState(false);
+  const [imageSelection, setImageSelection] = useState<{ id: string; label: string; available: boolean } | null>(null);
   const detailOpenerRef = useRef<HTMLElement | null>(null);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
@@ -161,9 +172,22 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
       const selection = await client.chooseSearchImage();
       // Picker cancel (`selected_path: null`) leaves the current
       // Library/result state unchanged: no submit, no mode change.
-      if (!selection.selected_path) return;
-      const requestId = submitImageSearch();
-      if (requestId) setResultMode({ kind: "image", selectionId: requestId });
+      if (!selection.selected_path) {
+        if (resultMode.kind === "image") {
+          setImageSelection((current) => current ? { ...current, available: false } : current);
+        }
+        return;
+      }
+      const nextSelection = {
+        id: crypto.randomUUID(),
+        label: selectedImageLabel(selection.selected_path),
+        available: true,
+      };
+      const requestId = submitImageSearch(nextSelection.id, nextSelection.label);
+      if (requestId) {
+        setImageSelection(nextSelection);
+        setResultMode({ kind: "image", selectionId: nextSelection.id });
+      }
     } catch {
       // Picker/transport failure also leaves browsing usable without
       // inventing a result mode; the image hook error surfaces only for
@@ -171,7 +195,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     } finally {
       setIsChoosingImage(false);
     }
-  }, [client, submitImageSearch, setResultMode, semanticBlocked, isChoosingImage]);
+  }, [client, resultMode.kind, submitImageSearch, setResultMode, semanticBlocked, isChoosingImage]);
 
   const handleFindSimilar = useCallback(
     (assetId: string) => {
@@ -190,8 +214,16 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   const handleClearSearch = useCallback(() => {
     clearSearch();
     clearQuery();
+    setImageSelection(null);
     setResultMode({ kind: "browse" });
   }, [clearSearch, clearQuery, setResultMode]);
+
+  const currentSearch = search.current;
+  const handleRetrySearch = useCallback(() => {
+    if (semanticBlocked || currentSearch.status !== "error" || !currentSearch.request) return;
+    if (currentSearch.request.kind === "image" && imageSelection?.available !== true) return;
+    retrySearch();
+  }, [currentSearch, imageSelection?.available, retrySearch, semanticBlocked]);
 
   const handleSelectAsset = useCallback(
     (assetId: string) => {
@@ -275,6 +307,10 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             resultMode={resultMode}
             search={search}
             onClearSearch={handleClearSearch}
+            onRetrySearch={semanticBlocked ? undefined : handleRetrySearch}
+            onChooseImage={() => void handleImageSearch()}
+            imageQueryLabel={imageSelection?.label ?? null}
+            imageSelectionAvailable={imageSelection?.available ?? false}
             onFindSimilar={handleFindSimilar}
           />
         }

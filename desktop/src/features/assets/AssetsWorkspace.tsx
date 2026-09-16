@@ -26,6 +26,7 @@ import {
   type LibraryStatusFilter,
 } from "../library/libraryUrlState";
 import {
+  getAssetDisplayName,
   getOrderedLibraryAssets,
 } from "../library/libraryOrdering";
 import { EMPTY_LIBRARY_SEARCH, type LibrarySearchView } from "../library/useLibrarySearch";
@@ -51,6 +52,14 @@ interface AssetsWorkspaceProps {
   search?: LibrarySearchView;
   /** Clear all search modes and restore browsing (cancels active work). */
   onClearSearch?: () => void;
+  /** Retry the current retrieval while preserving its result context. */
+  onRetrySearch?: () => void;
+  /** Re-open the native image picker when the previous image payload is gone. */
+  onChooseImage?: () => void;
+  /** Safe filename for the currently selected visual query. */
+  imageQueryLabel?: string | null;
+  /** Whether the native side still has the selected image payload. */
+  imageSelectionAvailable?: boolean;
   /**
    * Find Similar entry point for ticket 12 (card hover/context action).
    * Shares the same result mode as the inspector entry point.
@@ -94,6 +103,59 @@ function AdvancedDetails({ items }: { items: readonly ComposedSearchItem[] }) {
   );
 }
 
+function assetCount(count: number): string {
+  return `${count} Asset${count === 1 ? "" : "s"}`;
+}
+
+function browseFilterSummary(media: LibraryMediaFilter, status: LibraryStatusFilter): string | null {
+  const filters = [
+    media === "still" ? "Stills" : media === "gif" ? "GIFs" : null,
+    status === "indexed" ? "Indexed" : status === "pending" ? "Pending" : status === "failed" ? "Failed" : null,
+  ].filter((value): value is string => value !== null);
+  return filters.length ? `Filters: ${filters.join(" · ")}` : null;
+}
+
+function BrowseResultContext({
+  total,
+  visible,
+  media,
+  status,
+}: {
+  total: number;
+  visible: number;
+  media: LibraryMediaFilter;
+  status: LibraryStatusFilter;
+}) {
+  const filterSummary = browseFilterSummary(media, status);
+  return (
+    <p className="library-result-context" role="status" aria-label="Browse results">
+      <strong>{filterSummary ? `Showing ${visible} of ${assetCount(total)}` : assetCount(total)}</strong>
+      <span>{filterSummary ?? "Browse mode · all loaded Assets."}</span>
+    </p>
+  );
+}
+
+function ActiveFilterRecovery({
+  media,
+  status,
+  onClearFilters,
+}: {
+  media: LibraryMediaFilter;
+  status: LibraryStatusFilter;
+  onClearFilters?: () => void;
+}) {
+  const summary = browseFilterSummary(media, status);
+  if (!summary || !onClearFilters) return null;
+  return (
+    <>
+      <span>{summary.replace("Filters:", "Active filters:")} may hide matches from this search.</span>
+      <button className="button button-secondary" type="button" onClick={() => onClearFilters()}>
+        Clear filters
+      </button>
+    </>
+  );
+}
+
 export function AssetsWorkspace({
   client,
   selectedAssetId,
@@ -109,6 +171,10 @@ export function AssetsWorkspace({
   resultMode,
   search = EMPTY_LIBRARY_SEARCH,
   onClearSearch,
+  onRetrySearch,
+  onChooseImage,
+  imageQueryLabel,
+  imageSelectionAvailable = false,
   onFindSimilar,
 }: AssetsWorkspaceProps) {
   const queryClient = useQueryClient();
@@ -236,7 +302,26 @@ export function AssetsWorkspace({
   );
   const isSearching = search.current.status === "loading";
   const searchError = search.current.error;
+  const searchRetryable = search.current.status === "error" && search.current.retryable;
   const hasResults = search.result !== null;
+  const visualImageLabel = search.current.request?.kind === "image"
+    ? search.current.request.label
+    : imageQueryLabel ?? "selected image";
+  const similarSource = isSimilarMode ? summaryMap.get(effectiveMode.assetId) : undefined;
+  const visualSimilarLabel = similarSource
+    ? getAssetDisplayName(similarSource)
+    : isSimilarMode
+      ? effectiveMode.assetId
+      : "selected Asset";
+  const focusSearchAfterRetry = () => {
+    window.requestAnimationFrame(() => {
+      document.getElementById("library-search-input")?.focus({ preventScroll: true });
+    });
+  };
+  const retrySearch = () => {
+    onRetrySearch?.();
+    focusSearchAfterRetry();
+  };
   const composedResults = useMemo(
     () => search.result ? composeSearchItems(search.result.assets, summaryMap) : null,
     [search.result, summaryMap],
@@ -261,8 +346,8 @@ export function AssetsWorkspace({
     });
   }, [assetsData]);
 
-  if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
-  if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
+  if (assetsQuery.isPending) return <p role="status" aria-label="Loading Assets">Loading Assets…</p>;
+  if (assetsQuery.isError) return <section className="notice notice-warning" role="alert" aria-label="Could not load Assets"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
 
   const { assets } = assetsQuery.data;
   // Ticket 17: selection lives only in this `useState` (never in URL or
@@ -396,6 +481,9 @@ export function AssetsWorkspace({
     {copyNotice ? <section className={`notice ${copyNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={copyNotice.kind === "error" ? "alert" : "status"}><span>{copyNotice.text}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
     <ImportFailureDetails />
+    {!isLocalMode && !isSemanticMode && !isImageMode && !isSimilarMode && assets.length ? (
+      <BrowseResultContext total={assets.length} visible={orderedAssets.length} media={media} status={status} />
+    ) : null}
     {isLocalMode ? (
       <section className="notice" role="status" aria-label="Local search results">
         <strong>Local matches for &ldquo;{localDisplayQuery}&rdquo; &middot; {localMatches.length} of {orderedAssets.length}</strong>
@@ -417,12 +505,14 @@ export function AssetsWorkspace({
             : `Semantic results for \u201C${semanticModeQuery}\u201D \u00B7 ${searchSummaries.length}`}
         </strong>
         <span>Semantic results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
+        {isSearching && hasResults ? <span>Searching the Active Index Recipe for &ldquo;{semanticModeQuery}&rdquo;&hellip;</span> : null}
         {searchError ? (
           <section className="notice notice-warning" role="alert" aria-label="Semantic search error">
             <strong>Semantic search unavailable</strong>
             <span>{searchError}</span>
             <span>Library browsing remains available. Local matches for this query stay visible below.</span>
+            {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry search</button> : null}
+            {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
           </section>
         ) : null}
         {staleCount ? (
@@ -448,13 +538,18 @@ export function AssetsWorkspace({
             ? `Searching the Active Index Recipe for the chosen image\u2026`
             : `Image results \u00B7 ${searchSummaries.length}`}
         </strong>
+        <span>Query image: &ldquo;{visualImageLabel}&rdquo;</span>
         <span>Image results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching ? <p aria-live="polite">Searching the Active Index Recipe&hellip;</p> : null}
+        {isSearching && hasResults ? <span>Searching the Active Index Recipe for the chosen image&hellip;</span> : null}
         {searchError ? (
           <section className="notice notice-warning" role="alert" aria-label="Image search error">
             <strong>Image search unavailable</strong>
             <span>{searchError}</span>
+            <span>Query image: &ldquo;{visualImageLabel}&rdquo;</span>
             <span>Library browsing remains available. Local matches stay visible below.</span>
+            {searchRetryable && imageSelectionAvailable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry image search</button> : null}
+            {onChooseImage && (!searchRetryable || !imageSelectionAvailable) ? <button className="button button-secondary" type="button" onClick={onChooseImage}>Choose another image</button> : null}
+            {!searchRetryable ? <span>This request cannot be retried. Choose another image or clear search.</span> : null}
           </section>
         ) : null}
         {staleCount ? (
@@ -480,13 +575,17 @@ export function AssetsWorkspace({
             ? `Finding similar Assets\u2026`
             : `Similar results \u00B7 ${searchSummaries.length}`}
         </strong>
+        <span>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</span>
         <span>Similar results in similarity order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching ? <p aria-live="polite">Finding similar Assets in the Active Index Recipe&hellip;</p> : null}
+        {isSearching && hasResults ? <span>Finding similar Assets in the Active Index Recipe&hellip;</span> : null}
         {searchError ? (
           <section className="notice notice-warning" role="alert" aria-label="Similar search error">
             <strong>Find Similar unavailable</strong>
             <span>{searchError}</span>
+            <span>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</span>
             <span>Library browsing remains available. Local matches stay visible below.</span>
+            {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry similar search</button> : null}
+            {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
           </section>
         ) : null}
         {staleCount ? (
@@ -526,6 +625,7 @@ export function AssetsWorkspace({
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         )
@@ -543,6 +643,7 @@ export function AssetsWorkspace({
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         ) : localMatches.length ? (
@@ -560,6 +661,7 @@ export function AssetsWorkspace({
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         )
@@ -570,13 +672,14 @@ export function AssetsWorkspace({
           <div className="empty-state" aria-label="No image matches" ref={wallRef}>
             <h2>No image matches</h2>
             <p>
-              Only Indexed Assets appear in image results. Try another image, or index
+              Query image: &ldquo;{visualImageLabel}&rdquo;. Only Indexed Assets appear in image results. Try another image, or index
               more Assets with the Active Index Recipe.
             </p>
-            <div>
+            <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         ) : localMatches.length ? (
@@ -587,13 +690,14 @@ export function AssetsWorkspace({
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches</h2>
             <p>
-              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Query image: &ldquo;{visualImageLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
               Clearing the search restores browsing with the selected sort and filters.
             </p>
-            <div>
+            <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         )
@@ -604,13 +708,14 @@ export function AssetsWorkspace({
           <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
             <h2>No similar Assets</h2>
             <p>
-              Only Indexed Assets appear in similar results. Index more Assets with
+              Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. Only Indexed Assets appear in similar results. Index more Assets with
               the Active Index Recipe to expand this search.
             </p>
-            <div>
+            <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         ) : localMatches.length ? (
@@ -621,13 +726,14 @@ export function AssetsWorkspace({
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches</h2>
             <p>
-              The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
+              Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
               Clearing the search restores browsing with the selected sort and filters.
             </p>
-            <div>
+            <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
+              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
         )

@@ -146,7 +146,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .library-search-row { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .library-search-row input { min-width: 0; flex: 1 1 220px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
 .library-search-mode { min-width: 132px; min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
-.library-search-bar p[role="note"] { margin: 0; font-size: 12px; }
+.library-search-bar p[role="note"] { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.library-result-context { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 12px; color: var(--color-text-muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.library-result-context strong { color: var(--color-text); font-weight: 600; }
+.notice > * { min-width: 0; overflow-wrap: anywhere; }
 .library-body { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; align-items: stretch; }
 .library-body[data-inspector="open"] { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
 .library-content { min-width: 0; min-height: 0; overflow: auto; }

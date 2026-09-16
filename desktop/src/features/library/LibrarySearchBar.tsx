@@ -112,6 +112,7 @@ export function LibrarySearchBar({
   };
 
   const trimmed = draft.trim();
+  const hasUnsubmittedMeaningDraft = mode === "meaning" && trimmed !== "" && draft !== query;
   // Ticket 11: a new submit must stay available while a previous request is
   // still waiting so it can cancel obsolete work via `cancelSearch(previous)`.
   // Only empty queries and health-blocked semantic work disable submit.
@@ -194,6 +195,13 @@ export function LibrarySearchBar({
           ) : null}
         </div>
       </form>
+      {hasUnsubmittedMeaningDraft ? (
+        <p className="library-search-context" role="note">
+          {query
+            ? <>Showing results for &ldquo;{query}&rdquo;. &ldquo;{draft}&rdquo; is a draft; choose Search to update the Library.</>
+            : <>Showing the current Library results. &ldquo;{draft}&rdquo; is a draft; choose Search to update the Library.</>}
+        </p>
+      ) : null}
       {semanticBlocked ? (
         <p role="note">
           Semantic search is unavailable until the current session passes the Runtime health

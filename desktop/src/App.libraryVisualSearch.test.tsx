@@ -348,6 +348,95 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
   });
 
+  it("identifies the selected image and retries the same visual query", async () => {
+    const client = makeClient({
+      searchImage: vi
+        .fn()
+        .mockRejectedValueOnce({ error: "SidecarError", detail: "image index unavailable", retryable: true })
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          query_path: "C:/Source/query.png",
+          query_media_type: "image/png",
+          top_k: 18,
+          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.88 })],
+        }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    const results = await screen.findByRole("status", { name: "Image search results" });
+    expect(results).toHaveTextContent("Query image: “query.png”");
+    const error = await screen.findByRole("alert", { name: "Image search error" });
+    expect(error).toHaveTextContent("Query image: “query.png”");
+
+    const retry = within(error).getByRole("button", { name: "Retry image search" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByLabelText("Search Library")).toHaveFocus());
+    expect(client.searchImage).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “query.png”");
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+  });
+
+  it("keeps the image query visible and offers re-selection after picker cancellation", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi.fn()
+        .mockResolvedValueOnce({ selected_path: "C:/Source/query.png" })
+        .mockResolvedValueOnce({ selected_path: null })
+        .mockResolvedValueOnce({ selected_path: "C:/Source/replacement.png" }),
+      searchImage: vi
+        .fn()
+        .mockRejectedValueOnce({ error: "SidecarError", detail: "image search failed", retryable: true })
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          query_path: "C:/Source/replacement.png",
+          query_media_type: "image/png",
+          top_k: 18,
+          results: [searchAsset({ asset_id: CAT_ID, score: 0.9 })],
+        }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    const error = await screen.findByRole("alert", { name: "Image search error" });
+    expect(error).toHaveTextContent("Query image: “query.png”");
+
+    await clickImageSearch();
+    await flush();
+    expect(screen.getByRole("alert", { name: "Image search error" })).toHaveTextContent("Query image: “query.png”");
+    expect(screen.queryByRole("button", { name: "Retry image search" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose another image" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose another image" }));
+    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “replacement.png”");
+    expect(client.searchImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not offer retry for a non-retryable visual failure", async () => {
+    const client = makeClient({
+      searchImage: vi.fn(async () => {
+        throw { error: "SidecarError", detail: "image file is invalid", retryable: false };
+      }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    const error = await screen.findByRole("alert", { name: "Image search error" });
+    expect(error).toHaveTextContent("image file is invalid");
+    expect(error).toHaveTextContent("cannot be retried");
+    expect(within(error).queryByRole("button", { name: "Retry image search" })).not.toBeInTheDocument();
+    expect(within(error).getByRole("button", { name: "Choose another image" })).toBeInTheDocument();
+  });
+
   it("starting image search cancels an older cancellable Search Request", async () => {
     const first = deferred<Record<string, unknown>>();
     const second = deferred<Record<string, unknown>>();
@@ -795,7 +884,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
     const pending = screen.getByRole("status", { name: "Similar search results" });
     expect(pending).toHaveTextContent("Similar results · 1");
-    expect(within(pending).getByText(/Finding similar Assets in the Active Index Recipe/)).toBeInTheDocument();
+    expect(pending).toHaveTextContent("Finding similar Assets in the Active Index Recipe…");
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
 
     await act(async () => {
@@ -805,6 +894,36 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(await screen.findByRole("alert", { name: "Similar search error" })).toHaveTextContent("similar index unavailable");
     expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 1");
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+  });
+
+  it("identifies the source Asset and retries a failed Find Similar request", async () => {
+    const client = makeClient({
+      findSimilar: vi
+        .fn()
+        .mockRejectedValueOnce({ error: "SidecarError", detail: "similar index unavailable", retryable: true })
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          asset_id: CAT_ID,
+          top_k: 18,
+          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.93 })],
+        }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    const results = await screen.findByRole("status", { name: "Similar search results" });
+    expect(results).toHaveTextContent("Source Asset: “cat-meme.png”");
+    const error = await screen.findByRole("alert", { name: "Similar search error" });
+    expect(error).toHaveTextContent("Source Asset: “cat-meme.png”");
+
+    fireEvent.click(within(error).getByRole("button", { name: "Retry similar search" }));
+    expect(await screen.findByText("Similar results · 1")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Source Asset: “cat-meme.png”");
+    expect(client.findSimilar).toHaveBeenCalledTimes(2);
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
   });
 
   it("a late similar failure and finally cannot clear a newer image request's loading state", async () => {
@@ -873,7 +992,6 @@ describe("Image search and Find Similar (ticket 12)", () => {
 
     const pending = screen.getByRole("status", { name: "Similar search results" });
     expect(pending).toHaveTextContent("Finding similar Assets…");
-    expect(within(pending).getByText(/Finding similar Assets in the Active Index Recipe/)).toBeInTheDocument();
     expect(screen.queryByRole("alert", { name: "Similar search error" })).not.toBeInTheDocument();
 
     await act(async () => {
@@ -920,8 +1038,8 @@ describe("Image search and Find Similar (ticket 12)", () => {
     currentAssets = {
       ...assets,
       assets: assets.assets
-        .filter((asset) => asset.asset_id !== ZEBRA_ID)
-        .map((asset) => (asset.asset_id === CAT_ID ? { ...asset, status: "pending" } : asset)),
+        .filter((asset) => asset.asset_id !== ZEBRA_ID && asset.asset_id !== CAT_ID)
+        .map((asset) => (asset.asset_id === DOG_ID ? { ...asset, status: "pending" } : asset)),
     };
     await act(async () => {
       await queryClient.invalidateQueries({ queryKey: ["assets"] });
@@ -929,7 +1047,8 @@ describe("Image search and Find Similar (ticket 12)", () => {
 
     expect(await screen.findByLabelText("No similar matches")).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent("Similar results · 0");
-    expect(screen.getByText(/1 similar result.*omitted/i)).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Similar search results" })).toHaveTextContent(`Source Asset: “${CAT_ID}”`);
+    expect(screen.getByText(/2 similar results.*omitted/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /zebra\.png/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
   });

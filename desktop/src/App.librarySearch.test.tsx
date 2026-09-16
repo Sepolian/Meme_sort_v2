@@ -280,6 +280,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
 
     fireEvent.change(input, { target: { value: "CAT" } });
     expect(client.searchText).not.toHaveBeenCalled();
+    expect(screen.getByText(/is a draft; choose Search to update the Library/)).toBeInTheDocument();
     expect(cardOrder()).toEqual([
       "Open cat-meme.png",
       "Open zebra.png",
@@ -479,8 +480,9 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
 
   it("submit starts exactly one UUID-scoped Search Request with in-progress state and keeps the Library on failure", async () => {
     const gate = deferred<{ results: SearchAsset[] } & Record<string, unknown>>();
+    const retryGate = deferred<{ results: SearchAsset[] } & Record<string, unknown>>();
     const client = makeClient({
-      searchText: vi.fn(async () => gate.promise as never),
+      searchText: vi.fn().mockReturnValueOnce(gate.promise).mockReturnValueOnce(retryGate.promise),
     });
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
@@ -497,7 +499,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
 
     // In-progress without discarding local browsing.
     expect(await screen.findByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Searching the Active Index Recipe/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Searching the Active Index Recipe/)).toHaveLength(1);
     expect(screen.getByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
 
     await act(async () => {
@@ -509,6 +511,50 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     // Library remains usable through local matches.
     expect(screen.getByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
     expect(screen.getByText(/Library browsing remains available/)).toBeInTheDocument();
+
+    const retry = screen.getByRole("button", { name: "Retry search" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByLabelText("Search Library")).toHaveFocus());
+    expect(client.searchText).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
+    await act(async () => {
+      retryGate.resolve({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        query: "cat",
+        top_k: 18,
+        results: [searchAsset({ asset_id: CAT_ID, score: 0.9 })],
+      });
+    });
+    expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
+  });
+
+  it("explains active filters and offers clear filters for an empty filename search", async () => {
+    const client = makeClient();
+    renderApp("/?q=cat&media=gif&status=failed", client);
+    expect(await screen.findByRole("heading", { name: /No local matches for/ })).toBeInTheDocument();
+    expect(screen.getByText("Active filters: GIFs · Failed may hide matches from this search.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(await screen.findByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
+  });
+
+  it("keeps active-filter recovery in an empty semantic retrieval fallback", async () => {
+    const client = makeClient({
+      searchText: vi.fn(async () => {
+        throw { error: "SidecarError", detail: "semantic index unavailable", retryable: true };
+      }),
+    });
+    renderApp("/?media=gif&status=failed", client);
+    await typeQuery("cat");
+    await submitSearch();
+
+    expect(await screen.findByRole("heading", { name: /No local matches for/ })).toBeInTheDocument();
+    expect(screen.getByText("Active filters: GIFs · Failed may hide matches from this search.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(await screen.findByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
   });
 
   it("composed semantic results use the shared waterfall in relevance order, exclude non-Indexed, and hide scores except in advanced details", async () => {
@@ -788,7 +834,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await act(async () => {
       first.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
     });
-    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(screen.getByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
 
     await act(async () => {
@@ -815,7 +861,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await submitSearch();
     const calls = (client.searchText as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls[0][1]).not.toBe(calls[1][1]);
-    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(screen.getByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
     expect(cardOrder()).toEqual(["Open zebra.png"]);
 
     await act(async () => {
@@ -850,7 +896,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await act(async () => {
       first.reject(new Error("stale search failure"));
     });
-    expect(screen.getByText("Searching the Active Index Recipe…")).toBeInTheDocument();
+    expect(screen.getByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
     expect(screen.queryByRole("alert", { name: "Semantic search error" })).not.toBeInTheDocument();
 
     const section = screen.getByRole("status", { name: "Semantic search results" });

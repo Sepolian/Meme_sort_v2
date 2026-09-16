@@ -219,6 +219,7 @@ describe("Library sorting, filtering, and density controls", () => {
     expect(screen.getByRole("button", { name: "Stills" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByRole("group", { name: "View options" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Browse results" })).toHaveTextContent("3 Assets");
 
     const viewMenu = openViewMenu();
     expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("newest");
@@ -254,11 +255,14 @@ describe("Library sorting, filtering, and density controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "GIFs" }));
     // Only the GIF remains.
     expect(cardOrder()).toEqual(["Open apple.gif"]);
+    expect(screen.getByRole("status", { name: "Browse results" })).toHaveTextContent("Showing 1 of 3 Assets");
+    expect(screen.getByRole("status", { name: "Browse results" })).toHaveTextContent("Filters: GIFs");
 
     const viewMenu = openViewMenu();
     fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "indexed" } });
     // gif AND indexed matches nothing (the GIF is failed).
     expect(await screen.findByText("No Assets match these filters")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Browse results" })).toHaveTextContent("Showing 0 of 3 Assets");
     expect(screen.queryByRole("button", { name: /^Open / })).not.toBeInTheDocument();
 
     fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "failed" } });
