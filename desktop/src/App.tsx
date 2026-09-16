@@ -17,13 +17,10 @@ import { useLibrarySearch } from "./features/library/useLibrarySearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
-import { useImportBatch } from "./features/import/ImportBatchContext";
 import { TaskBar } from "./features/tasks/TaskBar";
-import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
 import { RuntimeHealthProvider } from "./features/runtime/RuntimeHealthProvider";
 import { useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/useRuntimeHealth";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator } from "./features/runtime/RuntimeHealthBanner";
-import { summarizeTasks } from "./features/tasks/taskVisibility";
 import { useTheme } from "./features/theme/ThemeContext";
 import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
@@ -459,7 +456,6 @@ function AppShell({ client }: { client: MemeSortClient }) {
   }, []);
   const windowControls = useWindowControls();
   const settingsMatch = useMatch("/settings");
-  const importBatch = useImportBatch();
   const health = useRuntimeHealth();
   const stateQuery = useQuery({
     queryKey: ["app-state"],
@@ -467,13 +463,6 @@ function AppShell({ client }: { client: MemeSortClient }) {
     // Polling app-state must not start another automatic health check (ticket 14).
     refetchInterval: 5_000,
   });
-  const taskSummary = summarizeTasks({
-    importTask: importBatch.snapshot,
-    healthStatus: health.status,
-    healthBlocked: health.isBlocked,
-    appState: stateQuery.data ?? null,
-  });
-
   return (
     <div className="app-shell">
       <TitleBar controls={windowControls} />
@@ -500,11 +489,10 @@ function AppShell({ client }: { client: MemeSortClient }) {
       <div className="workspace">
         <header
           className="topbar"
-          data-visible={taskSummary.visible ? "true" : "false"}
-          aria-hidden={!taskSummary.visible}
+          data-visible={health.status === "checking" ? "true" : "false"}
+          aria-hidden={health.status !== "checking"}
         >
           <RuntimeHealthCompactIndicator />
-          <TopBarTaskEntry appState={stateQuery.data ?? null} />
         </header>
         <div className="workspace-main">
           <div className="workspace-status">

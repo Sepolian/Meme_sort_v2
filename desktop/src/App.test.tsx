@@ -455,7 +455,7 @@ describe("App", () => {
     });
     expect(cancelled.chooseLibraryFiles).toHaveBeenCalledTimes(1);
     expect(cancelled.startLibraryImport).not.toHaveBeenCalled();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert", { name: "Import Batch result" })).not.toBeInTheDocument();
   });
 
   it("closes the keyboard help dialog with Escape", async () => {

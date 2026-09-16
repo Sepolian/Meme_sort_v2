@@ -16,13 +16,11 @@ function readMinimized(): boolean {
 }
 
 /**
- * Minimizable bottom task bar for import, indexing, and Runtime health
- * (ticket 15).
+ * Compact Activity entry for import, indexing, and Runtime health.
  *
  * Visible only for active, failed, or otherwise actionable work. Returns null
- * for idle/non-actionable state so it automatically disappears. Minimized
- * state only collapses details; it never keeps an idle bar visible and never
- * hides attention-required work.
+ * for idle/non-actionable state so it automatically disappears. Collapsing
+ * details never hides attention-required work or its recovery route.
  */
 export function TaskBar({ appState }: { appState: AppState | null }) {
   const batch = useImportBatch();
@@ -53,31 +51,45 @@ export function TaskBar({ appState }: { appState: AppState | null }) {
   if (summary.healthLabel) details.push({ label: "Runtime health", text: summary.healthLabel });
 
   return (
-    <section className="task-bar" role="region" aria-label="Background tasks" data-tone={summary.tone ?? "active"}>
+    <section className="task-bar" role="region" aria-label="Activity" data-tone={summary.tone ?? "active"}>
       <div className="task-bar-header">
-        <strong>{summary.compactLabel}</strong>
+        <div className="task-bar-summary">
+          <strong>Activity</strong>
+          <span>{summary.compactLabel}</span>
+        </div>
         <div className="task-bar-actions">
           <button
             className="button button-secondary task-bar-toggle"
             type="button"
+            aria-controls="activity-details"
+            aria-expanded={!minimized}
             onClick={() => setMinimizedPersisted(!minimized)}
           >
-            {minimized ? "Expand tasks" : "Minimize tasks"}
+            {minimized ? "Expand Activity" : "Collapse Activity"}
           </button>
           <Link className="text-button" to="/settings">
             Open diagnostics
           </Link>
         </div>
       </div>
-      {!minimized ? (
-        <ul className="detail-list task-bar-details">
-          {details.map((detail) => (
-            <li key={detail.label}>
-              <strong>{detail.label}</strong>
-              <span>{detail.text}</span>
-            </li>
-          ))}
-        </ul>
+      <ul id="activity-details" className="detail-list task-bar-details" hidden={minimized}>
+        {details.map((detail) => (
+          <li key={detail.label}>
+            <strong>{detail.label}</strong>
+            <span>{detail.text}</span>
+          </li>
+        ))}
+      </ul>
+      {summary.indexingLabel ? (
+        <span
+          className="activity-live-summary"
+          role={summary.indexingAttention ? "alert" : "status"}
+          aria-label="Indexing activity"
+          aria-live={summary.indexingAttention ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
+          {summary.indexingLabel}
+        </span>
       ) : null}
     </section>
   );

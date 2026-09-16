@@ -181,15 +181,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 32px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
 .topbar[data-visible="false"] { display: none; }
 .runtime-health-preparing { color: var(--color-text-muted); font-size: 14px; font-weight: 500; }
-/* Ticket 15: compact top-bar task entry and minimizable bottom task bar. */
-.task-top-entry { max-width: 40ch; overflow: hidden; color: var(--color-text-muted); font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.task-top-entry[data-tone="attention"] { color: var(--color-pending); }
+/* Compact Activity entry for actionable background work. */
 .task-bar { min-width: 0; flex: 0 0 auto; padding: 12px 32px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .task-bar[data-tone="attention"] { border-top-color: var(--color-pending); }
 .task-bar-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.task-bar-header strong { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.task-bar-summary { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.task-bar-summary strong { font-size: 14px; font-weight: 600; }
+.task-bar-summary span { min-width: 0; overflow-wrap: anywhere; color: var(--color-text-muted); font-size: 14px; }
+.task-bar[data-tone="attention"] .task-bar-summary span { color: var(--color-pending); }
 .task-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .task-bar-details { margin-top: 12px; }
+.activity-live-summary { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sidebar,
 .library-content,
 .library-inspector {

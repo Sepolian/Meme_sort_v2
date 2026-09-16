@@ -16,6 +16,7 @@ export interface TaskSummary {
   compactLabel: string | null;
   importLabel: string | null;
   indexingLabel: string | null;
+  indexingAttention: boolean;
   healthLabel: string | null;
 }
 
@@ -45,23 +46,26 @@ function indexingLabelFor(appState: AppState | null): { label: string | null; at
   if (!appState) return { label: null, attention: false };
   const worker = appState.worker_loop;
   const pending = appState.library_status.job_counts.pending ?? appState.pending_jobs.length;
-  if (worker.paused) {
+  const running = appState.library_status.job_counts.running ?? 0;
+  const failedCount = appState.library_status.job_counts.failed ?? 0;
+  const runningLabel = running === 1 ? "1 running job" : `${running} running jobs`;
+  const pendingLabel = pending === 1 ? "1 pending job" : `${pending} pending jobs`;
+  const failedLabel = failedCount === 1 ? "1 failed job needs retry" : `${failedCount} failed jobs need retry`;
+  if (worker.paused && (pending > 0 || running > 0 || failedCount > 0)) {
+    const labels = ["Indexing paused"];
+    if (running > 0) labels.push(runningLabel);
+    if (pending > 0) labels.push(pendingLabel);
+    if (failedCount > 0) labels.push(failedLabel);
     return {
-      label: pending > 0 ? `Indexing paused · ${pending} pending jobs` : "Indexing paused",
+      label: labels.join(" · "),
       attention: true,
     };
   }
-  if (pending > 0) {
-    return { label: pending === 1 ? "Indexing 1 pending job" : `Indexing ${pending} pending jobs`, attention: false };
-  }
-  const failedRecent = (appState.library_status.recent_jobs ?? []).filter((job) => job.status === "failed");
-  if (failedRecent.length > 0) {
-    return {
-      label: failedRecent.length === 1 ? "1 failed job needs retry" : `${failedRecent.length} failed jobs need retry`,
-      attention: true,
-    };
-  }
-  return { label: null, attention: false };
+  const labels: string[] = [];
+  if (running > 0) labels.push(runningLabel);
+  if (pending > 0) labels.push(pendingLabel);
+  if (failedCount > 0) labels.push(failedLabel);
+  return { label: labels.length > 0 ? `Indexing ${labels.join(" · ")}` : null, attention: failedCount > 0 };
 }
 
 function healthLabelFor(status: RuntimeTaskStatus, blocked: boolean): { label: string | null; attention: boolean } {
@@ -90,6 +94,7 @@ export function summarizeTasks(args: {
     compactLabel: visible ? parts.join(" · ") : null,
     importLabel: importPart.label,
     indexingLabel: indexingPart.label,
+    indexingAttention: indexingPart.attention,
     healthLabel: healthPart.label,
   };
 }

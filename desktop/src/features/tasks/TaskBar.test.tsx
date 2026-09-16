@@ -131,7 +131,7 @@ function renderApp(route: string, client: MemeSortClient) {
   return { ...view, queryClient };
 }
 
-describe("task visibility summary (ticket 15)", () => {
+describe("task visibility summary", () => {
   it("hides when idle, healthy, and non-actionable", () => {
     const summary = summarizeTasks({
       importTask: importSnapshot(),
@@ -153,6 +153,20 @@ describe("task visibility summary (ticket 15)", () => {
     expect(summary.visible).toBe(false);
   });
 
+  it("keeps an idle paused worker quiet", () => {
+    const summary = summarizeTasks({
+      importTask: importSnapshot(),
+      healthStatus: "healthy",
+      healthBlocked: false,
+      appState: {
+        ...baseAppState(),
+        worker_loop: { paused: true, running: true },
+      },
+    });
+    expect(summary.visible).toBe(false);
+    expect(summary.compactLabel).toBeNull();
+  });
+
   it("keeps failed import discoverable as attention", () => {
     const summary = summarizeTasks({
       importTask: importSnapshot({ batch_id: "b1", status: "failed", partial_result: importResultSummary() }),
@@ -166,7 +180,7 @@ describe("task visibility summary (ticket 15)", () => {
   });
 });
 
-describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
+describe("Activity entry", () => {
   beforeEach(() => {
     resetRuntimeHealthForTesting();
     window.localStorage.clear();
@@ -185,7 +199,7 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     expect(container.querySelector(".workspace")?.firstElementChild).toHaveClass("topbar");
     expect(container.querySelector(".topbar")).toHaveAttribute("data-visible", "false");
     expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Background tasks" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument();
   });
 
   it("keeps the workspace mounted while task visibility changes", async () => {
@@ -202,12 +216,12 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
       library_status: { total_assets: 3, job_counts: { pending: 2 } },
     };
     await queryClient.invalidateQueries({ queryKey: ["app-state"] });
-    await waitFor(() => expect(screen.getByRole("status", { name: "Background tasks summary" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" })).toBeInTheDocument());
     expect(container.querySelector(".workspace-main")).toBe(workspaceMain);
 
     currentAppState = baseAppState();
     await queryClient.invalidateQueries({ queryKey: ["app-state"] });
-    await waitFor(() => expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument());
     expect(container.querySelector(".workspace-main")).toBe(workspaceMain);
   });
 
@@ -223,15 +237,10 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     const client = createClient();
     renderApp("/", client);
 
-    await waitFor(() =>
-      expect(screen.getByRole("status", { name: "Background tasks summary" }).textContent).toContain(
-        "Importing 4 of 12",
-      ),
-    );
-    const topEntry = screen.getByRole("status", { name: "Background tasks summary" });
-    expect(topEntry.textContent).toContain("Importing 4 of 12");
-    const taskBar = screen.getByRole("region", { name: "Background tasks" });
-    expect(taskBar.textContent).toContain("Importing 4 of 12");
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Importing 4 of 12"));
+    const taskBar = screen.getByRole("region", { name: "Activity" });
+    expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("region", { name: "Activity" })).toHaveLength(1);
     // Expanded details break the same state down without duplicating action controls.
     expect(taskBar.textContent).toContain("Import");
     expect(within(taskBar).queryByRole("button", { name: "Pause Import Batch" })).not.toBeInTheDocument();
@@ -249,19 +258,15 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     const client = createClient();
     renderApp("/", client);
 
-    await waitFor(() =>
-      expect(screen.getByRole("region", { name: "Background tasks" }).textContent).toContain("Importing 2 of 8"),
-    );
-    const taskBar = screen.getByRole("region", { name: "Background tasks" });
-    expect(taskBar.textContent).toContain("Importing 2 of 8");
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Importing 2 of 8"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Minimize tasks" }));
-    expect(screen.getByRole("region", { name: "Background tasks" }).textContent).toContain("Importing 2 of 8");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Activity" }));
+    expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Importing 2 of 8");
     // Details collapse when minimized; the header stays discoverable.
-    expect(screen.queryByText("Runtime health")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Activity" })).queryByRole("list")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand tasks" }));
-    expect(screen.getByRole("region", { name: "Background tasks" }).textContent).toContain("Importing 2 of 8");
+    fireEvent.click(screen.getByRole("button", { name: "Expand Activity" }));
+    expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Importing 2 of 8");
   });
 
   it("keeps failed import visible instead of auto-disappearing", async () => {
@@ -273,14 +278,8 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     const client = createClient();
     renderApp("/", client);
 
-    await waitFor(() =>
-      expect(screen.getByRole("status", { name: "Background tasks summary" }).textContent).toContain(
-        "Import Batch failed",
-      ),
-    );
-    const topEntry = screen.getByRole("status", { name: "Background tasks summary" });
-    expect(topEntry.textContent).toContain("Import Batch failed");
-    expect(screen.getByRole("region", { name: "Background tasks" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Import Batch failed"));
+    expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
   });
 
   it("shows indexing work while the worker is paused", async () => {
@@ -292,18 +291,102 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     const client = createClient();
     const { container } = renderApp("/", client);
 
-    await waitFor(() =>
-      expect(screen.getByRole("status", { name: "Background tasks summary" }).textContent).toContain(
-        "Indexing paused",
-      ),
-    );
-    const topEntry = screen.getByRole("status", { name: "Background tasks summary" });
-    expect(topEntry.textContent).toContain("Indexing paused");
-    const taskBar = screen.getByRole("region", { name: "Background tasks" });
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Indexing paused"));
+    const taskBar = screen.getByRole("region", { name: "Activity" });
     const workspaceMain = container.querySelector(".workspace-main");
 
     expect(taskBar).toBeInTheDocument();
     expect(workspaceMain).toContainElement(taskBar);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Activity" }));
+    expect(screen.getByRole("link", { name: "Open diagnostics" })).toHaveAttribute("href", "/settings");
+    expect(within(taskBar).queryByRole("list")).not.toBeInTheDocument();
+  });
+
+  it("shows active indexing progress in the single Activity entry", async () => {
+    currentAppState = {
+      ...baseAppState(),
+      library_status: { total_assets: 3, job_counts: { pending: 2, running: 1 } },
+    };
+    const client = createClient();
+    renderApp("/", client);
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("1 running job"));
+    const activity = screen.getByRole("region", { name: "Activity" });
+    expect(activity).toHaveAttribute("data-tone", "active");
+    expect(within(activity).getByRole("listitem")).toHaveTextContent("Indexing 1 running job · 2 pending jobs");
+    expect(screen.getAllByRole("status", { name: "Indexing activity" })).toHaveLength(1);
+    expect(screen.getByRole("status", { name: "Indexing activity" })).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("keeps a running job visible when no jobs are pending", async () => {
+    currentAppState = {
+      ...baseAppState(),
+      library_status: { total_assets: 3, job_counts: { pending: 0, running: 1, failed: 0 } },
+    };
+    const client = createClient();
+    renderApp("/", client);
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("1 running job"));
+    expect(screen.getByRole("status", { name: "Indexing activity" })).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("uses the authoritative failed count when recent details are incomplete", async () => {
+    currentAppState = {
+      ...baseAppState(),
+      library_status: {
+        total_assets: 3,
+        job_counts: { pending: 0, failed: 3 },
+        recent_jobs: [{
+          job_id: "job-1",
+          type: "embed_asset",
+          status: "failed",
+          asset_id: "asset-1",
+          recipe_id: "recipe-1",
+          attempt_count: 1,
+          created_at: "2026-08-09T00:00:00Z",
+          updated_at: "2026-08-09T00:00:00Z",
+          error_code: "EmbeddingFailed",
+          error_detail: "Embedding failed.",
+        }],
+      },
+    };
+    const client = createClient();
+    renderApp("/", client);
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("3 failed jobs need retry"));
+    expect(screen.getByRole("alert", { name: "Indexing activity" })).toHaveAttribute("aria-live", "assertive");
+    expect(screen.getByRole("link", { name: "Open diagnostics" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("keeps indexing failures discoverable while pending work remains", async () => {
+    currentAppState = {
+      ...baseAppState(),
+      library_status: {
+        total_assets: 3,
+        job_counts: { pending: 2, running: 1, failed: 1 },
+        recent_jobs: [{
+          job_id: "job-1",
+          type: "embed_asset",
+          status: "failed",
+          asset_id: "asset-1",
+          recipe_id: "recipe-1",
+          attempt_count: 1,
+          created_at: "2026-08-09T00:00:00Z",
+          updated_at: "2026-08-09T00:00:00Z",
+          error_code: "EmbeddingFailed",
+          error_detail: "Embedding failed.",
+        }],
+      },
+    };
+    const client = createClient();
+    renderApp("/", client);
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("2 pending jobs"));
+    const activity = screen.getByRole("region", { name: "Activity" });
+    expect(activity).toHaveTextContent("1 running job");
+    expect(activity).toHaveTextContent("1 failed job needs retry");
+    expect(activity).toHaveAttribute("data-tone", "attention");
   });
 
   it("shows Runtime failure in the task bar while keeping browsing usable and supporting Retry", async () => {
@@ -314,9 +397,9 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     const failure = await screen.findByRole("alert", { name: "Runtime health failure" });
     expect(failure.textContent).toContain("external setup script");
 
-    const topEntry = await screen.findByRole("status", { name: "Background tasks summary" });
-    expect(topEntry.textContent).toContain("Runtime needs attention");
-    expect(await screen.findByRole("region", { name: "Background tasks" })).toBeInTheDocument();
+    const taskBar = await screen.findByRole("region", { name: "Activity" });
+    expect(taskBar.textContent).toContain("Runtime needs attention");
+    expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
 
     // Browsing stays usable while semantic work is blocked.
     expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
@@ -325,7 +408,7 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry health check" }));
     await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(2));
     await waitFor(() =>
-      expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument(),
     );
   });
 });

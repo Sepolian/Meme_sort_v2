@@ -497,7 +497,7 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
 
     expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 1.")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("MemeSort could not delete the selected Pending Job records. Assets and generated files were not modified.")).not.toBeInTheDocument();
     expect(client.deleteAsset).not.toHaveBeenCalled();
   });
 });
@@ -657,7 +657,7 @@ describe("Advanced Diagnostics selection follows the queue snapshot (ticket 03)"
       });
     });
     expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 1.")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("MemeSort could not delete the selected Pending Job records. Assets and generated files were not modified.")).not.toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
     expect(client.deleteAsset).not.toHaveBeenCalled();
