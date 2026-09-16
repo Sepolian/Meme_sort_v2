@@ -627,7 +627,7 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect((screen.getByLabelText("Select second.png") as HTMLInputElement).checked).toBe(true);
 
     // Inspector Clipboard Copy preserves the toolbar checkbox selection.
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to Clipboard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy image" }));
     expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
     expect((screen.getByLabelText("Select second.png") as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText("1 selected")).toBeInTheDocument();

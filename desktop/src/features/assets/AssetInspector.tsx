@@ -457,17 +457,6 @@ function InspectorBody({
             onClose={previewMenu.closeMenu}
           />
         ) : null}
-        <div>
-          <span className={`status-pill status-${asset.status}`}>
-            {statusLabel(asset.status)}
-          </span>
-          <h3>{name}</h3>
-          <p>
-            {dimensionsLabel(asset)} · {asset.media_type} ·{" "}
-            {asset.source_record_count} Source Record
-            {asset.source_record_count === 1 ? "" : "s"}
-          </p>
-        </div>
         <div className="inspector-primary-actions">
           <button
             className="button"
@@ -475,7 +464,7 @@ function InspectorBody({
             disabled={copyPending}
             onClick={onCopy}
           >
-            {copyPending ? "Copying…" : "Copy to Clipboard"}
+            {copyPending ? "Copying…" : "Copy image"}
           </button>
           <button
             className="button button-secondary"
@@ -533,6 +522,17 @@ function InspectorBody({
             <span>{revealState.message}</span>
           </section>
         ) : null}
+        <div>
+          <span className={`status-pill status-${asset.status}`}>
+            {statusLabel(asset.status)}
+          </span>
+          <h3>{name}</h3>
+          <p>
+            {dimensionsLabel(asset)} · {asset.media_type} ·{" "}
+            {asset.source_record_count} Source Record
+            {asset.source_record_count === 1 ? "" : "s"}
+          </p>
+        </div>
       </section>
 
       {/* Secondary area: dimensions/media/import, OCR, Source Records */}

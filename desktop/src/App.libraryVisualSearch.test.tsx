@@ -631,7 +631,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     });
     renderApp(`/?asset=${CAT_ID}`, client);
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
 
     fireEvent.click(screen.getByRole("button", { name: "Find Similar" }));
     expect(client.findSimilar).toHaveBeenCalledTimes(1);

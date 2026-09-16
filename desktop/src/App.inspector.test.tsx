@@ -370,14 +370,28 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     renderApp(`/?asset=${FIRST_ASSET}`, client);
 
     const inspectorAside = await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     expect(
       within(inspectorAside).getByRole("img", { name: "first.gif preview" }),
     ).toHaveAttribute(
       "src",
       "http://memesort-media.localhost/media/originals/first.gif",
     );
-    expect(screen.getByRole("button", { name: "Find Similar" })).toBeInTheDocument();
+    const primary = within(inspectorAside).getByRole("region", { name: "Primary actions" });
+    const preview = within(primary).getByRole("img", { name: "first.gif preview" });
+    const copy = within(primary).getByRole("button", { name: "Copy image" });
+    const similar = within(primary).getByRole("button", { name: "Find Similar" });
+    const metadata = within(primary).getByRole("heading", { name: "first.gif" });
+    const isBefore = (first: Element, second: Element) =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    expect(isBefore(preview, copy)).toBe(true);
+    expect(isBefore(copy, similar)).toBe(true);
+    fireEvent.click(copy);
+    const feedback = await within(primary).findByRole("status");
+    expect(isBefore(similar, feedback)).toBe(true);
+    expect(isBefore(feedback, metadata)).toBe(true);
+    expect(isBefore(similar, metadata)).toBe(true);
     expect(screen.getAllByRole("button", { name: "Reveal in Explorer" }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("region", { name: "Details" })).toHaveTextContent("320 × 180");
     expect(screen.getByRole("region", { name: "OCR" })).toHaveTextContent("reaction text");
@@ -399,7 +413,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
     await screen.findByRole("complementary", { name: "Inspector" });
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to Clipboard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy image" }));
     expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
 
     expect(client.copyAssetToClipboard).toHaveBeenCalledTimes(1);
@@ -418,7 +432,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     renderApp(`/?asset=${FIRST_ASSET}`, client);
 
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     await openInspectorSections();
     fireEvent.click(screen.getByRole("button", { name: "Copy original file" }));
 
@@ -441,7 +455,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
     await screen.findByRole("complementary", { name: "Inspector" });
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to Clipboard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy image" }));
     const alert = await screen.findByRole("alert", { name: "Clipboard Copy failed" });
     expect(alert).toHaveTextContent("Clipboard is busy.");
     expect(alert).not.toHaveTextContent(/rollback/i);
@@ -480,7 +494,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     const appClient = makeClient();
     const appRender = renderApp(`/?asset=${FIRST_ASSET}`, appClient);
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     expect(screen.getByRole("button", { name: "Find Similar" })).toBeInTheDocument();
     appRender.unmount();
   });
@@ -512,7 +526,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     await openInspectorSections();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
@@ -546,7 +560,7 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     renderApp(`/?asset=${FIRST_ASSET}`, client);
 
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal in Explorer" })[0]);
     expect(await screen.findByText("Opened the managed Library Copy in File Explorer.")).toBeInTheDocument();
     expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "managed");
@@ -710,7 +724,7 @@ describe("Source Record removal and deletion cache coordination", () => {
     const { getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
 
     await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy to Clipboard" });
+    await screen.findByRole("button", { name: "Copy image" });
     await openInspectorSections();
     fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
     const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
