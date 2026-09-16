@@ -257,6 +257,18 @@ describe("Settings Runtime and installation (ticket 15)", () => {
     expect(screen.getByText("setup_windows_llama.ps1", { exact: false })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /install runtime/i })).not.toBeInTheDocument();
   });
+
+  it("renders one Runtime failure surface for a trailing-slash Settings route", async () => {
+    const client = createClient();
+    (client.runRuntimeHealthCheck as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...healthyResult(),
+      smoke_test_ok: false,
+      error: "Vulkan0 unavailable.",
+    });
+    renderApp("/settings/", client);
+
+    expect(await screen.findAllByRole("alert", { name: "Runtime health failure" })).toHaveLength(1);
+  });
 });
 
 describe("Settings Advanced Diagnostics parity (ticket 15)", () => {

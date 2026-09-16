@@ -209,8 +209,6 @@ export function AssetsWorkspace({
         : [],
     [assetsData, sort, media, status],
   );
-  const isFiltered = media !== DEFAULT_LIBRARY_MEDIA || status !== DEFAULT_LIBRARY_STATUS;
-
   // Ticket 11: single Library search bar with instant local filtering and
   // explicit semantic submit. Local preserves the ordered input (sort order
   // retained, Pending/Failed included). Semantic composes raw SearchAsset
@@ -266,7 +264,7 @@ export function AssetsWorkspace({
   if (assetsQuery.isPending) return <p aria-live="polite">Loading Assets…</p>;
   if (assetsQuery.isError) return <section className="notice notice-warning" role="alert"><strong>Could not load Assets</strong><span>The Library was not modified. Retry when the sidecar is available.</span><button className="button button-secondary" type="button" onClick={() => void assetsQuery.refetch()}>Retry Assets</button></section>;
 
-  const { assets, active_recipe_label: activeRecipe } = assetsQuery.data;
+  const { assets } = assetsQuery.data;
   // Ticket 17: selection lives only in this `useState` (never in URL or
   // persisted preferences). The waterfall hover checkbox adds/removes IDs via
   // `toggleAsset`; the toolbar below renders only for >=1 selection.
@@ -381,7 +379,7 @@ export function AssetsWorkspace({
   };
 
   return <>
-    <section className="asset-toolbar"><p>{isFiltered ? `${orderedAssets.length} of ${assets.length} Assets` : `${assets.length} Asset${assets.length === 1 ? "" : "s"}`} · Active Index Recipe: {activeRecipe || "Not active"}</p><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span></div></section>
+    <section className="asset-toolbar"><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span></div></section>
     {selectedIds.size > 0 ? (
       <section className="selection-toolbar" role="toolbar" aria-label="Selection toolbar">
         <span>{selectedIds.size} selected</span>

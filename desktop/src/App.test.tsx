@@ -262,11 +262,16 @@ describe("App", () => {
   }
 
   it("shows state returned through the typed Tauri client", async () => {
-    renderApp();
+    const { container } = renderApp();
 
     expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
-    expect(screen.getByText("llama.cpp / Vulkan0")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("Assets")).toBeInTheDocument();
+    expect(container.querySelector(".asset-toolbar")).toHaveTextContent("Drag image files or folders onto the asset wall to import");
+    expect(container.querySelector(".asset-toolbar")).not.toHaveTextContent("3 Assets");
+    expect(container.querySelector(".asset-toolbar")).not.toHaveTextContent("Active Index Recipe");
+    expect(screen.queryByText("Connected to MemeSort")).not.toBeInTheDocument();
+    expect(screen.queryByText("Authenticated desktop session")).not.toBeInTheDocument();
     expect(await screen.findByText("Pending Asset")).toBeInTheDocument();
     expect(screen.getByText("Failed Asset")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "first.gif preview" })).toHaveAttribute(

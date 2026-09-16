@@ -121,13 +121,14 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
 
 function renderApp(route: string, client: MemeSortClient) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[route]}>
         <App client={client} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
 }
 
 describe("task visibility summary (ticket 15)", () => {
@@ -176,13 +177,38 @@ describe("compact top-bar entry and bottom task bar (ticket 15)", () => {
 
   it("hides both surfaces when idle and non-actionable", async () => {
     const client = createClient();
-    renderApp("/", client);
+    const { container } = renderApp("/", client);
 
     await screen.findByRole("heading", { name: "Your library" });
     await waitFor(() => expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
 
+    expect(container.querySelector(".workspace")?.firstElementChild).toHaveClass("topbar");
+    expect(container.querySelector(".topbar")).toHaveAttribute("data-visible", "false");
     expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Background tasks" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the workspace mounted while task visibility changes", async () => {
+    const client = createClient();
+    const { container, queryClient } = renderApp("/", client);
+
+    await screen.findByRole("heading", { name: "Your library" });
+    await waitFor(() => expect(container.querySelector(".topbar")).toHaveAttribute("data-visible", "false"));
+    const workspaceMain = container.querySelector(".workspace-main");
+
+    currentAppState = {
+      ...baseAppState(),
+      worker_loop: { paused: true, running: true },
+      library_status: { total_assets: 3, job_counts: { pending: 2 } },
+    };
+    await queryClient.invalidateQueries({ queryKey: ["app-state"] });
+    await waitFor(() => expect(screen.getByRole("status", { name: "Background tasks summary" })).toBeInTheDocument());
+    expect(container.querySelector(".workspace-main")).toBe(workspaceMain);
+
+    currentAppState = baseAppState();
+    await queryClient.invalidateQueries({ queryKey: ["app-state"] });
+    await waitFor(() => expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument());
+    expect(container.querySelector(".workspace-main")).toBe(workspaceMain);
   });
 
   it("shows agreeing compact and expanded state while importing", async () => {

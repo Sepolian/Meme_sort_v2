@@ -114,8 +114,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .text-button:active:not(:disabled) { transform: scale(0.98); transition: transform 80ms ease-out; }
 .library-shell { display: grid; flex: 1 1 auto; gap: 16px; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .library-toolbar { display: grid; gap: 12px; min-width: 0; }
-.library-toolbar .metric-grid { margin-bottom: 0; }
-.library-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .library-import-menu { position: relative; display: grid; gap: 8px; justify-items: start; min-width: 0; }
 .library-import-dropdown { position: absolute; z-index: 5; top: calc(100% + 8px); left: 0; display: grid; gap: 8px; min-width: 200px; padding: 8px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: var(--shadow-raised); }
 .library-import-option { justify-content: start; width: 100%; min-height: 32px; }
@@ -167,9 +165,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .workspace-status { display: grid; min-width: 0; max-height: 50%; overflow-y: auto; flex: 0 1 auto; }
 .route-content { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 32px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
-.connection { color: var(--color-text-muted); font-size: 14px; font-weight: 500; }
-.connection-online::before { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--color-accent); content: ""; }
-.topbar-detail { color: var(--color-text-muted); font-size: 14px; }
+.topbar[data-visible="false"] { display: none; }
 .runtime-health-preparing { color: var(--color-text-muted); font-size: 14px; font-weight: 500; }
 /* Ticket 15: compact top-bar task entry and minimizable bottom task bar. */
 .task-top-entry { max-width: 40ch; overflow: hidden; color: var(--color-text-muted); font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -226,18 +222,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .page, .state-panel { width: min(1120px, 100%); margin: 0 auto; padding: 32px; }
 .route-content > .page { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.page-library { display: flex; width: 100%; max-width: none; min-height: 0; flex-direction: column; overflow: hidden !important; padding-bottom: 0; }
+.page-library { display: flex; width: 100%; max-width: none; min-height: 0; flex-direction: column; overflow: hidden !important; padding: 20px 32px 0; }
 .page-heading { margin-bottom: 24px; }
+.page-heading-with-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.page-heading-copy { min-width: 0; }
+.page-library .page-heading { margin-bottom: 16px; }
+.page-library .page-heading .eyebrow { margin-bottom: 4px; }
+.page-library .page-heading h1 { margin-bottom: 2px; font-size: 1.5rem; }
+.library-heading-count { color: var(--color-text-muted); font-size: 14px; line-height: 1.35; }
 .eyebrow { margin: 0 0 8px; color: var(--color-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 8px; font-size: 2rem; font-weight: 650; line-height: 1.15; letter-spacing: -0.035em; }
 h2 { margin-bottom: 8px; font-size: 16px; font-weight: 600; line-height: 1.35; }
 p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-.metric { display: grid; gap: 8px; min-width: 0; padding: 16px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
-.metric dt { color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
-.metric dd { overflow-wrap: anywhere; margin: 0; color: var(--color-text); font-size: 16px; font-weight: 600; line-height: 1.35; }
 .surface, .empty-state, .notice { padding: 24px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
 .surface p:last-child, .empty-state p:last-child { margin-bottom: 0; }
 .empty-state { max-width: 720px; }
@@ -294,7 +292,6 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
 .dialog { width: min(440px, 100%); padding: 24px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: var(--shadow-raised); }
 .dialog h2 { font-size: 16px; }
 .asset-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-.asset-toolbar p { margin: 0; }
 .asset-toolbar-actions, .dialog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .asset-toolbar-actions > span { color: var(--color-text-muted); font-size: 14px; }
 .toolbar-hint { font-size: 12px; font-style: italic; }
@@ -390,12 +387,7 @@ p { color: var(--color-text-muted); font-size: 14px; line-height: 1.45; }
   .library-inspector { position: absolute; z-index: 10; top: 0; right: 0; bottom: 0; width: min(360px, 100%); padding: 16px; border: 1px solid var(--color-border); border-radius: 10px 0 0 10px; background: var(--color-surface); box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
 }
 
-/* Summaries support browsing without competing with the search field. */
-.library-toolbar .metric-grid { gap: 0; padding: 12px 0; border-block: 1px solid var(--color-border); }
-.library-toolbar .metric { gap: 4px; padding: 0 16px; border: 0; border-radius: 0; background: transparent; }
-.library-toolbar .metric:first-child { padding-left: 0; }
-.library-toolbar .metric + .metric { border-left: 1px solid var(--color-border); }
-.library-toolbar .metric dd { font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+/* Compact Library chrome keeps the first Asset media near the viewport top. */
 .library-control select, .sidebar-theme select { min-height: 36px; border-radius: 8px; }
 .library-content { padding-bottom: 24px; }
 .library-import-dropdown { transform-origin: top left; }
@@ -440,14 +432,10 @@ input::placeholder { color: var(--color-text-muted); opacity: 1; }
   .library-inspector { padding: 16px; }
   .library-inspector > .inspector { animation: none; }
   .topbar { min-height: 48px; padding: 0 16px; }
-  .topbar-detail { display: none; }
   .task-bar { padding: 12px 16px; }
   .page, .state-panel { padding: 24px 16px; }
-  .page-library { padding-bottom: 0; }
-  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page-library { padding: 16px 16px 0; }
   .asset-toolbar { align-items: start; flex-direction: column; }
-  .library-toolbar .metric-grid { row-gap: 12px; }
-  .library-toolbar .metric:nth-child(odd) { padding-left: 0; border-left: 0; }
   .library-controls { gap: 8px; }
   .library-control { flex: 1 1 40%; }
   .topbar { flex-wrap: wrap; padding-block: 8px; }

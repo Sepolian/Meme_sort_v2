@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation, useMatch } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, SidecarDisconnected } from "./components/States";
@@ -16,11 +16,13 @@ import { useLibrarySearch } from "./features/library/useLibrarySearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
 import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
+import { useImportBatch } from "./features/import/ImportBatchContext";
 import { TaskBar } from "./features/tasks/TaskBar";
 import { TopBarTaskEntry } from "./features/tasks/TopBarTaskEntry";
 import { RuntimeHealthProvider } from "./features/runtime/RuntimeHealthProvider";
-import { useOptionalRuntimeHealth } from "./features/runtime/useRuntimeHealth";
+import { useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/useRuntimeHealth";
 import { RuntimeHealthBanner, RuntimeHealthCompactIndicator } from "./features/runtime/RuntimeHealthBanner";
+import { summarizeTasks } from "./features/tasks/taskVisibility";
 import { useTheme } from "./features/theme/ThemeContext";
 import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
@@ -37,6 +39,8 @@ interface PageProps {
   eyebrow: string;
   children: ReactNode;
   className?: string;
+  headingActions?: ReactNode;
+  headingMeta?: ReactNode;
 }
 
 const primaryNavigation = [
@@ -46,24 +50,19 @@ const primaryNavigation = [
 
 const settingsNavigation = [{ to: "/settings", label: "Settings" }];
 
-function Page({ title, eyebrow, children, className }: PageProps) {
+function Page({ title, eyebrow, children, className, headingActions, headingMeta }: PageProps) {
   return (
     <main className={`page${className ? ` ${className}` : ""}`} aria-labelledby="page-title">
-      <div className="page-heading">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1 id="page-title">{title}</h1>
+      <div className={`page-heading${headingActions || headingMeta ? " page-heading-with-actions" : ""}`}>
+        <div className="page-heading-copy">
+          <p className="eyebrow">{eyebrow}</p>
+          <h1 id="page-title">{title}</h1>
+          {headingMeta}
+        </div>
+        {headingActions}
       </div>
       {children}
     </main>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="metric">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
   );
 }
 
@@ -118,7 +117,6 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   const detailOpenerRef = useRef<HTMLElement | null>(null);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
-  const pendingJobs = state.library_status.job_counts.pending ?? state.pending_jobs.length;
 
   const handleQueryChange = useCallback(
     (next: string) => {
@@ -206,13 +204,21 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   }, [clearAssetId]);
 
   return (
-    <Page className="page-library" title="Your library" eyebrow="MemeSort desktop">
+    <Page
+      className="page-library"
+      title="Your library"
+      eyebrow="MemeSort desktop"
+      headingMeta={
+        <span className="library-heading-count">
+          <strong>{state.library_status.total_assets}</strong>{" "}
+          <span>{state.library_status.total_assets === 1 ? "Asset" : "Assets"}</span>
+        </span>
+      }
+      headingActions={<LibraryImportMenu client={client} />}
+    >
       <LibraryShell
         toolbar={
           <>
-            <div className="library-toolbar-row">
-              <LibraryImportMenu client={client} />
-            </div>
             <LibrarySearchBar
               query={q}
               isSearching={search.current.status === "loading"}
@@ -233,12 +239,6 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               onStatusChange={setStatus}
               onDensityChange={setDensity}
             />
-            <section className="metric-grid" aria-label="Library summary">
-              <Metric label="Assets" value={state.library_status.total_assets} />
-              <Metric label="Pending jobs" value={pendingJobs} />
-              <Metric label="Runtime" value={`${state.runtime.backend_name} / ${state.runtime.device}`} />
-              <Metric label="Worker" value={state.worker_loop.paused ? "Paused" : "Running"} />
-            </section>
           </>
         }
         content={
@@ -358,11 +358,20 @@ function ThemeSidebarControl() {
 function AppShell({ client }: { client: MemeSortClient }) {
   const [showHelp, setShowHelp] = useState(false);
   const windowControls = useWindowControls();
+  const settingsMatch = useMatch("/settings");
+  const importBatch = useImportBatch();
+  const health = useRuntimeHealth();
   const stateQuery = useQuery({
     queryKey: ["app-state"],
     queryFn: () => client.getAppState(),
     // Polling app-state must not start another automatic health check (ticket 14).
     refetchInterval: 5_000,
+  });
+  const taskSummary = summarizeTasks({
+    importTask: importBatch.snapshot,
+    healthStatus: health.status,
+    healthBlocked: health.isBlocked,
+    appState: stateQuery.data ?? null,
   });
 
   return (
@@ -389,18 +398,18 @@ function AppShell({ client }: { client: MemeSortClient }) {
         </div>
       </aside>
       <div className="workspace">
-        <header className="topbar">
-          <span className={stateQuery.isSuccess ? "connection connection-online" : "connection"}>
-            {stateQuery.isSuccess ? "Connected to MemeSort" : "Connecting…"}
-          </span>
+        <header
+          className="topbar"
+          data-visible={taskSummary.visible ? "true" : "false"}
+          aria-hidden={!taskSummary.visible}
+        >
           <RuntimeHealthCompactIndicator />
           <TopBarTaskEntry appState={stateQuery.data ?? null} />
-          <span className="topbar-detail">Authenticated desktop session</span>
         </header>
         <div className="workspace-main">
           <div className="workspace-status">
             <ImportBatchPanel />
-            <RuntimeHealthBanner />
+            {settingsMatch ? null : <RuntimeHealthBanner />}
           </div>
           {stateQuery.isPending ? <LoadingState /> : null}
           {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
