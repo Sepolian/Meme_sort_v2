@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useEscapeSurface } from "../../components/useEscapeSurface";
 
 export interface AssetContextMenuItem {
   label: string;
@@ -15,14 +16,37 @@ export function AssetContextMenu({
   menuLabel,
   items,
   onClose,
+  opener,
 }: {
   x: number;
   y: number;
   menuLabel: string;
   items: readonly AssetContextMenuItem[];
   onClose: () => void;
+  opener?: HTMLElement | null;
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef(opener ?? null);
+
+  const restoreFocus = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      if (openerRef.current?.isConnected) {
+        openerRef.current.focus({ preventScroll: true });
+        return;
+      }
+      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const dismissMenu = useCallback((restore: boolean) => {
+    onClose();
+    if (restore) restoreFocus();
+  }, [onClose, restoreFocus]);
+
+  const dismissWithFocus = useCallback(() => dismissMenu(true), [dismissMenu]);
+  const dismissWithoutFocus = useCallback(() => dismissMenu(false), [dismissMenu]);
+
+  useEscapeSurface(true, dismissWithFocus);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -33,22 +57,14 @@ export function AssetContextMenu({
         menuRef.current &&
         !menuRef.current.contains(event.target as Node | null)
       ) {
-        onClose();
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
+        dismissWithoutFocus();
       }
     };
     window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose]);
+  }, [dismissWithoutFocus]);
 
   // Render into `body` so transformed ancestors (e.g. the inspector enter
   // animation) cannot offset the fixed cursor position.
@@ -79,7 +95,7 @@ export function AssetContextMenu({
           role="menuitem"
           onClick={() => {
             item.onSelect();
-            onClose();
+            dismissWithFocus();
           }}
         >
           {item.label}

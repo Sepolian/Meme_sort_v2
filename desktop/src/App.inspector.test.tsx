@@ -257,6 +257,18 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(container.querySelector(".library-content + .library-inspector")).not.toBeNull();
   });
 
+  it("moves focus into the inspector when it opens", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const close = await screen.findByRole("button", { name: "Close inspector" });
+    expect(close).toHaveFocus();
+  });
+
   it("returns focus to the Asset trigger after closing the inspector", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -266,11 +278,12 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     fireEvent.click(opener);
     await screen.findByRole("complementary", { name: "Inspector" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const close = screen.getByRole("button", { name: "Close inspector" });
+    close.focus();
+    fireEvent.click(close);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /first\.gif/i })).toHaveFocus();
     });
-    expect(document.activeElement).toBe(opener);
   });
 
   it("does not move Library focus when Escape closes an untouched inspector", async () => {
@@ -306,6 +319,157 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
+  it("restores context-menu focus before a second Escape closes the inspector", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    const close = screen.getByRole("button", { name: "Close inspector" });
+    expect(close).toHaveFocus();
+    fireEvent.contextMenu(await within(inspector).findByRole("img", { name: "first.gif preview" }), {
+      button: 2,
+      clientX: 200,
+      clientY: 150,
+    });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(close).toHaveFocus());
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /first\.gif/i })).toHaveFocus();
+    });
+  });
+
+  it("does not restore a dismissed menu opener over another Asset", async () => {
+    const client = makeClient();
+    const { container } = renderApp("/", client);
+
+    const firstOpener = await screen.findByRole("button", { name: /first\.gif/i });
+    const secondOpener = await screen.findByRole("button", { name: /indexed\.png/i });
+    const firstCard = container.querySelector<HTMLElement>(
+      `article[data-asset-id="${FIRST_ASSET}"]`,
+    );
+    expect(firstCard).not.toBeNull();
+
+    firstOpener.focus();
+    fireEvent.contextMenu(firstCard as HTMLElement, {
+      button: 2,
+      clientX: 200,
+      clientY: 150,
+    });
+    expect(screen.getByRole("menu", { name: "Actions for first.gif" })).toBeInTheDocument();
+
+    secondOpener.focus();
+    fireEvent.pointerDown(secondOpener);
+    expect(screen.queryByRole("menu", { name: "Actions for first.gif" })).not.toBeInTheDocument();
+    expect(secondOpener).toHaveFocus();
+
+    fireEvent.click(secondOpener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    const inspector = await screen.findByRole("region", { name: "Asset inspector" });
+    expect(inspector).toHaveAttribute("data-asset-id", SECOND_ASSET);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Close inspector" })).toHaveFocus();
+    });
+  });
+
+  it("closes the Import menu before the inspector on Escape", async () => {
+    const client = makeClient();
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    const importTrigger = screen.getByRole("button", { name: "Import" });
+    fireEvent.click(importTrigger);
+    const importItem = await screen.findByRole("menuitem", { name: "Choose Files" });
+    importItem.focus();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: "Import options" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(importTrigger).toHaveFocus();
+  });
+
+  it("closes only one nested menu or panel for each Escape", async () => {
+    const client = makeClient();
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    const importTrigger = screen.getByRole("button", { name: "Import" });
+    fireEvent.click(importTrigger);
+    const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
+    fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
+    expect(screen.getAllByRole("menu")).toHaveLength(2);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Actions for first.gif" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Import options" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Import options" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+
+    await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete this Asset?" })).toBeInTheDocument();
+    fireEvent.click(importTrigger);
+    expect(screen.getByRole("menu", { name: "Import options" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    const importMenuOpen = screen.queryByRole("menu", { name: "Import options" }) !== null;
+    const confirmationOpen = screen.queryByRole("alertdialog", { name: "Delete this Asset?" }) !== null;
+    expect(importMenuOpen).not.toBe(confirmationOpen);
+    expect(importMenuOpen).toBe(false);
+    expect(confirmationOpen).toBe(true);
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Import options" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("restores confirmation focus before a second Escape closes the inspector", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    await screen.findByRole("alertdialog", { name: "Delete this Asset?" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete Asset" })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete this Asset?" });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete Asset" })).toHaveFocus());
+    expect(dialog).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+    });
   });
 
   it("deep-links the inspector from the URL on first load and closes by removing only asset", async () => {
@@ -363,6 +527,74 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(await screen.findByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
     expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
+  it("restores the Asset opener when history closes the inspector", async () => {
+    const client = makeClient();
+    let goBack: (() => void) | null = null;
+    function HistoryBack() {
+      const navigate = useNavigate();
+      goBack = () => navigate(-1);
+      return null;
+    }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <HistoryBack />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    screen.getByRole("button", { name: "Close inspector" }).focus();
+
+    await act(async () => {
+      goBack?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("does not restore Asset A focus after navigation changes the inspector to Asset B", async () => {
+    const client = makeClient();
+    function OpenSecond() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(`/?asset=${SECOND_ASSET}`)}>
+          Open second
+        </button>
+      );
+    }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <OpenSecond />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Open second" }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(screen.getByRole("region", { name: "Library workspace" }).querySelector(".library-content"));
+    });
+    expect(document.activeElement).not.toBe(opener);
   });
 
   it("renders all required sections: primary, secondary, collapsed advanced, and overflow", async () => {
@@ -723,8 +955,12 @@ describe("Source Record removal and deletion cache coordination", () => {
         return removeSourceResult(assetId, sourcePath, false);
       }),
     });
-    const { container, getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+    const { container, getLocation } = renderApp("/", client);
 
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
     fireEvent.click(await screen.findByLabelText("Select first.gif"));
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     await screen.findByRole("complementary", { name: "Inspector" });
@@ -747,6 +983,15 @@ describe("Source Record removal and deletion cache coordination", () => {
     const sources = screen.getByRole("region", { name: "Source Records" });
     expect(sources).toHaveTextContent(EXTRA_SOURCE);
     expect(sources).not.toHaveTextContent(PRIMARY_SOURCE);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Close inspector" })).toHaveFocus();
+    });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+    });
   });
 
   it("reports Source Record removal failures as errors without dropping the Asset", async () => {
@@ -759,10 +1004,14 @@ describe("Source Record removal and deletion cache coordination", () => {
         };
       }),
     });
-    renderApp(`/?asset=${FIRST_ASSET}`, client);
+    renderApp("/", client);
 
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
     await screen.findByRole("complementary", { name: "Inspector" });
-    fireEvent.click(screen.getByRole("button", { name: "Remove Source Record" }));
+    const removeButton = await screen.findByRole("button", { name: "Remove Source Record" });
+    fireEvent.click(removeButton);
     const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
 
@@ -770,6 +1019,7 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(alert).toHaveTextContent("Source Record is locked.");
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
+    await waitFor(() => expect(removeButton).toHaveFocus());
   });
 
   it("does not surface delayed Source Record removal success after selecting another Asset", async () => {
@@ -955,12 +1205,15 @@ describe("Source Record removal and deletion cache coordination", () => {
     const { getLocation } = renderApp("/", client);
 
     fireEvent.click(await screen.findByLabelText("Select first.gif"));
-    fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
     await screen.findByRole("complementary", { name: "Inspector" });
     await openInspectorSections();
     const assetFetchesBeforeDelete = getAssets.mock.calls.length;
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const deleteButton = screen.getByRole("button", { name: "Delete Asset" });
+    fireEvent.click(deleteButton);
     const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete Asset" }));
     await waitFor(() => {
@@ -974,6 +1227,7 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(screen.getByLabelText("Select first.gif")).toBeChecked();
     expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
     expect(getAssets.mock.calls.length).toBe(assetFetchesBeforeDelete);
+    await waitFor(() => expect(deleteButton).toHaveFocus());
   });
 
   it("keeps a detail that was opened while a Delete was still in flight", async () => {

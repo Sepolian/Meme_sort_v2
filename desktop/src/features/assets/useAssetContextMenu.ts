@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 export interface AssetContextMenuAnchor {
   x: number;
   y: number;
+  opener: HTMLElement | null;
 }
 
 /**
@@ -17,7 +18,14 @@ export function useAssetContextMenu() {
   const [anchor, setAnchor] = useState<AssetContextMenuAnchor | null>(null);
   const openMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
-    setAnchor({ x: event.clientX, y: event.clientY });
+    const target = event.currentTarget;
+    const opener =
+      target.closest<HTMLElement>(".asset-card")?.querySelector<HTMLElement>(".asset-card-open") ??
+      target.closest<HTMLElement>(".library-inspector")?.querySelector<HTMLElement>(".inspector-header button") ??
+      (document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+        ? document.activeElement
+        : null);
+    setAnchor({ x: event.clientX, y: event.clientY, opener });
   }, []);
   const closeMenu = useCallback(() => {
     setAnchor(null);

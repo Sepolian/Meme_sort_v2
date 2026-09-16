@@ -277,6 +277,7 @@ function AssetWaterfallCard({
         <AssetContextMenu
           x={menu.anchor.x}
           y={menu.anchor.y}
+          opener={menu.anchor.opener}
           menuLabel={`Actions for ${name}`}
           items={[
             {

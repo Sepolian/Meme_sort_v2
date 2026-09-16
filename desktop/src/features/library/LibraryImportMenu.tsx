@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
+import { useEscapeSurface } from "../../components/useEscapeSurface";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { importBatchBlockedMessage, importWorkIsActive } from "../import/import-status";
@@ -30,23 +31,24 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
   const [libraryBusy, setLibraryBusy] = useState<"files" | "folder" | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const importTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const controlsDisabled = libraryBusy !== null || importBatch.starting || importWorkActive;
 
+  useEscapeSurface(menuOpen, () => {
+    setMenuOpen(false);
+    importTriggerRef.current?.focus({ preventScroll: true });
+  });
+
   useEffect(() => {
     if (!menuOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
     const closeOnOutsidePointer = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
       }
     };
-    window.addEventListener("keydown", closeOnEscape);
     document.addEventListener("mousedown", closeOnOutsidePointer);
     return () => {
-      window.removeEventListener("keydown", closeOnEscape);
       document.removeEventListener("mousedown", closeOnOutsidePointer);
     };
   }, [menuOpen]);
@@ -96,6 +98,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
   return (
     <div className="library-import-menu" ref={menuRef}>
       <button
+        ref={importTriggerRef}
         className="button"
         type="button"
         aria-haspopup="menu"

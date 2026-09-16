@@ -4,6 +4,7 @@ import { Link, NavLink, Route, Routes, useLocation, useMatch } from "react-route
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, SidecarDisconnected } from "./components/States";
+import { useEscapeSurface } from "./components/useEscapeSurface";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
 import { AssetInspector } from "./features/assets/AssetInspector";
 import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
@@ -125,7 +126,9 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   } = useLibrarySearch({ client, resultMode });
   const [isChoosingImage, setIsChoosingImage] = useState(false);
   const [imageSelection, setImageSelection] = useState<{ id: string; label: string; available: boolean } | null>(null);
-  const detailOpenerRef = useRef<HTMLElement | null>(null);
+  const detailOpenerRef = useRef<{ assetId: string; element: HTMLElement } | null>(null);
+  const previousSelectedAssetIdRef = useRef(selectedAssetId);
+  const detailCloseHandledRef = useRef(false);
   const optionalHealth = useOptionalRuntimeHealth();
   const semanticBlocked = optionalHealth?.isBlocked ?? false;
 
@@ -230,27 +233,65 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
       // The card/View button remains the active element after its click. Keep
       // that trigger so closing this non-modal inspector restores focus to it.
       detailOpenerRef.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+          ? { assetId, element: document.activeElement }
+          : null;
       setAssetId(assetId);
     },
     [setAssetId],
   );
 
+  const restoreDetailFocus = useCallback((closingAssetId: string) => {
+    const opener = detailOpenerRef.current;
+    const openerAssetId = opener?.assetId === closingAssetId ? closingAssetId : null;
+    const openerElement = openerAssetId ? opener?.element : null;
+    const focusAvailableTarget = (retry: boolean) => {
+      const currentOpener = openerElement && openerElement !== document.body && openerElement.isConnected
+        ? openerElement
+        : openerAssetId
+          ? Array.from(document.querySelectorAll<HTMLElement>(".asset-card")).find(
+              (card) => card.dataset.assetId === openerAssetId,
+            )?.querySelector<HTMLElement>(".asset-card-open") ?? null
+          : null;
+      if (currentOpener) {
+        currentOpener.focus({ preventScroll: true });
+        return;
+      }
+      if (retry && openerAssetId) {
+        window.requestAnimationFrame(() => focusAvailableTarget(false));
+        return;
+      }
+      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+    };
+    window.requestAnimationFrame(() => focusAvailableTarget(true));
+  }, []);
+
   const handleCloseDetail = useCallback(() => {
     const focusWasInInspector =
       document.activeElement instanceof HTMLElement &&
       document.activeElement.closest(".library-inspector") !== null;
+    detailCloseHandledRef.current = true;
     clearAssetId();
     if (!focusWasInInspector) return;
+    restoreDetailFocus(selectedAssetId ?? "");
+  }, [clearAssetId, restoreDetailFocus, selectedAssetId]);
+
+  useEffect(() => {
     const opener = detailOpenerRef.current;
-    window.requestAnimationFrame(() => {
-      if (opener?.isConnected) {
-        opener.focus({ preventScroll: true });
-        return;
-      }
-      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
-    });
-  }, [clearAssetId]);
+    if (selectedAssetId !== null && opener && opener.assetId !== selectedAssetId) {
+      detailOpenerRef.current = null;
+    }
+  }, [selectedAssetId]);
+
+  useEffect(() => {
+    const previousAssetId = previousSelectedAssetIdRef.current;
+    const wasOpen = previousAssetId !== null;
+    previousSelectedAssetIdRef.current = selectedAssetId;
+    const closeWasHandled = detailCloseHandledRef.current;
+    detailCloseHandledRef.current = false;
+    if (!wasOpen || selectedAssetId !== null || closeWasHandled) return;
+    restoreDetailFocus(previousAssetId);
+  }, [restoreDetailFocus, selectedAssetId]);
 
   return (
     <Page
@@ -338,16 +379,13 @@ function SettingsRoute({ state, client, onStateChanged }: { state: AppState; cli
 }
 
 function HelpDialog({ onClose }: { onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEscapeSurface(true, onClose);
+
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+    closeButtonRef.current?.focus({ preventScroll: true });
+  }, []);
 
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
@@ -361,7 +399,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
         <p className="eyebrow">Keyboard</p>
         <h2 id="help-title">MemeSort navigation</h2>
         <p>Use Tab to move through the navigation and controls. Press Escape to close this dialog.</p>
-        <button className="button button-secondary" type="button" autoFocus onClick={onClose}>Close</button>
+        <button ref={closeButtonRef} className="button button-secondary" type="button" onClick={onClose}>Close</button>
       </section>
     </div>
   );
@@ -412,6 +450,13 @@ function ThemeSidebarControl() {
 
 function AppShell({ client }: { client: MemeSortClient }) {
   const [showHelp, setShowHelp] = useState(false);
+  const helpTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeHelp = useCallback(() => {
+    setShowHelp(false);
+    window.requestAnimationFrame(() => {
+      helpTriggerRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
   const windowControls = useWindowControls();
   const settingsMatch = useMatch("/settings");
   const importBatch = useImportBatch();
@@ -448,7 +493,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
               </NavLink>
             ))}
           </nav>
-          <button className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
+          <button ref={helpTriggerRef} className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
           <ThemeSidebarControl />
         </div>
       </aside>
@@ -472,7 +517,7 @@ function AppShell({ client }: { client: MemeSortClient }) {
           <TaskBar appState={stateQuery.data ?? null} />
         </div>
       </div>
-      {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}
+      {showHelp ? <HelpDialog onClose={closeHelp} /> : null}
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { mediaUrl } from "../../api/media-url";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useEscapeSurface } from "../../components/useEscapeSurface";
 import { getAssetDisplayName } from "../library/libraryOrdering";
 import { AssetContextMenu } from "./AssetContextMenu";
 import { useAssetContextMenu } from "./useAssetContextMenu";
@@ -111,6 +112,8 @@ export function AssetInspector({
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(
     null,
   );
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const confirmationOpenerRef = useRef<HTMLElement | null>(null);
   const mountedRef = useRef(false);
   const assetIdentityRef = useRef({ assetId });
   if (assetIdentityRef.current.assetId !== assetId) {
@@ -137,31 +140,29 @@ export function AssetInspector({
     setConfirmRemoveSource(null);
     setIsRemovingSource(false);
     setActionFeedback(null);
+    confirmationOpenerRef.current = null;
   }, [assetId]);
 
-  // Escape closes only the highest active surface. Local confirmations are
-  // dismissed first; menus/dialogs above the inspector mark the event handled
-  // so the deferred inspector close cannot consume the same key.
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (confirmDelete) {
-        event.preventDefault();
-        if (!isDeleting) setConfirmDelete(false);
+    closeButtonRef.current?.focus({ preventScroll: true });
+  }, [assetId]);
+
+  const restoreConfirmationFocus = useCallback((preferUnderlying = false) => {
+    window.requestAnimationFrame(() => {
+      const opener = preferUnderlying ? null : confirmationOpenerRef.current;
+      if (opener && opener !== document.body && opener.isConnected) {
+        opener.focus({ preventScroll: true });
         return;
       }
-      if (confirmRemoveSource) {
-        event.preventDefault();
-        if (!isRemovingSource) setConfirmRemoveSource(null);
+      if (closeButtonRef.current?.isConnected) {
+        closeButtonRef.current.focus({ preventScroll: true });
         return;
       }
-      queueMicrotask(() => {
-        if (!event.defaultPrevented) onClose();
-      });
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, confirmDelete, confirmRemoveSource, isDeleting, isRemovingSource]);
+      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  useEscapeSurface(!confirmDelete && !confirmRemoveSource, onClose);
 
   const runClipboardCopy = async () => {
     setCopyState({ kind: "pending" });
@@ -257,6 +258,7 @@ export function AssetInspector({
       const result = await client.removeSourceRecord(operationAssetId, sourcePath);
       if (isCurrentOperation(operationIdentity)) {
         setConfirmRemoveSource(null);
+        restoreConfirmationFocus(true);
         setActionFeedback({
           kind: "success",
           message: result.asset_deleted
@@ -289,6 +291,7 @@ export function AssetInspector({
           ),
         });
         setConfirmRemoveSource(null);
+        restoreConfirmationFocus();
       }
     } finally {
       if (isCurrentOperation(operationIdentity)) setIsRemovingSource(false);
@@ -304,6 +307,7 @@ export function AssetInspector({
       await client.deleteAsset(operationAssetId);
       if (isCurrentOperation(operationIdentity)) {
         setConfirmDelete(false);
+        restoreConfirmationFocus(true);
       }
       onDeleted?.(operationAssetId);
       // Shared post-delete coordination removes the Asset from the visible
@@ -319,6 +323,7 @@ export function AssetInspector({
           ),
         );
         setConfirmDelete(false);
+        restoreConfirmationFocus();
       }
     } finally {
       if (isCurrentOperation(operationIdentity)) setIsDeleting(false);
@@ -351,6 +356,7 @@ export function AssetInspector({
           <h2>Asset inspector</h2>
         </div>
         <button
+          ref={closeButtonRef}
           className="button button-secondary"
           type="button"
           onClick={onClose}
@@ -401,15 +407,20 @@ export function AssetInspector({
           onRevealManaged={runRevealManaged}
           onRevealSource={runRevealSource}
           onFindSimilar={handleFindSimilar}
-          onRequestDelete={() => {
+          onRequestDelete={(opener) => {
+            confirmationOpenerRef.current = opener;
             setDeleteError(null);
             setConfirmDelete(true);
           }}
           onCancelDelete={() => setConfirmDelete(false)}
           onConfirmDelete={runConfirmedDelete}
-          onRequestRemoveSource={setConfirmRemoveSource}
+          onRequestRemoveSource={(sourcePath, opener) => {
+            confirmationOpenerRef.current = opener;
+            setConfirmRemoveSource(sourcePath);
+          }}
           onCancelRemoveSource={() => setConfirmRemoveSource(null)}
           onConfirmRemoveSource={runRemoveSource}
+          onRestoreConfirmationFocus={restoreConfirmationFocus}
         />
       ) : null}
     </section>
@@ -439,6 +450,7 @@ function InspectorBody({
   onRequestRemoveSource,
   onCancelRemoveSource,
   onConfirmRemoveSource,
+  onRestoreConfirmationFocus,
 }: {
   asset: AssetDetail;
   activeRecipeLabel: string;
@@ -456,12 +468,13 @@ function InspectorBody({
   onRevealManaged: () => void;
   onRevealSource: (sourcePath: string) => void;
   onFindSimilar: () => void;
-  onRequestDelete: () => void;
+  onRequestDelete: (opener: HTMLElement) => void;
   onCancelDelete: () => void;
   onConfirmDelete: () => void;
-  onRequestRemoveSource: (sourcePath: string) => void;
+  onRequestRemoveSource: (sourcePath: string, opener: HTMLElement) => void;
   onCancelRemoveSource: () => void;
   onConfirmRemoveSource: (sourcePath: string) => void;
+  onRestoreConfirmationFocus: (preferUnderlying?: boolean) => void;
 }) {
   const name = assetName(asset);
   const preview = mediaUrl(asset.library_url);
@@ -498,6 +511,7 @@ function InspectorBody({
           <AssetContextMenu
             x={previewMenu.anchor.x}
             y={previewMenu.anchor.y}
+            opener={previewMenu.anchor.opener}
             menuLabel={`Actions for ${name}`}
             items={[
               { label: "Copy image", onSelect: onCopy },
@@ -628,7 +642,9 @@ function InspectorBody({
                 <button
                   className="text-button detail-action"
                   type="button"
-                  onClick={() => onRequestRemoveSource(source.source_path)}
+                  onClick={(event) =>
+                    onRequestRemoveSource(source.source_path, event.currentTarget)
+                  }
                 >
                   Remove Source Record
                 </button>
@@ -703,7 +719,7 @@ function InspectorBody({
                 className="button button-danger"
                 type="button"
                 disabled={isDeleting}
-                onClick={onRequestDelete}
+                onClick={(event) => onRequestDelete(event.currentTarget)}
               >
                 Delete Asset
               </button>
@@ -749,6 +765,8 @@ function InspectorBody({
           pending={isDeleting}
           onCancel={onCancelDelete}
           onConfirm={onConfirmDelete}
+          onEscape={onCancelDelete}
+          onRestoreFocus={() => onRestoreConfirmationFocus()}
         />
       ) : null}
 
@@ -761,6 +779,8 @@ function InspectorBody({
           pending={isRemovingSource}
           onCancel={onCancelRemoveSource}
           onConfirm={() => onConfirmRemoveSource(confirmRemoveSource)}
+          onEscape={onCancelRemoveSource}
+          onRestoreFocus={() => onRestoreConfirmationFocus()}
         />
       ) : null}
     </div>

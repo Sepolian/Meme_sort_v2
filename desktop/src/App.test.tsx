@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -462,9 +462,19 @@ describe("App", () => {
     renderApp("/settings");
     await screen.findByRole("heading", { name: "Settings" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Keyboard help" }));
+    const trigger = screen.getByRole("button", { name: "Keyboard help" });
+    trigger.focus();
+    fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "MemeSort navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "MemeSort navigation" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "MemeSort navigation" })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });

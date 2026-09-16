@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AssetWaterfall } from "./AssetWaterfall";
 import type { AssetSummary } from "../../api/types";
@@ -29,7 +29,7 @@ function rightClick(target: Element): boolean {
 }
 
 describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
-  it("suppresses the native image menu and offers Copy image plus Copy original file", () => {
+  it("suppresses the native image menu and offers Copy image plus Copy original file", async () => {
     const onCopyImage = vi.fn();
     const onCopyOriginal = vi.fn();
     const { container } = render(
@@ -47,6 +47,8 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     const card = container.querySelector(
       `article[data-asset-id="${GIF_ID}"]`,
     ) as HTMLElement;
+    const opener = screen.getByRole("button", { name: `Open ${GIF_ID}.gif` });
+    opener.focus();
 
     expect(rightClick(card)).toBe(false);
 
@@ -58,6 +60,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(onCopyOriginal).not.toHaveBeenCalled();
     // Selecting an item dismisses the menu.
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it("routes Copy original file through its own handler with the Asset ID", () => {

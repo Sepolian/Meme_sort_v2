@@ -5,6 +5,7 @@ import type {
   LibrarySort,
   LibraryStatusFilter,
 } from "./libraryUrlState";
+import { useEscapeSurface } from "../../components/useEscapeSurface";
 
 interface LibraryControlsProps {
   sort: LibrarySort;
@@ -55,23 +56,17 @@ export function LibraryControls({
     if (restoreFocus) viewTriggerRef.current?.focus();
   }, []);
 
+  useEscapeSurface(viewOpen, () => closeView(true));
+
   useEffect(() => {
     if (!viewOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      closeView(true);
-    };
     const closeOnOutsidePointer = (event: MouseEvent) => {
       if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
         closeView(false);
       }
     };
-    window.addEventListener("keydown", closeOnEscape);
     document.addEventListener("mousedown", closeOnOutsidePointer);
     return () => {
-      window.removeEventListener("keydown", closeOnEscape);
       document.removeEventListener("mousedown", closeOnOutsidePointer);
     };
   }, [closeView, viewOpen]);
@@ -110,12 +105,6 @@ export function LibraryControls({
             id="library-view-options"
             role="group"
             aria-label="View options"
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              event.stopPropagation();
-              closeView(true);
-            }}
           >
             <label className="library-control" htmlFor="library-sort">
               <span>Sort</span>

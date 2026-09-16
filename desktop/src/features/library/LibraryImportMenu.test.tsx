@@ -222,7 +222,10 @@ describe("LibraryImportMenu", () => {
   it("closes the menu with Escape for keyboard users", async () => {
     renderMenu();
     await openMenu();
+    const trigger = screen.getByRole("button", { name: "Import" });
+    screen.getByRole("menuitem", { name: "Choose Files" }).focus();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "Import options" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });
