@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
@@ -29,6 +29,11 @@ type CopyStatus =
   | { kind: "pending" }
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
+
+type ActionFeedback = {
+  kind: "success" | "error";
+  message: string;
+};
 
 function assetName(asset: AssetSummary): string {
   return getAssetDisplayName(asset);
@@ -103,7 +108,23 @@ export function AssetInspector({
     null,
   );
   const [isRemovingSource, setIsRemovingSource] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(
+    null,
+  );
+  const mountedRef = useRef(false);
+  const assetIdentityRef = useRef({ assetId });
+  if (assetIdentityRef.current.assetId !== assetId) {
+    assetIdentityRef.current = { assetId };
+  }
+  const isCurrentOperation = (identity: { assetId: string }) =>
+    mountedRef.current && assetIdentityRef.current === identity;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Reset transient action state when the inspected Asset changes.
   useEffect(() => {
@@ -185,14 +206,17 @@ export function AssetInspector({
   };
 
   const runRevealManaged = async () => {
+    const operationIdentity = assetIdentityRef.current;
     setRevealState({ kind: "pending" });
     try {
       await client.revealAsset(assetId, "managed");
+      if (!isCurrentOperation(operationIdentity)) return;
       setRevealState({
         kind: "success",
         message: "Opened the managed Library Copy in File Explorer.",
       });
     } catch (error) {
+      if (!isCurrentOperation(operationIdentity)) return;
       setRevealState({
         kind: "error",
         message: tauriErrorDetail(
@@ -204,76 +228,100 @@ export function AssetInspector({
   };
 
   const runRevealSource = async (sourcePath: string) => {
+    const operationIdentity = assetIdentityRef.current;
     setActionFeedback(null);
     try {
       await client.revealAsset(assetId, "source", sourcePath);
-      setActionFeedback("Opened the recorded Source Path in File Explorer.");
-    } catch {
-      setActionFeedback(
-        "The requested file could not be opened in File Explorer. The Library was not modified.",
-      );
+      if (!isCurrentOperation(operationIdentity)) return;
+      setActionFeedback({
+        kind: "success",
+        message: "Opened the recorded Source Path in File Explorer.",
+      });
+    } catch (error) {
+      if (!isCurrentOperation(operationIdentity)) return;
+      setActionFeedback({
+        kind: "error",
+        message: tauriErrorDetail(
+          error,
+          "The requested file could not be opened in File Explorer. The Library was not modified.",
+        ),
+      });
     }
   };
 
   const runRemoveSource = async (sourcePath: string) => {
+    const operationIdentity = assetIdentityRef.current;
+    const operationAssetId = assetId;
     setIsRemovingSource(true);
     try {
-      const result = await client.removeSourceRecord(assetId, sourcePath);
-      setConfirmRemoveSource(null);
-      setActionFeedback(
-        result.asset_deleted
-          ? "Removed the final Source Record and deleted the Orphan Asset."
-          : "Removed the Source Record.",
-      );
+      const result = await client.removeSourceRecord(operationAssetId, sourcePath);
+      if (isCurrentOperation(operationIdentity)) {
+        setConfirmRemoveSource(null);
+        setActionFeedback({
+          kind: "success",
+          message: result.asset_deleted
+            ? "Removed the final Source Record and deleted the Orphan Asset."
+            : "Removed the Source Record.",
+        });
+      }
       // A normal Source Record removal only refreshes the affected data: the
       // Asset and the current selection stay, the detail shows the remaining
       // Source Records.
       if (result.asset_deleted) {
         // The backend turned this Asset into an Orphan Asset and deleted it,
         // so it takes the same post-delete path as an explicit delete.
-        onDeleted?.(assetId);
-        await reconcileDeletedAssets([assetId]);
+        onDeleted?.(operationAssetId);
+        await reconcileDeletedAssets([operationAssetId]);
       } else {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["assets"] }),
           queryClient.invalidateQueries({ queryKey: ["app-state"] }),
-          queryClient.invalidateQueries({ queryKey: ["asset-detail", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-detail", operationAssetId] }),
         ]);
       }
     } catch (error) {
-      setActionFeedback(
-        tauriErrorDetail(
-          error,
-          "The requested Asset change could not be completed. The Library was not modified by the desktop UI.",
-        ),
-      );
-      setConfirmRemoveSource(null);
+      if (isCurrentOperation(operationIdentity)) {
+        setActionFeedback({
+          kind: "error",
+          message: tauriErrorDetail(
+            error,
+            "The requested Asset change could not be completed. The Library was not modified by the desktop UI.",
+          ),
+        });
+        setConfirmRemoveSource(null);
+      }
     } finally {
-      setIsRemovingSource(false);
+      if (isCurrentOperation(operationIdentity)) setIsRemovingSource(false);
     }
   };
 
   const runConfirmedDelete = async () => {
+    const operationIdentity = assetIdentityRef.current;
+    const operationAssetId = assetId;
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await client.deleteAsset(assetId);
-      setConfirmDelete(false);
-      onDeleted?.(assetId);
+      await client.deleteAsset(operationAssetId);
+      if (isCurrentOperation(operationIdentity)) {
+        setConfirmDelete(false);
+      }
+      onDeleted?.(operationAssetId);
       // Shared post-delete coordination removes the Asset from the visible
       // wall, drops its detail cache, closes the detail while it still targets
       // this Asset, and then refreshes counts and App State.
-      await reconcileDeletedAssets([assetId]);
+      await reconcileDeletedAssets([operationAssetId]);
     } catch (error) {
-      setDeleteError(
-        tauriErrorDetail(
-          error,
-          "The requested Asset change could not be completed. The Library was not modified by the desktop UI.",
-        ),
-      );
-      setConfirmDelete(false);
+      if (isCurrentOperation(operationIdentity)) {
+        setDeleteError(
+          tauriErrorDetail(
+            error,
+            "The requested Asset change could not be completed. The Library was not modified by the desktop UI.",
+          ),
+        );
+        setConfirmDelete(false);
+      }
     } finally {
-      setIsDeleting(false);
+      if (isCurrentOperation(operationIdentity)) setIsDeleting(false);
     }
   };
 
@@ -284,9 +332,10 @@ export function AssetInspector({
     if (onFindSimilar) {
       onFindSimilar(assetId);
     } else {
-      setActionFeedback(
-        "Find Similar will search from this Asset once Library search lands.",
-      );
+      setActionFeedback({
+        kind: "success",
+        message: "Find Similar will search from this Asset once Library search lands.",
+      });
     }
   };
 
@@ -396,7 +445,7 @@ function InspectorBody({
   copyState: CopyStatus;
   copyOriginalState: CopyStatus;
   revealState: CopyStatus;
-  actionFeedback: string | null;
+  actionFeedback: ActionFeedback | null;
   deleteError: string | null;
   isDeleting: boolean;
   confirmDelete: boolean;
@@ -675,8 +724,13 @@ function InspectorBody({
       </section>
 
       {actionFeedback ? (
-        <section className="notice notice-success" role="status">
-          <span>{actionFeedback}</span>
+        <section
+          className={`notice ${actionFeedback.kind === "error" ? "notice-warning" : "notice-success"}`}
+          role={actionFeedback.kind === "error" ? "alert" : "status"}
+          aria-label={actionFeedback.kind === "error" ? "Asset action failed" : undefined}
+        >
+          {actionFeedback.kind === "error" ? <strong>Asset action failed</strong> : null}
+          <span>{actionFeedback.message}</span>
         </section>
       ) : null}
       {deleteError ? (

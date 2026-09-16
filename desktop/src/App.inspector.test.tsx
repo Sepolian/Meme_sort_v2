@@ -570,6 +570,90 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "source", "C:/Source/first.gif");
   });
 
+  it("reports Source reveal failures as errors without claiming success", async () => {
+    const client = makeClient({
+      revealAsset: vi.fn(async (_assetId: string, target: string) => {
+        if (target === "source") {
+          throw {
+            error: "SidecarError",
+            detail: "Recorded Source Path is unavailable.",
+            retryable: true,
+          };
+        }
+      }),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Reveal Source" }));
+
+    const alert = await screen.findByRole("alert", { name: "Asset action failed" });
+    expect(alert).toHaveTextContent("Recorded Source Path is unavailable.");
+    expect(screen.queryByText("Opened the recorded Source Path in File Explorer.")).not.toBeInTheDocument();
+  });
+
+  it("does not surface delayed managed reveal success after selecting another Asset", async () => {
+    let releaseReveal!: () => void;
+    const revealGate = new Promise<void>((resolve) => {
+      releaseReveal = resolve;
+    });
+    const client = makeClient({
+      revealAsset: vi.fn(async (assetId: string, target: string) => {
+        if (assetId === FIRST_ASSET && target === "managed") await revealGate;
+      }),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Reveal in Explorer" }));
+    await waitFor(() => {
+      expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "managed");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      releaseReveal();
+    });
+
+    expect(screen.queryByText("Opened the managed Library Copy in File Explorer.")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
+  it("does not surface delayed managed reveal failure after selecting another Asset", async () => {
+    let rejectReveal!: (reason: unknown) => void;
+    const revealGate = new Promise<void>((_resolve, reject) => {
+      rejectReveal = reject;
+    });
+    const client = makeClient({
+      revealAsset: vi.fn(async (assetId: string, target: string) => {
+        if (assetId === FIRST_ASSET && target === "managed") {
+          await revealGate;
+        }
+      }),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Reveal in Explorer" }));
+    await waitFor(() => {
+      expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "managed");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      rejectReveal({
+        error: "SidecarError",
+        detail: "Managed Library Copy is unavailable.",
+        retryable: true,
+      });
+    });
+
+    expect(screen.queryByText("Managed Library Copy is unavailable.")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
   it("renders no centered detail dialog anywhere: the inspector is the only detail surface", async () => {
     const appClient = makeClient();
     const appRender = renderApp(`/?asset=${FIRST_ASSET}`, appClient);
@@ -665,6 +749,164 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(sources).not.toHaveTextContent(PRIMARY_SOURCE);
   });
 
+  it("reports Source Record removal failures as errors without dropping the Asset", async () => {
+    const client = makeClient({
+      removeSourceRecord: vi.fn(async () => {
+        throw {
+          error: "SidecarError",
+          detail: "Source Record is locked.",
+          retryable: true,
+        };
+      }),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Remove Source Record" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+
+    const alert = await screen.findByRole("alert", { name: "Asset action failed" });
+    expect(alert).toHaveTextContent("Source Record is locked.");
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
+  });
+
+  it("does not surface delayed Source Record removal success after selecting another Asset", async () => {
+    const removalResult = {
+      library_root: "C:/Library",
+      asset_id: FIRST_ASSET,
+      removed_source_path: PRIMARY_SOURCE,
+      asset_deleted: false,
+      removed_source_records: 1,
+      removed_jobs: 0,
+      removed_renditions: 0,
+      removed_embeddings: 0,
+    };
+    let releaseRemoval!: (result: typeof removalResult) => void;
+    const removalGate = new Promise<typeof removalResult>((resolve) => {
+      releaseRemoval = resolve;
+    });
+    const client = makeClient({
+      removeSourceRecord: vi.fn(async () => removalGate),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Remove Source Record" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+    await waitFor(() => {
+      expect(client.removeSourceRecord).toHaveBeenCalledWith(FIRST_ASSET, PRIMARY_SOURCE);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      releaseRemoval(removalResult);
+    });
+
+    expect(screen.queryByText("Removed the Source Record.")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
+  it("calls onDeleted for delayed final Source Record removal after switching Assets", async () => {
+    const removalResult = {
+      library_root: "C:/Library",
+      asset_id: FIRST_ASSET,
+      removed_source_path: PRIMARY_SOURCE,
+      asset_deleted: true,
+      removed_source_records: 1,
+      removed_jobs: 1,
+      removed_renditions: 1,
+      removed_embeddings: 1,
+    };
+    let releaseRemoval!: () => void;
+    const removalGate = new Promise<typeof removalResult>((resolve) => {
+      releaseRemoval = () => resolve(removalResult);
+    });
+    const client = makeClient({
+      removeSourceRecord: vi.fn(async () => removalGate),
+    });
+    const onDeleted = vi.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AssetInspector
+            assetId={FIRST_ASSET}
+            client={client as never}
+            onClose={() => undefined}
+            onDeleted={onDeleted}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("region", { name: "Asset inspector" });
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Source Record" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+    await waitFor(() => {
+      expect(client.removeSourceRecord).toHaveBeenCalledWith(FIRST_ASSET, PRIMARY_SOURCE);
+    });
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AssetInspector
+            assetId={SECOND_ASSET}
+            client={client as never}
+            onClose={() => undefined}
+            onDeleted={onDeleted}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      releaseRemoval();
+    });
+
+    await waitFor(() => {
+      expect(onDeleted).toHaveBeenCalledWith(FIRST_ASSET);
+    });
+    expect(screen.getByRole("region", { name: "Asset inspector" })).toBeInTheDocument();
+    expect(screen.queryByText("Removed the final Source Record and deleted the Orphan Asset.")).not.toBeInTheDocument();
+  });
+
+  it("does not surface delayed Source Record removal failure after selecting another Asset", async () => {
+    let rejectRemoval!: (reason: unknown) => void;
+    const removalGate = new Promise<never>((_resolve, reject) => {
+      rejectRemoval = reject;
+    });
+    const client = makeClient({
+      removeSourceRecord: vi.fn(async () => removalGate),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Remove Source Record" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove this Source Record?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Source Record" }));
+    await waitFor(() => {
+      expect(client.removeSourceRecord).toHaveBeenCalledWith(FIRST_ASSET, PRIMARY_SOURCE);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      rejectRemoval({
+        error: "SidecarError",
+        detail: "Source Record is locked.",
+        retryable: true,
+      });
+    });
+
+    expect(screen.queryByText("Source Record is locked.")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+  });
+
   it("removing the final Source Record deletes the Orphan Asset like an explicit delete", async () => {
     let currentAssets = [...assets.assets];
     const getAssetDetail = vi.fn(async (assetId: string) => ({ library_root: "C:/Library", active_recipe_id: "recipe-1", active_recipe_label: "Vulkan0 recipe", asset: detailFor(assetId) }));
@@ -696,6 +938,42 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(getLocation().search).not.toContain("asset=");
     expect(screen.getByRole("button", { name: /indexed\.png/i })).toBeInTheDocument();
     expect(getAssetDetail.mock.calls.filter((call) => call[0] === FIRST_ASSET)).toHaveLength(1);
+  });
+
+  it("keeps the Asset and selection after a single-delete rejection", async () => {
+    const getAssets = vi.fn(async () => assets);
+    const client = makeClient({
+      getAssets,
+      deleteAsset: vi.fn(async () => {
+        throw {
+          error: "SidecarError",
+          detail: "Asset is locked by a running job.",
+          retryable: false,
+        };
+      }),
+    });
+    const { getLocation } = renderApp("/", client);
+
+    fireEvent.click(await screen.findByLabelText("Select first.gif"));
+    fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await openInspectorSections();
+    const assetFetchesBeforeDelete = getAssets.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Asset" }));
+    await waitFor(() => {
+      expect(client.deleteAsset).toHaveBeenCalledWith(FIRST_ASSET);
+    });
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Asset is locked by a running job.");
+    expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Select first.gif")).toBeChecked();
+    expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
+    expect(getAssets.mock.calls.length).toBe(assetFetchesBeforeDelete);
   });
 
   it("keeps a detail that was opened while a Delete was still in flight", async () => {
@@ -747,6 +1025,108 @@ describe("Source Record removal and deletion cache coordination", () => {
     });
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     expect(getLocation().search).toContain(`asset=${SECOND_ASSET}`);
+  });
+
+  it("calls onDeleted for delayed single delete after switching Assets", async () => {
+    const deletionResult = {
+      library_root: "C:/Library",
+      asset_id: FIRST_ASSET,
+      removed_source_path: null,
+      asset_deleted: true,
+      removed_source_records: 1,
+      removed_jobs: 1,
+      removed_renditions: 1,
+      removed_embeddings: 1,
+    };
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<typeof deletionResult>((resolve) => {
+      releaseDelete = () => resolve(deletionResult);
+    });
+    const client = makeClient({
+      deleteAsset: vi.fn(async () => deleteGate),
+    });
+    const onDeleted = vi.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AssetInspector
+            assetId={FIRST_ASSET}
+            client={client as never}
+            onClose={() => undefined}
+            onDeleted={onDeleted}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("region", { name: "Asset inspector" });
+    await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Asset" }));
+    await waitFor(() => {
+      expect(client.deleteAsset).toHaveBeenCalledWith(FIRST_ASSET);
+    });
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AssetInspector
+            assetId={SECOND_ASSET}
+            client={client as never}
+            onClose={() => undefined}
+            onDeleted={onDeleted}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      releaseDelete();
+    });
+
+    await waitFor(() => {
+      expect(onDeleted).toHaveBeenCalledWith(FIRST_ASSET);
+    });
+    expect(screen.getByRole("region", { name: "Asset inspector" })).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument();
+  });
+
+  it("does not surface delayed single-delete failure after selecting another Asset", async () => {
+    let rejectDelete!: (reason: unknown) => void;
+    const deleteGate = new Promise<never>((_resolve, reject) => {
+      rejectDelete = reject;
+    });
+    const client = makeClient({
+      deleteAsset: vi.fn(async () => deleteGate),
+    });
+    const { getLocation } = renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await screen.findByRole("button", { name: "Copy image" });
+    await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Asset" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this Asset?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Asset" }));
+    await waitFor(() => {
+      expect(client.deleteAsset).toHaveBeenCalledWith(FIRST_ASSET);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => {
+      rejectDelete({
+        error: "SidecarError",
+        detail: "Asset deletion was refused.",
+        retryable: false,
+      });
+    });
+
+    expect(screen.queryByText("Asset deletion was refused.")).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    expect(getLocation().search).toContain(`asset=${SECOND_ASSET}`);
+    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
   });
 });
 
