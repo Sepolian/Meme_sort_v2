@@ -10,23 +10,35 @@ export function ImportFailureDetails() {
   const snapshot = batch.snapshot;
   if (!snapshot || !importBatchIsTerminal(snapshot)) return null;
   const summary = snapshot.result ?? snapshot.partial_result;
-  if (!summary || summary.failure_count === 0) return null;
+  const error = snapshot.error;
+  const fatalError = snapshot.status === "failed" ? error : null;
+  const hasRecordedFailures = Boolean(summary && summary.failure_count > 0);
+  if (!hasRecordedFailures && !fatalError) return null;
 
   const stoppedEarly = snapshot.status === "failed" || snapshot.status === "cancelled";
-  const committed = importCommittedAssets(summary);
-  const omitted = summary.failure_count - summary.failure_details.length;
+  const committed = summary ? importCommittedAssets(summary) : false;
+  const failureCount = summary?.failure_count || 1;
+  const failures = summary?.failure_details.length
+    ? summary.failure_details
+    : fatalError
+      ? [{ stage: "batch", code: fatalError.error, source_name: "Import Batch", detail: fatalError.detail }]
+      : [];
+  const omitted = Math.max(0, failureCount - failures.length);
 
   return (
     <section className="import-failure-details" aria-labelledby="import-failure-details-heading">
       <h2 id="import-failure-details-heading">Import Failure details</h2>
       <p>
-        {summary.failure_count} Import Failure(s) recorded.
-        {committed
-          ? ` ${stoppedEarly ? "Committed before stopping" : "Committed"}: ${importAssetTotals(summary)}.`
+        {failureCount} Import Failure(s) recorded.
+        {summary
+          ? committed
+            ? ` ${stoppedEarly ? "Committed before stopping" : "Committed"}: ${importAssetTotals(summary)}.`
+            : " No Assets were committed by this batch."
           : " No Assets were committed by this batch."}
+        {summary && fatalError ? ` ${fatalError.detail}` : ""}
       </p>
       <ul className="detail-list">
-        {summary.failure_details.map((failure, index) => (
+        {failures.map((failure, index) => (
           <li key={`${index}-${failure.source_name}`}>
             <span className="mono">{failure.source_name}</span>
             <span>{failure.stage} · {failure.code} · {failure.detail}</span>
@@ -35,7 +47,7 @@ export function ImportFailureDetails() {
       </ul>
       {omitted > 0 ? (
         <p>
-          Showing the first {summary.failure_details.length} of {summary.failure_count} failures;
+          Showing the first {failures.length} of {failureCount} failures;
           {" "}{omitted} more were omitted.
         </p>
       ) : null}

@@ -18,7 +18,7 @@ type LibraryNotice = { kind: "error" | "success"; text: string };
  * native pickers (`chooseLibraryFiles`/`chooseLibraryFolder`) and passes only
  * the returned selection ID to `startLibraryImport`, so raw paths never reach
  * React. Picker cancellation (`null`) causes no mutation and no toast.
- * Active-batch gating, pause/resume (via ImportBatchPanel), validation,
+ * Active-batch gating, pause/resume (via Activity), validation,
  * feedback, and query invalidation match the previous Library flow. Launch
  * coordination (in-flight and known active/paused batches) and the start
  * refresh belong to the shared Import Batch Provider.

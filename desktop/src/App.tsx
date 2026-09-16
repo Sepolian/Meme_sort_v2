@@ -16,7 +16,6 @@ import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
 import { useLibrarySearch } from "./features/library/useLibrarySearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
-import { ImportBatchPanel } from "./features/import/ImportBatchPanel";
 import { TaskBar } from "./features/tasks/TaskBar";
 import { RuntimeHealthProvider } from "./features/runtime/RuntimeHealthProvider";
 import { useOptionalRuntimeHealth, useRuntimeHealth } from "./features/runtime/useRuntimeHealth";
@@ -496,7 +495,6 @@ function AppShell({ client }: { client: MemeSortClient }) {
         </header>
         <div className="workspace-main">
           <div className="workspace-status">
-            <ImportBatchPanel />
             {settingsMatch ? null : <RuntimeHealthBanner />}
           </div>
           {stateQuery.isPending ? <LoadingState /> : null}

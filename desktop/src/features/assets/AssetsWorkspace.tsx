@@ -8,7 +8,6 @@ import {
   type NativeDragSubscribe,
 } from "../../api/native-drag";
 import { useImportBatch } from "../import/ImportBatchContext";
-import { ImportFailureDetails } from "../import/ImportFailureDetails";
 import { importBatchBlockedMessage } from "../import/import-status";
 import { useOptionalRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { AssetWaterfall } from "./AssetWaterfall";
@@ -480,7 +479,6 @@ export function AssetsWorkspace({
     {feedback ? <section className="notice notice-success" role="status"><span>{feedback}</span></section> : null}
     {copyNotice ? <section className={`notice ${copyNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={copyNotice.kind === "error" ? "alert" : "status"}><span>{copyNotice.text}</span></section> : null}
     {libraryNotice ? <section className={`notice ${libraryNotice.kind === "error" ? "notice-warning" : "notice-success"}`} role={libraryNotice.kind === "error" ? "alert" : "status"}><span>{libraryNotice.text}</span></section> : null}
-    <ImportFailureDetails />
     {!isLocalMode && !isSemanticMode && !isImageMode && !isSimilarMode && assets.length ? (
       <BrowseResultContext total={assets.length} visible={orderedAssets.length} media={media} status={status} />
     ) : null}

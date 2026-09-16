@@ -109,9 +109,9 @@ function failureDetailsNote(
 ): string {
   if (!summary || summary.failure_count === 0) return "";
   if (summary.failures_truncated) {
-    return ` ${summary.failure_count} Import Failure(s) were recorded; the first ${summary.failure_details.length} are listed in the Library.`;
+    return ` ${summary.failure_count} Import Failure(s) were recorded; the first ${summary.failure_details.length} are listed in Activity.`;
   }
-  return ` ${summary.failure_count} Import Failure(s) are listed in the Library.`;
+  return ` ${summary.failure_count} Import Failure(s) are listed in Activity.`;
 }
 
 export function importResultMessage(snapshot: ImportTask): string {

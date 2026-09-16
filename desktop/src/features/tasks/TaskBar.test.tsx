@@ -241,10 +241,10 @@ describe("Activity entry", () => {
     const taskBar = screen.getByRole("region", { name: "Activity" });
     expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("region", { name: "Activity" })).toHaveLength(1);
-    // Expanded details break the same state down without duplicating action controls.
+    // Expanded Activity owns import controls and progress detail.
     expect(taskBar.textContent).toContain("Import");
-    expect(within(taskBar).queryByRole("button", { name: "Pause Import Batch" })).not.toBeInTheDocument();
-    expect(within(taskBar).queryByRole("button", { name: "Resume Import Batch" })).not.toBeInTheDocument();
+    expect(within(taskBar).getByRole("button", { name: "Pause Import Batch" })).toBeEnabled();
+    expect(within(taskBar).getByRole("button", { name: "Resume Import Batch" })).toBeDisabled();
   });
 
   it("minimizes and expands without losing the compact header", async () => {
@@ -273,13 +273,74 @@ describe("Activity entry", () => {
     currentImportStatus = importSnapshot({
       batch_id: "batch-1",
       status: "failed",
-      partial_result: importResultSummary({ new_assets: 0, duplicate_assets: 0 }),
+      partial_result: importResultSummary({
+        new_assets: 1,
+        failure_count: 1,
+        failure_details: [{
+          stage: "processing",
+          code: "decode_failed",
+          source_name: "broken.gif",
+          detail: "The image could not be decoded.",
+        }],
+      }),
     });
     const client = createClient();
     renderApp("/", client);
 
     await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Import Batch failed"));
+    const activity = screen.getByRole("region", { name: "Activity" });
+    expect(within(activity).getByRole("region", { name: "Import Failure details" })).toHaveTextContent("broken.gif");
+    expect(within(activity).getAllByRole("link", { name: "View Import Failure details" })).toHaveLength(1);
     expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(activity).getByRole("button", { name: "Collapse Activity" }));
+    const activityDetails = activity.querySelector<HTMLElement>("#activity-details");
+    expect(activityDetails).not.toBeNull();
+    expect(activityDetails).toHaveAttribute("hidden");
+    expect(getComputedStyle(activityDetails!).display).toBe("none");
+    expect(within(activity).queryByRole("region", { name: "Import Failure details" })).not.toBeInTheDocument();
+    expect(within(activity).getAllByRole("link", { name: "View Import Failure details" })).toHaveLength(1);
+    expect(within(activity).getByRole("button", { name: "Expand Activity" })).toBeInTheDocument();
+    expect(activity).toHaveTextContent("Import Batch failed");
+
+    fireEvent.click(within(activity).getByRole("link", { name: "View Import Failure details" }));
+    await waitFor(() => {
+      expect(within(activity).getByRole("region", { name: "Import Failure details" })).toBeInTheDocument();
+      expect(activityDetails).not.toHaveAttribute("hidden");
+      expect(getComputedStyle(activityDetails!).display).not.toBe("none");
+    });
+    expect(within(activity).getAllByRole("link", { name: "View Import Failure details" })).toHaveLength(1);
+  });
+
+  it("keeps a fatal Import Batch error visible when no partial result exists", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-fatal",
+      status: "failed",
+      error: { error: "import_batch_preflight_failed", detail: "The selected folder is unavailable." },
+    });
+    renderApp("/", createClient());
+
+    const details = await screen.findByRole("region", { name: "Import Failure details" });
+    expect(details).toHaveTextContent(
+      "The selected folder is unavailable.",
+    );
+  });
+
+  it("keeps cancellation semantics without inventing a file failure", async () => {
+    currentImportStatus = importSnapshot({
+      batch_id: "batch-cancelled",
+      status: "cancelled",
+      partial_result: importResultSummary({ new_assets: 2, failure_count: 0 }),
+      error: { error: "ImportCancelledError", detail: "The application stopped the Import Batch on shutdown." },
+    });
+    renderApp("/", createClient());
+
+    const notice = await screen.findByRole("region", { name: "Import Batch cancelled" });
+    expect(within(notice).getByRole("status", { name: "Import Batch result" })).toHaveTextContent(
+      "Committed Assets remain in the Library",
+    );
+    expect(screen.queryByRole("region", { name: "Import Failure details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Import Failure details" })).not.toBeInTheDocument();
   });
 
   it("shows indexing work while the worker is paused", async () => {

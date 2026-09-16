@@ -650,7 +650,7 @@ describe("global Import Batch result notice", () => {
     }
   }, 20_000);
 
-  it("keeps warning results visible across navigation and links back to Library Import Failure details", async () => {
+  it("keeps warning results visible across navigation with Activity Import Failure details", async () => {
     currentImportStatus = importSnapshot({
       batch_id: "batch-warn",
       status: "completed_with_errors",
@@ -674,7 +674,7 @@ describe("global Import Batch result notice", () => {
     expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Import Batch finished with errors" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("link", { name: "View Import Failure details in the Library" }));
+    fireEvent.click(screen.getByRole("link", { name: "View Import Failure details" }));
     expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
     const details = screen.getByRole("region", { name: "Import Failure details" });
     const items = within(details).getAllByRole("listitem");
@@ -682,7 +682,7 @@ describe("global Import Batch result notice", () => {
     expect(items[0].textContent).toContain("broken.gif");
   });
 
-  it("caps Library Import Failure details at 100 entries and states how many were omitted", async () => {
+  it("caps Activity Import Failure details at 100 entries and states how many were omitted", async () => {
     currentImportStatus = importSnapshot({
       batch_id: "batch-cap",
       status: "failed",
@@ -715,7 +715,7 @@ describe("global Import Batch result notice", () => {
 
     const notice = screen.getByRole("region", { name: "Import Batch failed" });
     expect(within(notice).getByRole("alert", { name: "Import Batch result" }).textContent)
-      .toContain("130 Import Failure(s) were recorded; the first 100 are listed in the Library");
+      .toContain("130 Import Failure(s) were recorded; the first 100 are listed in Activity");
   });
 
   it("reports skipped unsupported files without failure styling or a details section", async () => {
@@ -739,7 +739,7 @@ describe("global Import Batch result notice", () => {
     expect(screen.getByRole("status", { name: "Import Batch result" }).textContent)
       .toContain("4 file(s) were skipped");
     expect(screen.queryByRole("region", { name: "Import Failure details" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "View Import Failure details in the Library" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Import Failure details" })).not.toBeInTheDocument();
   });
 
   it("announces a failing terminal result once through alert semantics without repeated announcements", async () => {
@@ -779,4 +779,3 @@ describe("global Import Batch result notice", () => {
     }
   }, 20_000);
 });
-
