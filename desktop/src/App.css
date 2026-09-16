@@ -125,7 +125,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .asset-context-menu-item:hover { background: var(--color-surface-raised); }
 .asset-context-menu-item:active { transform: scale(0.98); transition: transform 80ms ease-out; }
 /* Ticket 08: visible sort/filter/density controls in the Library toolbar. */
-.library-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; }
+.library-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.library-media-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.library-media-tab { min-height: 36px; padding: 6px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: 14px; font-weight: 600; transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out; }
+.library-media-tab:hover { background: var(--color-surface-raised); color: var(--color-text); }
+.library-media-tab[aria-pressed="true"] { border-color: color-mix(in srgb, var(--color-accent) 42%, var(--color-border)); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)); color: var(--color-accent); }
+.library-view-menu { position: relative; flex: 0 0 auto; }
+.library-view-trigger { display: inline-flex; align-items: center; gap: 8px; }
+.library-filter-indicator { color: var(--color-accent); font-size: 10px; line-height: 1; }
+.library-view-dropdown { position: absolute; z-index: 5; top: calc(100% + 8px); right: 0; display: grid; gap: 12px; min-width: min(280px, calc(100vw - 32px)); padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: var(--shadow-raised); }
+.library-view-dropdown .library-control select { width: 100%; }
+.library-view-clear { justify-self: start; }
 .library-control { display: grid; gap: 4px; min-width: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
 .library-control select { min-height: 32px; min-width: 0; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
 /* Ticket 11: single Library search bar with instant local filtering and

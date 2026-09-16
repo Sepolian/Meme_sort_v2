@@ -697,7 +697,11 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
       "Open bird-photo.png",
     ]);
 
-    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "oldest" } });
+    fireEvent.click(screen.getByRole("button", { name: "View", expanded: false }));
+    fireEvent.change(
+      within(screen.getByRole("group", { name: "View options" })).getByLabelText("Sort"),
+      { target: { value: "oldest" } },
+    );
     expect(cardOrder()).toEqual([
       "Open bird-photo.png",
       "Open dog-park.png",

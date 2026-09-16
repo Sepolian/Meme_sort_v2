@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, act } from "@testing-library/react";
+import { fireEvent, render, screen, act, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
@@ -192,28 +192,39 @@ function cardOrder(): string[] {
   return buttons.map((button) => button.getAttribute("aria-label") ?? "");
 }
 
-describe("Library sorting, filtering, and density controls (ticket 08)", () => {
+function openViewMenu() {
+  fireEvent.click(screen.getByRole("button", { name: /^View/, expanded: false }));
+  return screen.getByRole("group", { name: "View options" });
+}
+
+function LocationCapture() {
+  const location = useLocation();
+  return <output aria-label="Library URL">{location.search}</output>;
+}
+
+describe("Library sorting, filtering, and density controls", () => {
   beforeEach(() => {
     localStorage.clear();
     resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 
-  it("renders every control in the Library toolbar with its active default value", async () => {
+  it("renders media tabs and View controls with their active default values", async () => {
     const client = makeClient();
     renderApp("/", client);
 
     await screen.findByRole("button", { name: /Open zebra\.png/ });
 
-    const sort = screen.getByLabelText("Sort") as HTMLSelectElement;
-    const media = screen.getByLabelText("Media") as HTMLSelectElement;
-    const status = screen.getByLabelText("Status") as HTMLSelectElement;
-    const density = screen.getByLabelText("Density") as HTMLSelectElement;
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Stills" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("group", { name: "View options" })).not.toBeInTheDocument();
 
-    expect(sort.value).toBe("newest");
-    expect(media.value).toBe("all");
-    expect(status.value).toBe("all");
-    expect(density.value).toBe("comfortable");
+    const viewMenu = openViewMenu();
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("newest");
+    expect((within(viewMenu).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+    expect((within(viewMenu).getByLabelText("Density") as HTMLSelectElement).value).toBe("comfortable");
+    expect(within(viewMenu).getByRole("button", { name: "Clear filters" })).toBeDisabled();
 
     // Default newest-first order: zebra (Aug) > mango (May) > apple (Jan).
     expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
@@ -225,11 +236,12 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
     await screen.findByRole("button", { name: /Open zebra\.png/ });
     expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
 
-    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "oldest" } });
+    const viewMenu = openViewMenu();
+    fireEvent.change(within(viewMenu).getByLabelText("Sort"), { target: { value: "oldest" } });
     expect(cardOrder()).toEqual(["Open apple.gif", "Open mango.png", "Open zebra.png"]);
-    expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
 
-    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "name" } });
+    fireEvent.change(within(viewMenu).getByLabelText("Sort"), { target: { value: "name" } });
     // Name order: apple.gif < mango.png < zebra.png.
     expect(cardOrder()).toEqual(["Open apple.gif", "Open mango.png", "Open zebra.png"]);
   });
@@ -239,16 +251,17 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
     renderApp("/", client);
     await screen.findByRole("button", { name: /Open zebra\.png/ });
 
-    fireEvent.change(screen.getByLabelText("Media"), { target: { value: "gif" } });
+    fireEvent.click(screen.getByRole("button", { name: "GIFs" }));
     // Only the GIF remains.
     expect(cardOrder()).toEqual(["Open apple.gif"]);
 
-    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "indexed" } });
+    const viewMenu = openViewMenu();
+    fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "indexed" } });
     // gif AND indexed matches nothing (the GIF is failed).
     expect(await screen.findByText("No Assets match these filters")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Open / })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "failed" } });
+    fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "failed" } });
     // gif AND failed matches the GIF again.
     expect(await screen.findByRole("button", { name: /Open apple\.gif/ })).toBeInTheDocument();
     expect(cardOrder()).toEqual(["Open apple.gif"]);
@@ -262,11 +275,12 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
     const grid = screen.getByRole("region", { name: "Assets" });
     expect(grid).toHaveAttribute("data-density", "comfortable");
 
-    fireEvent.change(screen.getByLabelText("Density"), { target: { value: "compact" } });
+    const viewMenu = openViewMenu();
+    fireEvent.change(within(viewMenu).getByLabelText("Density"), { target: { value: "compact" } });
     expect(screen.getByRole("region", { name: "Assets" })).toHaveAttribute("data-density", "compact");
     expect(localStorage.getItem(LIBRARY_PREFERENCE_KEYS.density)).toBe("compact");
 
-    fireEvent.change(screen.getByLabelText("Density"), { target: { value: "comfortable" } });
+    fireEvent.change(within(viewMenu).getByLabelText("Density"), { target: { value: "comfortable" } });
     expect(screen.getByRole("region", { name: "Assets" })).toHaveAttribute("data-density", "comfortable");
     expect(localStorage.getItem(LIBRARY_PREFERENCE_KEYS.density)).toBe("comfortable");
   });
@@ -276,21 +290,67 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
     renderApp("/", client);
     await screen.findByRole("button", { name: /Open zebra\.png/ });
 
-    fireEvent.change(screen.getByLabelText("Media"), { target: { value: "gif" } });
-    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "indexed" } });
+    fireEvent.click(screen.getByRole("button", { name: "GIFs" }));
+    const viewMenu = openViewMenu();
+    fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "indexed" } });
 
     expect(await screen.findByText("No Assets match these filters")).toBeInTheDocument();
     expect(
       screen.getByText(/Adjust the Media and Status filters, or clear them/i),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    fireEvent.click(within(viewMenu).getByRole("button", { name: "Clear filters" }));
 
     // Both filters reset to all and the full newest-first wall returns.
     expect(await screen.findByRole("button", { name: /Open zebra\.png/ })).toBeInTheDocument();
-    expect((screen.getByLabelText("Media") as HTMLSelectElement).value).toBe("all");
-    expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
     expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
+  });
+
+  it("clearing media and status preserves query, sort, and inspector target", async () => {
+    const client = makeClient();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/?q=apple&sort=oldest&media=gif&status=failed&asset=asset-oldest"]}>
+          <LocationCapture />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    const viewMenu = openViewMenu();
+    fireEvent.click(within(viewMenu).getByRole("button", { name: "Clear filters" }));
+
+    await waitFor(() => {
+      const search = screen.getByLabelText("Library URL").textContent ?? "";
+      expect(search).toContain("q=apple");
+      expect(search).toContain("sort=oldest");
+      expect(search).toContain("asset=asset-oldest");
+      expect(search).not.toContain("media=");
+      expect(search).not.toContain("status=");
+    });
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("shows an active status indicator and restores View focus after Escape", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /Open zebra\.png/ });
+
+    const view = screen.getByRole("button", { name: "View", expanded: false });
+    fireEvent.click(view);
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "failed" } });
+
+    expect(screen.getByRole("button", { name: "View, status filter active" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear filters" })).not.toBeDisabled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "View options" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View, status filter active" })).toHaveFocus();
   });
 
   it("restores sort and filters from a deep link on first load", async () => {
@@ -298,9 +358,10 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
     renderApp("/?sort=oldest&media=gif&status=failed", client);
 
     expect(await screen.findByRole("button", { name: /Open apple\.gif/ })).toBeInTheDocument();
-    expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
-    expect((screen.getByLabelText("Media") as HTMLSelectElement).value).toBe("gif");
-    expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("failed");
+    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "true");
+    const viewMenu = openViewMenu();
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
+    expect((within(viewMenu).getByLabelText("Status") as HTMLSelectElement).value).toBe("failed");
     expect(cardOrder()).toEqual(["Open apple.gif"]);
   });
 
@@ -331,7 +392,8 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
 
     // Start on the deep-linked oldest sort.
     await screen.findByRole("button", { name: /Open apple\.gif/ });
-    expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
+    let viewMenu = openViewMenu();
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
     expect(cardOrder()).toEqual(["Open apple.gif", "Open mango.png", "Open zebra.png"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));
@@ -339,14 +401,76 @@ describe("Library sorting, filtering, and density controls (ticket 08)", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     // Back to default newest.
-    expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("newest");
+    viewMenu = screen.getByRole("group", { name: "View options" });
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("newest");
     expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
+    viewMenu = screen.getByRole("group", { name: "View options" });
+    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
     expect(cardOrder()).toEqual(["Open apple.gif", "Open mango.png", "Open zebra.png"]);
+  });
+
+  it("keeps media and status filters in App history without duplicate same-value entries", async () => {
+    const client = makeClient();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function BackForward() {
+      const navigate = useNavigate();
+      return (
+        <div>
+          <button type="button" onClick={() => navigate(-1)}>
+            Go back
+          </button>
+          <button type="button" onClick={() => navigate(1)}>
+            Go forward
+          </button>
+        </div>
+      );
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/", "/?media=gif", "/?media=gif&status=failed"]} initialIndex={2}>
+          <BackForward />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("button", { name: /Open apple\.gif/ });
+    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "GIFs" }));
+    const viewMenu = openViewMenu();
+    expect((within(viewMenu).getByLabelText("Status") as HTMLSelectElement).value).toBe("failed");
+    fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "failed" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "true");
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "true");
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("failed");
   });
 });

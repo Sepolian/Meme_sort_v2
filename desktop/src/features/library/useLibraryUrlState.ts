@@ -134,6 +134,7 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
 
   const persistAndReflect = useCallback(
     (key: "sort" | "media" | "status", param: string, value: string, isDefault: boolean) => {
+      if (effective[key] === value) return;
       const patch: Partial<LibraryPreferences> =
         key === "sort"
           ? { sort: value as LibrarySort }
@@ -147,7 +148,7 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
         else next.set(param, value);
       });
     },
-    [storage, updateParams],
+    [effective, storage, updateParams],
   );
 
   const setSort = useCallback(

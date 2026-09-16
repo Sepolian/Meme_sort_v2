@@ -238,6 +238,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               onMediaChange={setMedia}
               onStatusChange={setStatus}
               onDensityChange={setDensity}
+              onClearFilters={clearFilters}
             />
           </>
         }

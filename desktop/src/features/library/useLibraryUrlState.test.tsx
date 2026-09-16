@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, beforeEach } from "vitest";
-import { MemoryRouter, useSearchParams } from "react-router-dom";
+import { MemoryRouter, useNavigate, useSearchParams } from "react-router-dom";
 import { useLibraryUrlState } from "./useLibraryUrlState";
 import { LIBRARY_PREFERENCE_KEYS } from "./libraryUrlState";
 
@@ -19,6 +19,7 @@ function Probe({ storage, initialMode }: { storage?: Storage | null; initialMode
         {state.resultMode.kind === "local" || state.resultMode.kind === "semantic" ? state.resultMode.query : ""}
       </span>
       <button type="button" onClick={() => state.setSort("oldest")}>set-sort</button>
+      <button type="button" onClick={() => state.setMedia("gif")}>set-media-gif</button>
       <button type="button" onClick={() => state.setQuery("hello")}>set-query</button>
       <button type="button" onClick={() => state.setQuery("other")}>set-other-query</button>
       <button type="button" onClick={() => state.setAssetId("asset-1")}>set-asset</button>
@@ -38,6 +39,11 @@ function Probe({ storage, initialMode }: { storage?: Storage | null; initialMode
 function LocationProbe() {
   const [params] = useSearchParams();
   return <span data-testid="location">{`?${params.toString()}`}</span>;
+}
+
+function BackProbe() {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate(-1)}>go-back</button>;
 }
 
 function renderProbe(route: string, storage?: Storage | null) {
@@ -120,6 +126,23 @@ describe("useLibraryUrlState", () => {
     expect(screen.getByTestId("sort")).toHaveTextContent("oldest");
     expect(screen.getByTestId("location").textContent).toContain("sort=oldest");
     expect(storage.getItem(LIBRARY_PREFERENCE_KEYS.sort)).toBe("oldest");
+  });
+
+  it("does not add a history entry when media is already active", () => {
+    render(
+      <MemoryRouter initialEntries={["/?q=cat", "/?q=cat&sort=oldest&media=gif"]} initialIndex={1}>
+        <Probe storage={storage} />
+        <BackProbe />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+    act(() => {
+      screen.getByRole("button", { name: "set-media-gif" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "go-back" }).click();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=cat");
   });
 
   it("clearing the inspector removes only asset and preserves other params", () => {
