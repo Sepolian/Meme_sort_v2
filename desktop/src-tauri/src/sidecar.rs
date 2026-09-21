@@ -18,11 +18,13 @@ use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 
 use crate::clipboard::{
-    build_hdrop_payload, build_static_image_payload, classify_managed_path, write_payload_via,
-    ClipboardPayload, ClipboardWriter, ManagedCopyKind, WindowsClipboardWriter,
+    build_hdrop_payload, build_static_image_payload, classify_managed_path,
+    with_clipboard_write, write_payload_via, ClipboardPayload, ClipboardWriter, ManagedCopyKind,
+    WindowsClipboardWriter,
 };
 use crate::native_selection::{
     validate_library_paths, LibraryImportSelection, SearchImageSelection,
+    SearchImageSelectionEntry,
 };
 
 #[cfg(test)]
@@ -59,6 +61,24 @@ impl SidecarError {
             error: "SidecarError".to_owned(),
             detail: message.into(),
             retryable: true,
+        }
+    }
+
+    pub(crate) fn image_selection_unavailable() -> Self {
+        Self {
+            status: None,
+            error: "ImageSelectionUnavailable".to_owned(),
+            detail: "The selected image is no longer available. Choose another image.".to_owned(),
+            retryable: false,
+        }
+    }
+
+    fn invalid_search_request_id() -> Self {
+        Self {
+            status: None,
+            error: "InvalidSearchRequestId".to_owned(),
+            detail: "Invalid MemeSort Search Request identifier.".to_owned(),
+            retryable: false,
         }
     }
 
@@ -349,7 +369,7 @@ impl SidecarSession {
             session_cookie,
             ApiRoute::TextSearch {
                 query: validate_search_query(query)?,
-                request_id: validate_asset_id(request_id)?,
+                request_id: validate_search_request_id(request_id)?,
             },
         )
     }
@@ -364,7 +384,7 @@ impl SidecarSession {
             session_cookie,
             MutationRoute::CancelSearch,
             &SearchRequestPayload {
-                request_id: validate_asset_id(request_id)?,
+                request_id: validate_search_request_id(request_id)?,
             },
         )
     }
@@ -382,7 +402,7 @@ impl SidecarSession {
             &SearchImagePayload {
                 path: image_path.to_owned(),
                 top_k: 18,
-                request_id: validate_asset_id(request_id)?,
+                request_id: validate_search_request_id(request_id)?,
             },
         )
     }
@@ -1225,18 +1245,46 @@ pub async fn search_image(
         let selection = app
             .try_state::<SearchImageSelection>()
             .ok_or_else(|| SidecarError::new("MemeSort image selection is unavailable."))?;
-        let image_path = selection.selected_path()?;
-        with_sidecar_connection(&app, |origin, session_cookie| {
-            SidecarSession::search_image_for_connection(
-                origin,
-                session_cookie,
-                &image_path,
-                &request_id,
-            )
+        search_selected_image(&selection, &request_id, |image_path, request_id| {
+            with_sidecar_connection(&app, |origin, session_cookie| {
+                SidecarSession::search_image_for_connection(
+                    origin,
+                    session_cookie,
+                    image_path,
+                    request_id,
+                )
+            })
         })
     })
     .await
     .map_err(|error| SidecarError::new(format!("Image Search Request did not complete: {error}")))?
+}
+
+fn search_selected_image<T>(
+    selection: &SearchImageSelection,
+    request_id: &str,
+    search: impl FnOnce(&str, &str) -> Result<T, SidecarError>,
+) -> Result<T, SidecarError> {
+    let request_id = validate_search_request_id(request_id)?;
+    let entry = selection.take(&request_id)?;
+    let image_path = entry.path.display().to_string();
+    complete_selected_image_search(selection, entry, search(&image_path, &request_id))
+}
+
+fn complete_selected_image_search<T>(
+    selection: &SearchImageSelection,
+    entry: SearchImageSelectionEntry,
+    result: Result<T, SidecarError>,
+) -> Result<T, SidecarError> {
+    match result {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            if error.retryable && !selection.restore(entry)? {
+                return Err(SidecarError::image_selection_unavailable());
+            }
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]
@@ -1367,26 +1415,30 @@ pub fn open_log_directory(app: AppHandle) -> Result<(), SidecarError> {
 /// Asset ID; the resolved path never leaves Rust.
 #[tauri::command]
 pub fn copy_asset_to_clipboard(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::copy_asset_with_writer(
-            origin,
-            session_cookie,
-            &asset_id,
-            &WindowsClipboardWriter,
-        )
+    with_clipboard_write(|| {
+        with_sidecar_connection(&app, |origin, session_cookie| {
+            SidecarSession::copy_asset_with_writer(
+                origin,
+                session_cookie,
+                &asset_id,
+                &WindowsClipboardWriter,
+            )
+        })
     })
 }
 
 /// Copy one raw Library Copy file reference as a `CF_HDROP` payload.
 #[tauri::command]
 pub fn copy_original_file(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::copy_original_file_with_writer(
-            origin,
-            session_cookie,
-            &asset_id,
-            &WindowsClipboardWriter,
-        )
+    with_clipboard_write(|| {
+        with_sidecar_connection(&app, |origin, session_cookie| {
+            SidecarSession::copy_original_file_with_writer(
+                origin,
+                session_cookie,
+                &asset_id,
+                &WindowsClipboardWriter,
+            )
+        })
     })
 }
 
@@ -1394,13 +1446,15 @@ pub fn copy_original_file(app: AppHandle, asset_id: String) -> Result<(), Sideca
 /// validated and de-duplicated under the existing batch limit.
 #[tauri::command]
 pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(), SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::copy_original_files_with_writer(
-            origin,
-            session_cookie,
-            &asset_ids,
-            &WindowsClipboardWriter,
-        )
+    with_clipboard_write(|| {
+        with_sidecar_connection(&app, |origin, session_cookie| {
+            SidecarSession::copy_original_files_with_writer(
+                origin,
+                session_cookie,
+                &asset_ids,
+                &WindowsClipboardWriter,
+            )
+        })
     })
 }
 
@@ -1794,19 +1848,25 @@ fn managed_media_path(request: &http::Request<Vec<u8>>) -> Result<String, Sideca
     Ok(path.to_owned())
 }
 
-fn validate_asset_id(asset_id: &str) -> Result<String, SidecarError> {
-    let is_uuid = asset_id.len() == 36
-        && asset_id.chars().enumerate().all(|(index, character)| {
+fn normalize_uuid(identifier: &str) -> Option<String> {
+    let is_uuid = identifier.len() == 36
+        && identifier.chars().enumerate().all(|(index, character)| {
             if matches!(index, 8 | 13 | 18 | 23) {
                 character == '-'
             } else {
                 character.is_ascii_hexdigit()
             }
         });
-    if !is_uuid {
-        return Err(SidecarError::new("Invalid MemeSort Asset identifier."));
-    }
-    Ok(asset_id.to_ascii_lowercase())
+    is_uuid.then(|| identifier.to_ascii_lowercase())
+}
+
+pub(crate) fn validate_asset_id(asset_id: &str) -> Result<String, SidecarError> {
+    normalize_uuid(asset_id)
+        .ok_or_else(|| SidecarError::new("Invalid MemeSort Asset identifier."))
+}
+
+pub(crate) fn validate_search_request_id(request_id: &str) -> Result<String, SidecarError> {
+    normalize_uuid(request_id).ok_or_else(SidecarError::invalid_search_request_id)
 }
 
 fn validate_asset_ids(asset_ids: &[String]) -> Result<Vec<String>, SidecarError> {
@@ -1937,8 +1997,9 @@ mod tests {
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         default_library_root, logical_drag_position, managed_media_path, native_drag_counts,
         native_drag_summary, parse_handshake, parse_json_response, process_native_drag_event,
-        validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
-        validate_import_sources, validate_library_paths, validate_search_query,
+        complete_selected_image_search, search_selected_image, validate_asset_id,
+        validate_asset_ids, validate_duplicate_threshold, validate_import_sources,
+        validate_library_paths, validate_search_query, validate_search_request_id,
         validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
         BatchAssetActionPayload, EmptyPayload, IndexingPolicy, LibraryImportSelection,
         LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute, NativeDragContext,
@@ -2094,6 +2155,22 @@ mod tests {
                 "{asset_id} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn rejects_an_invalid_search_request_id_with_non_retryable_metadata() {
+        let error = validate_search_request_id("not-a-uuid")
+            .expect_err("invalid Search Request ID must be rejected");
+
+        assert_eq!(error.status, None);
+        assert_eq!(error.error, "InvalidSearchRequestId");
+        assert_eq!(error.detail, "Invalid MemeSort Search Request identifier.");
+        assert!(!error.retryable);
+        assert_eq!(
+            validate_search_request_id("123E4567-E89B-12D3-A456-426614174000")
+                .expect("valid Search Request ID should normalize"),
+            "123e4567-e89b-12d3-a456-426614174000"
+        );
     }
 
     #[test]
@@ -2378,20 +2455,112 @@ mod tests {
         });
         let origin = format!("http://127.0.0.1:{port}");
         let selection = SearchImageSelection::new();
+        let request_id = "123e4567-e89b-12d3-a456-426614174000";
         selection
-            .replace(Some(PathBuf::from("C:/Source/query.png")))
+            .replace(request_id, Some(PathBuf::from("C:/Source/query.png")))
             .expect("native image selection should be stored");
 
         SidecarSession::search_image_for_connection(
             &origin,
             "memesort_session=test-token",
             &selection
-                .selected_path()
+                .selected_path(request_id)
                 .expect("selected image path should be available"),
-            "123e4567-e89b-12d3-a456-426614174000",
+            request_id,
         )
         .expect("image search should succeed");
         server.join().expect("test server should finish");
+    }
+
+    #[test]
+    fn consumes_successful_image_selection_and_restores_only_retryable_failures() {
+        let selection = SearchImageSelection::new();
+        let request_id = "123e4567-e89b-12d3-a456-426614174000";
+
+        selection
+            .replace(request_id, Some(PathBuf::from("C:/Source/query.png")))
+            .expect("selection should be stored");
+        search_selected_image(&selection, request_id, |path, id| {
+            assert_eq!(path, "C:/Source/query.png");
+            assert_eq!(id, request_id);
+            Ok(())
+        })
+        .expect("image search should succeed");
+        assert!(search_selected_image(&selection, request_id, |_, _| Ok(())).is_err());
+
+        selection
+            .replace(request_id, Some(PathBuf::from("C:/Source/retry.png")))
+            .expect("retry selection should be stored");
+        assert!(search_selected_image(&selection, request_id, |_, _| {
+            Err::<(), _>(SidecarError::new("temporary transport failure"))
+        })
+        .is_err());
+        search_selected_image(&selection, request_id, |path, _| {
+            assert_eq!(path, "C:/Source/retry.png");
+            Ok(())
+        })
+        .expect("retryable failure should preserve one retry");
+
+        selection
+            .replace(request_id, Some(PathBuf::from("C:/Source/invalid.png")))
+            .expect("non-retryable selection should be stored");
+        assert!(search_selected_image(&selection, request_id, |_, _| {
+            Err::<(), _>(SidecarError::backend_response(400, b"{}"))
+        })
+        .is_err());
+        assert!(search_selected_image(&selection, request_id, |_, _| Ok(())).is_err());
+    }
+
+    #[test]
+    fn reports_unavailable_when_a_retryable_search_cannot_restore_its_evicted_selection() {
+        let selection = SearchImageSelection::new();
+        let request_id = "123e4567-e89b-12d3-a456-426614174000";
+        selection
+            .replace(request_id, Some(PathBuf::from("C:/Source/query.png")))
+            .expect("selection should be stored");
+
+        let error = search_selected_image(&selection, request_id, |_, _| {
+            for index in 0..16 {
+                selection
+                    .replace(
+                        &format!("123e4567-e89b-12d3-a456-42661418{index:04x}"),
+                        Some(PathBuf::from("C:/Source/newer.png")),
+                    )
+                    .expect("newer selection should be stored");
+            }
+            Err::<(), _>(SidecarError::new("temporary transport failure"))
+        })
+        .expect_err("an unrestorable selection must not advertise retry");
+
+        assert_eq!(error.error, "ImageSelectionUnavailable");
+        assert_eq!(error.detail, "The selected image is no longer available. Choose another image.");
+        assert_eq!(error.status, None);
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn reports_unavailable_when_a_selection_expires_during_a_retryable_search() {
+        let selection = SearchImageSelection::new();
+        let request_id = "123e4567-e89b-12d3-a456-426614174000";
+        selection
+            .replace(request_id, Some(PathBuf::from("C:/Source/query.png")))
+            .expect("selection should be stored");
+        let mut entry = selection
+            .take(request_id)
+            .expect("selection should be consumed");
+        entry.expire();
+
+        let error = complete_selected_image_search(
+            &selection,
+            entry,
+            Err::<(), _>(SidecarError::new("temporary transport failure")),
+        )
+        .expect_err("an expired selection must not advertise retry");
+
+        assert_eq!(error.error, "ImageSelectionUnavailable");
+        assert_eq!(error.detail, "The selected image is no longer available. Choose another image.");
+        assert_eq!(error.status, None);
+        assert!(!error.retryable);
     }
 
     #[test]

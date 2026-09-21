@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface AssetContextMenuAnchor {
   x: number;
@@ -14,10 +14,14 @@ export interface AssetContextMenuAnchor {
  * built on this anchor route through the native `MemeSortClient` commands
  * (ID-only, never paths) instead.
  */
-export function useAssetContextMenu() {
+export function useAssetContextMenu(disabled = false) {
   const [anchor, setAnchor] = useState<AssetContextMenuAnchor | null>(null);
   const openMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
+    if (disabled) {
+      setAnchor(null);
+      return;
+    }
     const target = event.currentTarget;
     const opener =
       target.closest<HTMLElement>(".asset-card")?.querySelector<HTMLElement>(".asset-card-open") ??
@@ -26,9 +30,12 @@ export function useAssetContextMenu() {
         ? document.activeElement
         : null);
     setAnchor({ x: event.clientX, y: event.clientY, opener });
-  }, []);
+  }, [disabled]);
   const closeMenu = useCallback(() => {
     setAnchor(null);
   }, []);
+  useEffect(() => {
+    if (disabled) closeMenu();
+  }, [closeMenu, disabled]);
   return { anchor, openMenu, closeMenu };
 }

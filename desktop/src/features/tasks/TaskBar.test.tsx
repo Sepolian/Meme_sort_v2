@@ -82,7 +82,7 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
     batchAssetAction: async () => {
       throw new Error("not under test");
     },
-    chooseSearchImage: async () => ({ selected_path: null }),
+    chooseSearchImage: async (requestId: string) => ({ request_id: requestId, selected_path: null }),
     chooseLibraryFiles: async () => null,
     chooseLibraryFolder: async () => null,
     startLibraryImport: async () => {

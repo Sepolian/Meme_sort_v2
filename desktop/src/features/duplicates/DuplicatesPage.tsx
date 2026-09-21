@@ -88,7 +88,7 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
 
   const thresholdValue = Number(threshold);
   const isValidThreshold = Number.isFinite(thresholdValue) && thresholdValue >= 0 && thresholdValue <= 1;
-  const semanticBlocked = health.isBlocked;
+  const semanticBlocked = !health.isAuthorized;
 
   const composed = useMemo(() => {
     if (!rawPairs || !summaries) return null;
@@ -96,7 +96,7 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
   }, [rawPairs, summaries]);
 
   const scan = async () => {
-    if (!isValidThreshold || isScanning) return;
+    if (!isValidThreshold || isScanning || !health.isAuthorized) return;
     setIsScanning(true);
     setScanError(null);
     setNotice(null);
@@ -249,7 +249,7 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
           <strong>Duplicate scan unavailable</strong>
           <span>{scanError}</span>
           <div className="import-actions">
-            <button className="button button-secondary" type="button" onClick={() => void scan()}>Retry scan</button>
+            <button className="button button-secondary" type="button" disabled={isScanning || semanticBlocked} onClick={() => void scan()}>Retry scan</button>
           </div>
         </section>
       ) : null}
@@ -261,7 +261,7 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
           <strong>{composed.stale.length} duplicate pair{composed.stale.length === 1 ? "" : "s"} omitted</strong>
           <span>Their Assets are no longer in the current Asset list. Rescan to refresh; nothing was rendered with invented dimensions or Source Records.</span>
           <div className="import-actions">
-            <button className="button button-secondary" type="button" onClick={() => void scan()}>Rescan duplicates</button>
+            <button className="button button-secondary" type="button" disabled={isScanning || semanticBlocked} onClick={() => void scan()}>Rescan duplicates</button>
           </div>
         </section>
       ) : null}

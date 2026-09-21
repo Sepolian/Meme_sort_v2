@@ -5,7 +5,10 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
+import {
+  resetRuntimeHealthForTesting,
+  retryRuntimeHealthCheck,
+} from "./features/runtime/runtimeHealthStore";
 
 const FIRST_ASSET = "123e4567-e89b-12d3-a456-426614174000";
 const SECOND_ASSET = "123e4567-e89b-12d3-a456-426614174001";
@@ -228,6 +231,22 @@ function renderApp(route: string | string[], client: ReturnType<typeof makeClien
   return { ...utils, getLocation: () => testLocation, queryClient };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 async function selectByLabel(label: string) {
   fireEvent.click(await screen.findByLabelText(label));
 }
@@ -345,6 +364,123 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["success", "failure"] as const)(
+    "does not surface a delayed single-card copy %s after its target context changes",
+    async (outcome) => {
+      const gate = deferred<void>();
+      const client = makeClient({
+        copyAssetToClipboard: vi.fn(async () => gate.promise),
+      });
+      const { container } = renderApp("/", client);
+
+      await screen.findByLabelText("Select first.gif");
+      const card = container.querySelector<HTMLElement>(`article[data-asset-id="${FIRST_ASSET}"]`);
+      expect(card).not.toBeNull();
+      fireEvent.contextMenu(card as HTMLElement, { button: 2, clientX: 200, clientY: 150 });
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Copy image" }));
+      expect(client.copyAssetToClipboard).toHaveBeenCalledWith(FIRST_ASSET);
+
+      // A filter transition removes the copied card from the active wall and
+      // invalidates the operation before its native promise settles.
+      fireEvent.click(screen.getByRole("button", { name: "Stills" }));
+      expect(screen.queryByLabelText("Select first.gif")).not.toBeInTheDocument();
+      await act(async () => {
+        if (outcome === "success") gate.resolve();
+        else gate.reject({ error: "SidecarError", detail: "Asset A copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(screen.queryByText("Copied to clipboard. Paste into QQ or WeChat.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Asset A copy failed.")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Select second.png")).toBeInTheDocument();
+    },
+  );
+
+  it.each(["success", "failure"] as const)(
+    "surfaces the current delayed single-card copy %s result",
+    async (outcome) => {
+      const gate = deferred<void>();
+      const client = makeClient({
+        copyAssetToClipboard: vi.fn(async () => gate.promise),
+      });
+      const { container } = renderApp("/", client);
+
+      await screen.findByLabelText("Select first.gif");
+      const card = container.querySelector<HTMLElement>(`article[data-asset-id="${FIRST_ASSET}"]`);
+      expect(card).not.toBeNull();
+      fireEvent.contextMenu(card as HTMLElement, { button: 2, clientX: 200, clientY: 150 });
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Copy image" }));
+      await act(async () => {
+        if (outcome === "success") gate.resolve();
+        else gate.reject({ error: "SidecarError", detail: "Current card copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+
+      if (outcome === "success") {
+        expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
+      } else {
+        expect(await screen.findByRole("alert")).toHaveTextContent("Current card copy failed.");
+      }
+    },
+  );
+
+  it.each(["success", "failure"] as const)(
+    "does not surface a delayed batch copy %s after its selection changes",
+    async (outcome) => {
+      const gate = deferred<void>();
+      const client = makeClient({
+        copyOriginalFiles: vi.fn(async () => gate.promise),
+      });
+      renderApp("/", client);
+
+      await selectByLabel("Select first.gif");
+      await selectByLabel("Select second.png");
+      fireEvent.click(screen.getByRole("button", { name: "Copy original files" }));
+      expect(client.copyOriginalFiles).toHaveBeenCalledWith([SECOND_ASSET, FIRST_ASSET]);
+
+      // Removing one selected ID changes the operation context even though
+      // the remaining Asset is still present and browseable.
+      fireEvent.click(screen.getByLabelText("Select second.png"));
+      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await act(async () => {
+        if (outcome === "success") gate.resolve();
+        else gate.reject({ error: "SidecarError", detail: "Batch copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(screen.queryByText("Copied 2 original file references.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Batch copy failed.")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(["success", "failure"] as const)(
+    "surfaces the current batch copy %s result for the unchanged selection",
+    async (outcome) => {
+      const gate = deferred<void>();
+      const client = makeClient({
+        copyOriginalFiles: vi.fn(async () => gate.promise),
+      });
+      renderApp("/", client);
+
+      await selectByLabel("Select first.gif");
+      await selectByLabel("Select second.png");
+      fireEvent.click(screen.getByRole("button", { name: "Copy original files" }));
+      await act(async () => {
+        if (outcome === "success") gate.resolve();
+        else gate.reject({ error: "SidecarError", detail: "Batch copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+
+      if (outcome === "success") {
+        expect(await screen.findByText("Copied 2 original file references.")).toBeInTheDocument();
+      } else {
+        expect(await screen.findByRole("alert")).toHaveTextContent("Batch copy failed.");
+      }
+    },
+  );
+
   it("clears selection explicitly via Clear selection", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -372,13 +508,16 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
 
     await selectByLabel("Select first.gif");
 
-    fireEvent.click(screen.getByRole("button", { name: "Rebuild Active Index" }));
+    const rebuild = screen.getByRole("button", { name: "Rebuild Active Index" });
+    rebuild.focus();
+    fireEvent.click(rebuild);
     const dialog = await screen.findByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" });
     expect(dialog).toHaveTextContent("Running Asset jobs are skipped.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Queue rebuild" }));
 
     expect(await screen.findByText(/Queued 1 Active Index rebuild\(s\); skipped 0 running Asset\(s\)\./)).toBeInTheDocument();
     expect(client.batchAssetAction).toHaveBeenCalledWith("rebuild-active-index", [FIRST_ASSET]);
+    await waitFor(() => expect(rebuild).toHaveFocus());
     // Rebuild preserves selection.
     expect((screen.getByLabelText("Select first.gif") as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText("1 selected")).toBeInTheDocument();
@@ -388,6 +527,35 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     const deleteDialog = await screen.findByRole("alertdialog", { name: "Delete 1 selected Asset(s)?" });
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Cancel" }));
     expect(client.batchAssetAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("rechecks authorization at Confirm time before rebuilding the Active Index", async () => {
+    const runRuntimeHealthCheck = vi
+      .fn()
+      .mockResolvedValueOnce(healthyCheck())
+      .mockResolvedValueOnce({ ...healthyCheck(), smoke_test_ok: false, error: "Vulkan0 authorization was lost." });
+    const client = makeClient({ runRuntimeHealthCheck });
+    renderApp("/", client);
+
+    await screen.findByLabelText("Select first.gif");
+    fireEvent.click(screen.getByLabelText("Select first.gif"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rebuild Active Index" })).toBeEnabled());
+    const rebuild = screen.getByRole("button", { name: "Rebuild Active Index" });
+    rebuild.focus();
+    fireEvent.click(rebuild);
+    const dialog = await screen.findByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" });
+
+    await act(async () => {
+      await retryRuntimeHealthCheck(client as never);
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Queue rebuild" }));
+
+    expect(client.batchAssetAction).not.toHaveBeenCalled();
+    expect(await screen.findByText(
+      "Indexing authorization was lost. Run the Runtime health check before rebuilding the Active Index.",
+    )).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".page-library")).toHaveFocus());
   });
 
   it("reconciles Delete from the mutation response: removes only affected, retains skipped", async () => {

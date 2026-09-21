@@ -7,6 +7,7 @@ interface LibrarySearchBarProps {
   isSearching: boolean;
   semanticBlocked?: boolean;
   isChoosingImage?: boolean;
+  imagePickerError?: string | null;
   onQueryChange: (query: string) => void;
   onSubmit: (query: string) => void;
   onClear: () => void;
@@ -35,6 +36,7 @@ export function LibrarySearchBar({
   isSearching,
   semanticBlocked = false,
   isChoosingImage = false,
+  imagePickerError = null,
   onQueryChange,
   onSubmit,
   onClear,
@@ -208,6 +210,11 @@ export function LibrarySearchBar({
           check. {mode === "filename"
             ? "By filename still filters the loaded Library locally."
             : "By meaning keeps your draft local without filtering the Library."}
+        </p>
+      ) : null}
+      {imagePickerError ? (
+        <p className="notice notice-warning" role="alert" aria-label="Image picker error">
+          {imagePickerError}
         </p>
       ) : null}
     </div>

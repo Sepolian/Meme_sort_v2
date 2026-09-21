@@ -149,7 +149,7 @@ function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn
     batchAssetAction: vi.fn(async () => {
       throw new Error("not under test");
     }),
-    chooseSearchImage: vi.fn(async () => ({ selected_path: null })),
+    chooseSearchImage: vi.fn(async (requestId: string) => ({ request_id: requestId, selected_path: null })),
     chooseLibraryFiles: vi.fn(async () => null),
     chooseLibraryFolder: vi.fn(async () => null),
     startLibraryImport: vi.fn(async () => {
@@ -306,13 +306,54 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
     renderApp("/settings", client);
     await screen.findByRole("heading", { name: "Settings" });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Resume worker" }));
+    const resume = await screen.findByRole("button", { name: "Resume worker" });
+    await waitFor(() => expect(resume).toBeEnabled());
+    fireEvent.click(resume);
     expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Worker Loop resumed.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Run one tick" }));
     expect(client.triggerWorkerLoop).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Worker Loop tick requested.")).toBeInTheDocument();
+  });
+
+  it("gates indexing-mutating diagnostics until current-session health authorizes them", async () => {
+    let resolve!: (value: RuntimeHealthResult) => void;
+    const client = createClient();
+    (client.runRuntimeHealthCheck as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(() => new Promise<RuntimeHealthResult>((r) => { resolve = r; }));
+    renderApp("/settings", client);
+
+    expect(await screen.findByRole("button", { name: "Resume worker" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Retry failed Jobs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run one tick" })).toBeDisabled();
+
+    resolve(healthyResult());
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Resume worker" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Retry failed Jobs" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Run one tick" })).toBeEnabled();
+    });
+  });
+
+  it("keeps pause, Pending Job deletion, and log access usable when health fails", async () => {
+    const client = createClient();
+    (client.getAppState as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(appStateSnapshot({ paused: false }));
+    (client.runRuntimeHealthCheck as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...healthyResult(),
+      smoke_test_ok: false,
+      error: "Vulkan0 unavailable.",
+    });
+    renderApp("/settings", client);
+
+    await screen.findByRole("alert", { name: "Runtime health failure" });
+    expect(screen.getByRole("button", { name: "Resume worker" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Retry failed Jobs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run one tick" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pause worker" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open log folder" })).toBeEnabled();
+
+    fireEvent.click(screen.getByLabelText("Select Pending Job embed_asset"));
+    expect(screen.getByRole("button", { name: "Delete selected Pending Jobs" })).toBeEnabled();
   });
 
   it("retries failed Job records without changing Assets", async () => {
@@ -329,7 +370,9 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
     renderApp("/settings", client);
 
     fireEvent.click(await screen.findByLabelText("Select Pending Job embed_asset"));
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected Pending Jobs" }));
+    const deletePending = screen.getByRole("button", { name: "Delete selected Pending Jobs" });
+    deletePending.focus();
+    fireEvent.click(deletePending);
     expect(screen.getByRole("alertdialog", { name: "Delete 1 Pending Job(s)?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete Pending Jobs" }));
 
@@ -337,6 +380,7 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
     expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
     expect(client.deleteAsset).not.toHaveBeenCalled();
     expect(client.getPendingJobs).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.querySelector("main.page")).toHaveFocus());
   });
 
   it("shows Recent Jobs and both Worker event sources from the read-only projection", async () => {

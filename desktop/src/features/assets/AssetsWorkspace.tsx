@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
@@ -31,6 +31,10 @@ import {
 import { EMPTY_LIBRARY_SEARCH, type LibrarySearchView } from "../library/useLibrarySearch";
 import { useDeletedAssetReconciliation } from "./useDeletedAssetReconciliation";
 import type { AssetSummary } from "../../api/types";
+import {
+  isRestorableFocusTarget,
+  scheduleFocusRestoration,
+} from "../../components/useEscapeSurface";
 
 interface AssetsWorkspaceProps {
   client: MemeSortClient;
@@ -69,6 +73,11 @@ interface AssetsWorkspaceProps {
 type BatchMutationRequest = { action: "delete" | "rebuild-active-index"; assetIds: string[] };
 
 type LibraryNotice = { kind: "error" | "success"; text: string };
+
+interface CopyOperation {
+  generation: number;
+  assetIds: string[];
+}
 
 interface ConfirmAction {
   title: string;
@@ -155,6 +164,40 @@ function ActiveFilterRecovery({
   );
 }
 
+function FilteredRetrievalEmpty({
+  label,
+  count,
+  media,
+  status,
+  onClearFilters,
+  onClearSearch,
+  wallRef,
+}: {
+  label: string;
+  count: number;
+  media: LibraryMediaFilter;
+  status: LibraryStatusFilter;
+  onClearFilters?: () => void;
+  onClearSearch?: () => void;
+  wallRef: RefObject<HTMLDivElement | null>;
+}) {
+  const summary = browseFilterSummary(media, status);
+  return (
+    <div className="empty-state" aria-label={`${label} results filtered out`} ref={wallRef}>
+      <h2>{count} {label.toLowerCase()} match{count === 1 ? " is" : "es are"} hidden by filters</h2>
+      <p>{summary?.replace("Filters:", "Active filters:")} excludes every match from this search.</p>
+      <div className="import-actions">
+        <button className="button button-secondary" type="button" onClick={() => onClearFilters?.()}>
+          Clear filters
+        </button>
+        <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
+          Clear search
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AssetsWorkspace({
   client,
   selectedAssetId,
@@ -179,7 +222,7 @@ export function AssetsWorkspace({
   const queryClient = useQueryClient();
   const importBatch = useImportBatch();
   const runtimeHealth = useOptionalRuntimeHealth();
-  const indexingBlocked = runtimeHealth?.isBlocked ?? false;
+  const indexingBlocked = runtimeHealth ? !runtimeHealth.isAuthorized : false;
   const startBatch = importBatch.startBatch;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmation, setConfirmation] = useState<ConfirmAction | null>(null);
@@ -189,6 +232,14 @@ export function AssetsWorkspace({
   // both success and failure; failure never claims clipboard restoration.
   const [copyPending, setCopyPending] = useState(false);
   const [copyNotice, setCopyNotice] = useState<LibraryNotice | null>(null);
+  const copyGenerationRef = useRef(0);
+  const copyOperationRef = useRef<CopyOperation | null>(null);
+  const invalidateCopyOperation = useCallback(() => {
+    copyGenerationRef.current += 1;
+    copyOperationRef.current = null;
+    setCopyPending(false);
+    setCopyNotice(null);
+  }, []);
   const [dragPreview, setDragPreview] = useState<{ itemCount: number } | null>(null);
   const wallRef = useRef<HTMLDivElement | null>(null);
   const startedDropIdRef = useRef<string | null>(null);
@@ -204,6 +255,7 @@ export function AssetsWorkspace({
       setFeedback(mutationSummary(request, result));
       setConfirmation(null);
       if (request.action === "delete") {
+        invalidateCopyOperation();
         // Ticket 17: only Delete reconciles selection (removing exactly
         // `affected_asset_ids` so skipped/failed IDs are retained). Rebuild
         // preserves the full selection and never closes the inspector because
@@ -267,6 +319,10 @@ export function AssetsWorkspace({
   // affects presentation (column width/gap) via the grid's data-density
   // attribute and ticket 07's persisted preference.
   const assetsData = assetsQuery.data;
+  // Only the committed layout effect below owns this snapshot. Initializing
+  // from render data would let an abandoned render change which Assets a
+  // pending copy operation is allowed to publish against.
+  const copyAssetsRef = useRef<readonly AssetSummary[]>([]);
   const orderedAssets = useMemo(
     () =>
       assetsData
@@ -299,8 +355,35 @@ export function AssetsWorkspace({
     () => filterLocalAssets(orderedAssets, localDisplayQuery),
     [orderedAssets, localDisplayQuery],
   );
+  // Keep the raw local signal separate from the displayed wall. A zero raw
+  // match is a genuine no-match state; a positive raw count with no visible
+  // item means Media/Status filters hid the matches and needs recovery copy.
+  const unfilteredLocalMatches = useMemo(
+    () => filterLocalAssets(assetsData?.assets ?? [], localDisplayQuery),
+    [assetsData, localDisplayQuery],
+  );
+  const unfilteredLocalMatchCount = unfilteredLocalMatches.length;
   const isSearching = search.current.status === "loading";
   const searchError = search.current.error;
+  // Retrieval modes never reinterpret their meaning/image labels as a
+  // filename query while work is pending or unavailable. The active filters
+  // and sort already live in orderedAssets, so keep that browse wall intact.
+  const retrievalFallbackAssets = orderedAssets;
+  const copyResultIdentity = effectiveMode.kind === "browse"
+    ? ""
+    : effectiveMode.kind === "local" || effectiveMode.kind === "semantic"
+      ? effectiveMode.query
+      : effectiveMode.kind === "image"
+        ? effectiveMode.selectionId
+        : effectiveMode.assetId;
+  useLayoutEffect(() => {
+    copyAssetsRef.current = assetsData?.assets ?? [];
+    invalidateCopyOperation();
+  }, [assetsData, copyResultIdentity, effectiveMode.kind, invalidateCopyOperation, media, query, selectedAssetId, selectedIds, sort, status]);
+  useEffect(() => () => {
+    copyGenerationRef.current += 1;
+    copyOperationRef.current = null;
+  }, []);
   const searchRetryable = search.current.status === "error" && search.current.retryable;
   const hasResults = search.result !== null;
   const visualImageLabel = search.current.request?.kind === "image"
@@ -312,23 +395,53 @@ export function AssetsWorkspace({
     : isSimilarMode
       ? effectiveMode.assetId
       : "selected Asset";
-  const focusSearchAfterRetry = () => {
-    window.requestAnimationFrame(() => {
-      document.getElementById("library-search-input")?.focus({ preventScroll: true });
+  const retryFocusGenerationRef = useRef(0);
+  const retryFocusFrameCancelRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => {
+    retryFocusGenerationRef.current += 1;
+    retryFocusFrameCancelRef.current?.();
+    retryFocusFrameCancelRef.current = null;
+  }, []);
+  useEffect(() => {
+    retryFocusGenerationRef.current += 1;
+    retryFocusFrameCancelRef.current?.();
+    retryFocusFrameCancelRef.current = null;
+  }, [query, resultMode]);
+  const focusSearchAfterRetry = (source: HTMLElement | null) => {
+    const generation = ++retryFocusGenerationRef.current;
+    retryFocusFrameCancelRef.current?.();
+    retryFocusFrameCancelRef.current = scheduleFocusRestoration(() => {
+      retryFocusFrameCancelRef.current = null;
+      if (generation !== retryFocusGenerationRef.current) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body && active !== source) return;
+      const target = document.getElementById("library-search-input");
+      if (isRestorableFocusTarget(target)) target.focus({ preventScroll: true });
     });
   };
   const retrySearch = () => {
+    const source = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     onRetrySearch?.();
-    focusSearchAfterRetry();
+    focusSearchAfterRetry(source);
   };
   const composedResults = useMemo(
     () => search.result ? composeSearchItems(search.result.assets, summaryMap) : null,
     [search.result, summaryMap],
   );
   const indexedItems = useMemo(
-    () => composedResults?.items.filter((item) => item.summary.status === "indexed") ?? [],
-    [composedResults],
+    () => {
+      if (!composedResults) return [];
+      const activeAssetIds = new Set(orderedAssets.map((asset) => asset.asset_id));
+      return composedResults.items.filter(
+        (item) => item.summary.status === "indexed" && activeAssetIds.has(item.summary.asset_id),
+      );
+    },
+    [composedResults, orderedAssets],
   );
+  const unfilteredIndexedCount = composedResults?.items.filter(
+    (item) => item.summary.status === "indexed",
+  ).length ?? 0;
+  const allResultsFiltered = unfilteredIndexedCount > 0 && indexedItems.length === 0;
   const searchSummaries = useMemo(() => indexedItems.map((item) => item.summary), [indexedItems]);
   const staleCount = composedResults?.stale.length ?? 0;
 
@@ -369,7 +482,6 @@ export function AssetsWorkspace({
       if (isLocalMode) return localMatches;
       if (isSemanticMode || isImageMode || isSimilarMode) {
         if (hasResults && searchSummaries.length) return searchSummaries;
-        if (localMatches.length) return localMatches;
         return orderedAssets;
       }
       return orderedAssets;
@@ -386,31 +498,58 @@ export function AssetsWorkspace({
   const clearSelection = () => {
     setSelectedIds(new Set());
   };
+  const beginCopyOperation = (assetIds: readonly string[]): CopyOperation => {
+    const operation: CopyOperation = {
+      generation: copyGenerationRef.current + 1,
+      assetIds: [...assetIds],
+    };
+    copyGenerationRef.current = operation.generation;
+    copyOperationRef.current = operation;
+    setCopyPending(true);
+    setCopyNotice(null);
+    return operation;
+  };
+  const isCurrentCopyOperation = (operation: CopyOperation): boolean => {
+    if (
+      copyOperationRef.current !== operation ||
+      copyGenerationRef.current !== operation.generation
+    ) return false;
+    const currentAssetIds = new Set(copyAssetsRef.current.map((asset) => asset.asset_id));
+    return operation.assetIds.every((assetId) => currentAssetIds.has(assetId));
+  };
+  const finishCopyOperation = (operation: CopyOperation) => {
+    if (!isCurrentCopyOperation(operation)) return;
+    copyOperationRef.current = null;
+    setCopyPending(false);
+  };
   // Ticket 17: one selection uses the single-file client method; multiple
   // selections call the multi-file method once with stable visual-order IDs
   // (ID-only, never paths). Selection is preserved on success and failure.
   const runCopyOriginalFiles = async () => {
     const assetIds = getOrderedSelectedIds();
     if (!assetIds.length || copyPending || mutation.isPending) return;
-    setCopyPending(true);
-    setCopyNotice(null);
+    const operation = beginCopyOperation(assetIds);
     try {
       if (assetIds.length === 1) {
         await client.copyOriginalFile(assetIds[0]);
       } else {
         await client.copyOriginalFiles(assetIds);
       }
-      setCopyNotice({
-        kind: "success",
-        text: assetIds.length === 1 ? "Original file reference copied." : `Copied ${assetIds.length} original file references.`,
-      });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({
+          kind: "success",
+          text: assetIds.length === 1 ? "Original file reference copied." : `Copied ${assetIds.length} original file references.`,
+        });
+      }
     } catch (error) {
-      setCopyNotice({
-        kind: "error",
-        text: tauriErrorDetail(error, "Copy original files failed. The Library was not modified."),
-      });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({
+          kind: "error",
+          text: tauriErrorDetail(error, "Copy original files failed. The Library was not modified."),
+        });
+      }
     } finally {
-      setCopyPending(false);
+      finishCopyOperation(operation);
     }
   };
   // Ticket 01 follow-up: card right-click menu actions. "Copy image" is the
@@ -419,28 +558,34 @@ export function AssetsWorkspace({
   // Library Copy reference. Both are ID-only and report through copyNotice.
   const runCardClipboardCopy = async (assetId: string) => {
     if (copyPending || mutation.isPending) return;
-    setCopyPending(true);
-    setCopyNotice(null);
+    const operation = beginCopyOperation([assetId]);
     try {
       await client.copyAssetToClipboard(assetId);
-      setCopyNotice({ kind: "success", text: "Copied to clipboard. Paste into QQ or WeChat." });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({ kind: "success", text: "Copied to clipboard. Paste into QQ or WeChat." });
+      }
     } catch (error) {
-      setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.") });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.") });
+      }
     } finally {
-      setCopyPending(false);
+      finishCopyOperation(operation);
     }
   };
   const runCardCopyOriginal = async (assetId: string) => {
     if (copyPending || mutation.isPending) return;
-    setCopyPending(true);
-    setCopyNotice(null);
+    const operation = beginCopyOperation([assetId]);
     try {
       await client.copyOriginalFile(assetId);
-      setCopyNotice({ kind: "success", text: "Original file reference copied." });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({ kind: "success", text: "Original file reference copied." });
+      }
     } catch (error) {
-      setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Copy original file failed. The Library was not modified.") });
+      if (isCurrentCopyOperation(operation)) {
+        setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Copy original file failed. The Library was not modified.") });
+      }
     } finally {
-      setCopyPending(false);
+      finishCopyOperation(operation);
     }
   };
   const requestBatch = (action: "delete" | "rebuild-active-index") => {
@@ -450,6 +595,18 @@ export function AssetsWorkspace({
       ? { title: `Delete ${assetIds.length} selected Asset(s)?`, detail: "This deletes each Asset's Library Copy and Derived Artifacts. This cannot be undone.", confirmLabel: "Delete selected Assets", request: { action, assetIds } }
       : { title: `Rebuild ${assetIds.length} selected Asset(s)?`, detail: "This clears their active-recipe embeddings and queues new indexing work. Running Asset jobs are skipped.", confirmLabel: "Queue rebuild", request: { action, assetIds } });
   };
+  const confirmBatch = () => {
+    if (!confirmation) return;
+    if (confirmation.request.action === "rebuild-active-index" && indexingBlocked) {
+      setConfirmation(null);
+      setLibraryNotice({
+        kind: "error",
+        text: "Indexing authorization was lost. Run the Runtime health check before rebuilding the Active Index.",
+      });
+      return;
+    }
+    mutation.mutate(confirmation.request);
+  };
   const waterfallProps = {
     density,
     checkedIds: selectedIds,
@@ -458,6 +615,7 @@ export function AssetsWorkspace({
     onFindSimilar,
     onCopyImage: runCardClipboardCopy,
     onCopyOriginal: runCardCopyOriginal,
+    copyBusy: copyPending,
     sectionRef: wallRef,
     accepting: Boolean(dragPreview),
   };
@@ -496,7 +654,12 @@ export function AssetsWorkspace({
       </section>
     ) : null}
     {isSemanticMode ? (
-      <section className="notice" role="status" aria-label="Semantic search results">
+      <section
+        className="notice"
+        role="status"
+        aria-live={searchError || staleCount ? "off" : "polite"}
+        aria-label="Semantic search results"
+      >
         <strong>
           {isSearching && !hasResults
             ? `Searching the Active Index Recipe for \u201C${semanticModeQuery}\u201D\u2026`
@@ -508,7 +671,7 @@ export function AssetsWorkspace({
           <section className="notice notice-warning" role="alert" aria-label="Semantic search error">
             <strong>Semantic search unavailable</strong>
             <span>{searchError}</span>
-            <span>Library browsing remains available. Local matches for this query stay visible below.</span>
+            <span>Library browsing remains available with the active Media and Status filters below.</span>
             {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry search</button> : null}
             {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
           </section>
@@ -530,7 +693,12 @@ export function AssetsWorkspace({
       </section>
     ) : null}
     {isImageMode ? (
-      <section className="notice" role="status" aria-label="Image search results">
+      <section
+        className="notice"
+        role="status"
+        aria-live={searchError || staleCount ? "off" : "polite"}
+        aria-label="Image search results"
+      >
         <strong>
           {isSearching && !hasResults
             ? `Searching the Active Index Recipe for the chosen image\u2026`
@@ -544,7 +712,7 @@ export function AssetsWorkspace({
             <strong>Image search unavailable</strong>
             <span>{searchError}</span>
             <span>Query image: &ldquo;{visualImageLabel}&rdquo;</span>
-            <span>Library browsing remains available. Local matches stay visible below.</span>
+            <span>Library browsing remains available with the active Media and Status filters below.</span>
             {searchRetryable && imageSelectionAvailable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry image search</button> : null}
             {onChooseImage && (!searchRetryable || !imageSelectionAvailable) ? <button className="button button-secondary" type="button" onClick={onChooseImage}>Choose another image</button> : null}
             {!searchRetryable ? <span>This request cannot be retried. Choose another image or clear search.</span> : null}
@@ -567,7 +735,12 @@ export function AssetsWorkspace({
       </section>
     ) : null}
     {isSimilarMode ? (
-      <section className="notice" role="status" aria-label="Similar search results">
+      <section
+        className="notice"
+        role="status"
+        aria-live={searchError || staleCount ? "off" : "polite"}
+        aria-label="Similar search results"
+      >
         <strong>
           {isSearching && !hasResults
             ? `Finding similar Assets\u2026`
@@ -581,7 +754,7 @@ export function AssetsWorkspace({
             <strong>Find Similar unavailable</strong>
             <span>{searchError}</span>
             <span>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</span>
-            <span>Library browsing remains available. Local matches stay visible below.</span>
+            <span>Library browsing remains available with the active Media and Status filters below.</span>
             {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry similar search</button> : null}
             {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
           </section>
@@ -612,6 +785,8 @@ export function AssetsWorkspace({
       ) : isLocalMode ? (
         localMatches.length ? (
           <AssetWaterfall assets={localMatches} {...waterfallProps} />
+        ) : unfilteredLocalMatchCount > 0 ? (
+          <FilteredRetrievalEmpty label="Local" count={unfilteredLocalMatchCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
         ) : (
           <div className="empty-state" aria-label="No local matches" ref={wallRef}>
             <h2>No local matches for &ldquo;{localDisplayQuery}&rdquo;</h2>
@@ -630,6 +805,8 @@ export function AssetsWorkspace({
       ) : isSemanticMode ? (
         hasResults && searchSummaries.length ? (
           <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
+        ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
+          <FilteredRetrievalEmpty label="Semantic" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No semantic matches" ref={wallRef}>
             <h2>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
@@ -644,16 +821,17 @@ export function AssetsWorkspace({
               <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
-        ) : localMatches.length ? (
-          // In-progress or failed semantic request keeps the Library visible
-          // through instant local matches instead of discarding browsing.
-          <AssetWaterfall assets={localMatches} {...waterfallProps} />
+        ) : retrievalFallbackAssets.length ? (
+          // Failed semantic work keeps the filtered browse wall intact;
+          // meaning text is never treated as a filename query. Pending work
+          // uses the same filtered, sorted browse wall.
+          <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
         ) : (
-          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
-            <h2>No local matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
+          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
+            <h2>No Assets match these filters</h2>
             <p>
               The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Clearing the search restores browsing with the selected sort and filters.
+              Adjust the Media and Status filters, or clear them to browse the full Library.
             </p>
             <div>
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
@@ -666,6 +844,8 @@ export function AssetsWorkspace({
       ) : isImageMode ? (
         hasResults && searchSummaries.length ? (
           <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
+        ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
+          <FilteredRetrievalEmpty label="Image" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No image matches" ref={wallRef}>
             <h2>No image matches</h2>
@@ -680,16 +860,16 @@ export function AssetsWorkspace({
               <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
-        ) : localMatches.length ? (
-          // In-progress or failed image request keeps the Library visible
-          // through local matches instead of discarding browsing.
-          <AssetWaterfall assets={localMatches} {...waterfallProps} />
+        ) : retrievalFallbackAssets.length ? (
+          // In-progress or failed image work keeps the filtered browse wall
+          // visible instead of treating the image label as a filename query.
+          <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
         ) : (
-          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
-            <h2>No local matches</h2>
+          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
+            <h2>No Assets match these filters</h2>
             <p>
               Query image: &ldquo;{visualImageLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Clearing the search restores browsing with the selected sort and filters.
+              Adjust the Media and Status filters, or clear them to browse the full Library.
             </p>
             <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
@@ -702,6 +882,8 @@ export function AssetsWorkspace({
       ) : isSimilarMode ? (
         hasResults && searchSummaries.length ? (
           <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
+        ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
+          <FilteredRetrievalEmpty label="Similar" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
           <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
             <h2>No similar Assets</h2>
@@ -716,16 +898,16 @@ export function AssetsWorkspace({
               <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
             </div>
           </div>
-        ) : localMatches.length ? (
-          // In-progress or failed similar request keeps the Library visible
-          // through local matches instead of discarding browsing.
-          <AssetWaterfall assets={localMatches} {...waterfallProps} />
+        ) : retrievalFallbackAssets.length ? (
+          // In-progress or failed similar work keeps the filtered browse wall
+          // visible instead of treating the source label as a filename query.
+          <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
         ) : (
-          <div className="empty-state" aria-label="No local matches" ref={wallRef}>
-            <h2>No local matches</h2>
+          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
+            <h2>No Assets match these filters</h2>
             <p>
               Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Clearing the search restores browsing with the selected sort and filters.
+              Adjust the Media and Status filters, or clear them to browse the full Library.
             </p>
             <div className="import-actions">
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
@@ -766,7 +948,7 @@ export function AssetsWorkspace({
         confirmLabel={confirmation.confirmLabel}
         pending={mutation.isPending}
         onCancel={() => setConfirmation(null)}
-        onConfirm={() => mutation.mutate(confirmation.request)}
+        onConfirm={confirmBatch}
         onEscape={() => setConfirmation(null)}
       />
     ) : null}

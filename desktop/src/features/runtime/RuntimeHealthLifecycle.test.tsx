@@ -79,7 +79,7 @@ function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & {
     batchAssetAction: async () => {
       throw new Error("not under test");
     },
-    chooseSearchImage: async () => ({ selected_path: null }),
+      chooseSearchImage: async (requestId: string) => ({ request_id: requestId, selected_path: null }),
     chooseLibraryFiles: async () => null,
     chooseLibraryFolder: async () => null,
     startLibraryImport: async () => {
@@ -190,6 +190,29 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
     expect(await screen.findByRole("status", { name: "Runtime health" })).toHaveTextContent("Preparing search");
     resolve(healthyResult());
     await waitFor(() => expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps semantic and image requests disabled until current-session health authorizes them", async () => {
+    let resolve!: (value: RuntimeHealthResult) => void;
+    const client = makeClient({
+      runRuntimeHealthCheck: vi.fn(() => new Promise<RuntimeHealthResult>((r) => (resolve = r))),
+    });
+    renderApp("/", client);
+
+    const imageButton = await screen.findByRole("button", { name: "Search by image" });
+    expect(imageButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Open first\.gif/ })).toBeInTheDocument();
+
+    const input = screen.getByLabelText("Search Library");
+    fireEvent.change(input, { target: { value: "reaction" } });
+    expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
+
+    resolve(healthyResult());
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Search" })).toBeEnabled();
+    });
   });
 
   it("blocks semantic search and indexing on failure while browsing and import still work", async () => {

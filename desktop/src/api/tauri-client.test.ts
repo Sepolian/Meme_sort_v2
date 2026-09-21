@@ -87,13 +87,14 @@ describe("createMemeSortClient", () => {
   });
 
   it("uses a fixed path-free command to choose a native-selected image", async () => {
-    const selection = { selected_path: "C:/Source/query.png" };
+    const requestId = "123e4567-e89b-12d3-a456-426614174000";
+    const selection = { request_id: requestId, selected_path: "C:/Source/query.png" };
     const invokeCommand = vi.fn().mockResolvedValue(selection);
     const client = createMemeSortClient(invokeCommand);
 
-    const result = await client.chooseSearchImage();
+    const result = await client.chooseSearchImage(requestId);
 
-    expect(invokeCommand).toHaveBeenCalledWith("choose_search_image");
+    expect(invokeCommand).toHaveBeenCalledWith("choose_search_image", { requestId });
     expect(result).toEqual(selection);
   });
 

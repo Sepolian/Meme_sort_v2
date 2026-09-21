@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AssetWaterfall } from "./AssetWaterfall";
 import type { AssetSummary } from "../../api/types";
@@ -89,6 +89,38 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(onCopyImage).not.toHaveBeenCalled();
   });
 
+  it("suppresses pointer and keyboard context menus while both copy actions are busy", () => {
+    const onCopyImage = vi.fn();
+    const onCopyOriginal = vi.fn();
+    const { container } = render(
+      <AssetWaterfall
+        assets={[makeGif(GIF_ID)]}
+        density="comfortable"
+        checkedIds={new Set()}
+        onOpenAsset={() => undefined}
+        onToggleChecked={() => undefined}
+        onCopyImage={onCopyImage}
+        onCopyOriginal={onCopyOriginal}
+        copyBusy
+        columnCount={1}
+      />,
+    );
+    const card = container.querySelector(
+      `article[data-asset-id="${GIF_ID}"]`,
+    ) as HTMLElement;
+
+    expect(rightClick(card)).toBe(false);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    const opener = screen.getByRole("button", { name: `Open ${GIF_ID}.gif` });
+    opener.focus();
+    expect(fireEvent.contextMenu(opener, { button: 0, detail: 0 })).toBe(false);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+    expect(onCopyImage).not.toHaveBeenCalled();
+    expect(onCopyOriginal).not.toHaveBeenCalled();
+  });
+
   it("leaves right-click alone when no copy handlers are wired", () => {
     const { container } = render(
       <AssetWaterfall
@@ -130,5 +162,58 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("does not steal focus after dismissal when the user focuses another control", async () => {
+    const { container } = render(
+      <div>
+        <button type="button">Other control</button>
+        <AssetWaterfall
+          assets={[makeGif(GIF_ID)]}
+          density="comfortable"
+          checkedIds={new Set()}
+          onOpenAsset={() => undefined}
+          onToggleChecked={() => undefined}
+          onCopyImage={() => undefined}
+          onCopyOriginal={() => undefined}
+          columnCount={1}
+        />
+      </div>,
+    );
+    const card = container.querySelector(`article[data-asset-id="${GIF_ID}"]`) as HTMLElement;
+    expect(rightClick(card)).toBe(false);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy image" }));
+
+    const other = screen.getByRole("button", { name: "Other control" });
+    other.focus();
+    await act(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+    expect(other).toHaveFocus();
+  });
+
+  it("cancels a dismissed menu restoration when another menu opens before the next frame", async () => {
+    const { container } = render(
+      <AssetWaterfall
+        assets={[makeGif(GIF_ID)]}
+        density="comfortable"
+        checkedIds={new Set()}
+        onOpenAsset={() => undefined}
+        onToggleChecked={() => undefined}
+        onCopyImage={() => undefined}
+        onCopyOriginal={() => undefined}
+        columnCount={1}
+      />,
+    );
+    const card = container.querySelector(`article[data-asset-id="${GIF_ID}"]`) as HTMLElement;
+    expect(rightClick(card)).toBe(false);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy image" }));
+    expect(rightClick(card)).toBe(false);
+
+    const menuItem = screen.getByRole("menuitem", { name: "Copy image" });
+    await act(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+    expect(menuItem).toHaveFocus();
   });
 });

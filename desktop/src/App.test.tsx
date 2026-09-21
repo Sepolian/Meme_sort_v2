@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { Component, type ReactNode } from "react";
 import { App } from "./App";
+import { scheduleFocusRestoration } from "./components/useEscapeSurface";
 import type { AssetDetail, AssetListResult, PendingJob } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
@@ -17,6 +19,22 @@ const pendingJobSnapshot: PendingJob = {
   created_at: "2026-08-09T00:00:00Z",
   updated_at: "2026-08-09T00:00:00Z",
 };
+
+class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+function AbandonRender(): never {
+  throw new Error("abandon this render");
+}
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -158,7 +176,7 @@ const client = {
     removed_embeddings: 0,
     reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
   })),
-  chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
+  chooseSearchImage: vi.fn(async (requestId: string) => ({ request_id: requestId, selected_path: "C:/Source/query.png" })),
   chooseLibraryFiles: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174010", count: 2 })),
   chooseLibraryFolder: vi.fn(async () => ({ selection_id: "123e4567-e89b-12d3-a456-426614174011", count: 1 })),
   startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "123e4567-e89b-12d3-a456-426614174020", status: "scanning", running: true, started_at: 1 })),
@@ -316,7 +334,15 @@ describe("App", () => {
     fireEvent.click(await screen.findByLabelText("Select first.gif"));
     fireEvent.click(screen.getByRole("button", { name: "Rebuild Active Index" }));
 
-    expect(screen.getByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" })).toBeInTheDocument();
+    const dialog = screen.getByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" });
+    expect(dialog).toBeInTheDocument();
+    const queue = screen.getByRole("button", { name: "Queue rebuild" });
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    queue.focus();
+    fireEvent.keyDown(queue, { key: "Tab" });
+    expect(cancel).toHaveFocus();
+    fireEvent.keyDown(cancel, { key: "Tab", shiftKey: true });
+    expect(queue).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Queue rebuild" }));
 
     expect(await screen.findByText("Queued 1 Active Index rebuild(s); skipped 0 running Asset(s)."))
@@ -467,6 +493,8 @@ describe("App", () => {
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "MemeSort navigation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Close" }), { key: "Tab" });
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "MemeSort navigation" })).not.toBeInTheDocument();
@@ -476,5 +504,29 @@ describe("App", () => {
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("does not invalidate committed focus restoration from an abandoned App render", () => {
+    const cancelFrame = vi.spyOn(window, "cancelAnimationFrame");
+    const cancelPendingRestoration = scheduleFocusRestoration(() => undefined);
+    cancelFrame.mockClear();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <RenderBoundary>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/"]}>
+            <App client={client} />
+            <AbandonRender />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RenderBoundary>,
+    );
+
+    expect(cancelFrame).not.toHaveBeenCalled();
+    cancelPendingRestoration();
+    cancelFrame.mockRestore();
+    consoleError.mockRestore();
   });
 });

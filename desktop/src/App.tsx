@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
 import { EmptyState, LoadingState, SidecarDisconnected } from "./components/States";
-import { useEscapeSurface } from "./components/useEscapeSurface";
+import {
+  invalidateFocusRestorations,
+  isRestorableFocusTarget,
+  scheduleFocusRestoration,
+  useDialogFocus,
+  useEscapeSurface,
+} from "./components/useEscapeSurface";
 import { AssetsWorkspace } from "./features/assets/AssetsWorkspace";
 import { AssetInspector } from "./features/assets/AssetInspector";
 import { DuplicatesPage } from "./features/duplicates/DuplicatesPage";
@@ -13,6 +19,7 @@ import { LibraryImportMenu } from "./features/library/LibraryImportMenu";
 import { LibrarySearchBar, type LibrarySearchMode } from "./features/library/LibrarySearchBar";
 import { LibraryShell } from "./features/library/LibraryShell";
 import { useLibraryUrlState } from "./features/library/useLibraryUrlState";
+import type { LibraryResultMode } from "./features/library/libraryUrlState";
 import { useLibrarySearch } from "./features/library/useLibrarySearch";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { ImportBatchProvider } from "./features/import/ImportBatchProvider";
@@ -24,6 +31,7 @@ import { ThemeProvider } from "./features/theme/ThemeProvider";
 import type { ThemePreference } from "./features/theme/theme";
 import { TitleBar } from "./features/window/TitleBar";
 import { useWindowControls } from "./features/window/window-controls";
+import { isNativePickerCancellation, tauriErrorDetail } from "./api/tauri-error";
 import "./App.css";
 
 interface AppProps {
@@ -53,6 +61,30 @@ function selectedImageLabel(path: string): string {
     if (segment) return segment;
   }
   return "selected image";
+}
+
+function sameLibraryResultMode(left: LibraryResultMode, right: LibraryResultMode): boolean {
+  switch (left.kind) {
+    case "browse":
+      return right.kind === "browse";
+    case "local":
+      return right.kind === "local" && left.query === right.query;
+    case "semantic":
+      return right.kind === "semantic" && left.query === right.query;
+    case "image":
+      return right.kind === "image" && left.selectionId === right.selectionId;
+    case "similar":
+      return right.kind === "similar" && left.assetId === right.assetId;
+  }
+  return false;
+}
+
+interface CommittedPickerContext {
+  query: string;
+  resultMode: LibraryResultMode;
+  authorized: boolean;
+  healthStatus: string;
+  healthGeneration: number;
 }
 
 function Page({ title, eyebrow, children, className, headingActions, headingMeta }: PageProps) {
@@ -125,10 +157,62 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   const previousSelectedAssetIdRef = useRef(selectedAssetId);
   const detailCloseHandledRef = useRef(false);
   const optionalHealth = useOptionalRuntimeHealth();
-  const semanticBlocked = optionalHealth?.isBlocked ?? false;
+  // Persisted health is informational. Search and visual retrieval require a
+  // successful check in this application session; browsing and import do not.
+  const semanticBlocked = optionalHealth ? !optionalHealth.isAuthorized : false;
+  const [imagePickerError, setImagePickerError] = useState<string | null>(null);
+  const imagePickerGenerationRef = useRef(0);
+  const imagePickerMountedRef = useRef(false);
+  const currentHealthStatus = optionalHealth?.status ?? "unavailable";
+  const currentAuthorization = optionalHealth ? optionalHealth.isAuthorized : true;
+  const committedPickerContextRef = useRef<CommittedPickerContext | null>(null);
+  useLayoutEffect(() => {
+    const previous = committedPickerContextRef.current;
+    const healthChanged = previous !== null && (
+      previous.authorized !== currentAuthorization ||
+      previous.healthStatus !== currentHealthStatus
+    );
+    committedPickerContextRef.current = {
+      query: q,
+      resultMode,
+      authorized: currentAuthorization,
+      healthStatus: currentHealthStatus,
+      healthGeneration: (previous?.healthGeneration ?? 0) + (healthChanged ? 1 : 0),
+    };
+  }, [currentAuthorization, currentHealthStatus, q, resultMode]);
+
+  const previousPickerContextRef = useRef<CommittedPickerContext | null>(null);
+
+  useEffect(() => {
+    const current = committedPickerContextRef.current;
+    if (!current) return;
+    const previous = previousPickerContextRef.current;
+    if (
+      previous && (
+        previous.query !== current.query ||
+        !sameLibraryResultMode(previous.resultMode, current.resultMode) ||
+        previous.authorized !== current.authorized ||
+        previous.healthStatus !== current.healthStatus
+      )
+    ) {
+      setImagePickerError(null);
+    }
+    previousPickerContextRef.current = current;
+  }, [currentAuthorization, currentHealthStatus, q, resultMode]);
+
+  useLayoutEffect(() => {
+    imagePickerMountedRef.current = true;
+    return () => {
+      imagePickerMountedRef.current = false;
+      imagePickerGenerationRef.current += 1;
+    };
+  }, []);
 
   const handleQueryChange = useCallback(
     (next: string) => {
+      imagePickerGenerationRef.current += 1;
+      setIsChoosingImage(false);
+      setImagePickerError(null);
       setQuery(next);
     },
     [setQuery],
@@ -138,6 +222,9 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     (submitQuery: string) => {
       const trimmed = submitQuery.trim();
       if (!trimmed || semanticBlocked) return;
+      imagePickerGenerationRef.current += 1;
+      setIsChoosingImage(false);
+      setImagePickerError(null);
       const requestId = submitSearch(trimmed);
       if (requestId) {
         setQuery(trimmed);
@@ -149,6 +236,9 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
 
   const handleSearchModeChange = useCallback(
     (mode: LibrarySearchMode, draft: string) => {
+      imagePickerGenerationRef.current += 1;
+      setIsChoosingImage(false);
+      setImagePickerError(null);
       clearSearch();
       if (mode === "filename") {
         setQuery(draft);
@@ -164,41 +254,65 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   );
 
   const handleImageSearch = useCallback(async () => {
-    if (semanticBlocked || isChoosingImage) return;
+    const pickerContext = committedPickerContextRef.current;
+    if (!pickerContext?.authorized || !imagePickerMountedRef.current) return;
+    const generation = imagePickerGenerationRef.current + 1;
+    imagePickerGenerationRef.current = generation;
+    const pickerRequestId = crypto.randomUUID();
+    const isCurrentPicker = () =>
+      imagePickerMountedRef.current &&
+      generation === imagePickerGenerationRef.current &&
+      (() => {
+        const current = committedPickerContextRef.current;
+        return Boolean(
+          current &&
+          current.authorized &&
+          current.healthGeneration === pickerContext.healthGeneration &&
+          current.query === pickerContext.query &&
+          sameLibraryResultMode(pickerContext.resultMode, current.resultMode),
+        );
+      })();
+    setImagePickerError(null);
     setIsChoosingImage(true);
     try {
-      const selection = await client.chooseSearchImage();
+      const selection = await client.chooseSearchImage(pickerRequestId);
+      if (!isCurrentPicker()) return;
+      if (selection.request_id !== pickerRequestId) return;
       // Picker cancel (`selected_path: null`) leaves the current
       // Library/result state unchanged: no submit, no mode change.
-      if (!selection.selected_path) {
-        if (resultMode.kind === "image") {
-          setImageSelection((current) => current ? { ...current, available: false } : current);
-        }
-        return;
-      }
+      if (!selection.selected_path) return;
       const nextSelection = {
         id: crypto.randomUUID(),
         label: selectedImageLabel(selection.selected_path),
         available: true,
       };
-      const requestId = submitImageSearch(nextSelection.id, nextSelection.label);
+      const requestId = submitImageSearch(nextSelection.id, nextSelection.label, pickerRequestId);
       if (requestId) {
+        setImagePickerError(null);
         setImageSelection(nextSelection);
         setResultMode({ kind: "image", selectionId: nextSelection.id });
       }
-    } catch {
-      // Picker/transport failure also leaves browsing usable without
-      // inventing a result mode; the image hook error surfaces only for
-      // `searchImage` failures after a successful pick.
+    } catch (error) {
+      if (isCurrentPicker() && !isNativePickerCancellation(error)) {
+        setImagePickerError(
+          tauriErrorDetail(
+            error,
+            "MemeSort could not open the native image picker. Your Library was not modified.",
+          ),
+        );
+      }
     } finally {
-      setIsChoosingImage(false);
+      if (generation === imagePickerGenerationRef.current) setIsChoosingImage(false);
     }
-  }, [client, resultMode.kind, submitImageSearch, setResultMode, semanticBlocked, isChoosingImage]);
+  }, [client, setResultMode, submitImageSearch]);
 
   const handleFindSimilar = useCallback(
     (assetId: string) => {
       const trimmed = assetId.trim();
       if (!trimmed || semanticBlocked) return;
+      imagePickerGenerationRef.current += 1;
+      setIsChoosingImage(false);
+      setImagePickerError(null);
       const internalId = submitSimilarSearch(trimmed);
       if (internalId) {
         // Both inspector and card entries share this mode shape so they
@@ -210,56 +324,124 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
   );
 
   const handleClearSearch = useCallback(() => {
+    imagePickerGenerationRef.current += 1;
+    setIsChoosingImage(false);
     clearSearch();
     clearQuery();
+    setImagePickerError(null);
     setImageSelection(null);
     setResultMode({ kind: "browse" });
   }, [clearSearch, clearQuery, setResultMode]);
 
   const currentSearch = search.current;
+  const missingImageSelectionId = currentSearch.status === "error"
+    && currentSearch.errorCode === "ImageSelectionUnavailable"
+    && !currentSearch.retryable
+    && currentSearch.request.kind === "image"
+    ? currentSearch.request.selectionId
+    : null;
+  const imageSelectionAvailable = imageSelection?.available === true
+    && imageSelection.id !== missingImageSelectionId;
+  useEffect(() => {
+    if (!missingImageSelectionId) return;
+    setImageSelection((current) => (
+      current?.id === missingImageSelectionId && current.available
+        ? { ...current, available: false }
+        : current
+    ));
+  }, [missingImageSelectionId]);
   const handleRetrySearch = useCallback(() => {
     if (semanticBlocked || currentSearch.status !== "error" || !currentSearch.request) return;
-    if (currentSearch.request.kind === "image" && imageSelection?.available !== true) return;
+    if (currentSearch.request.kind === "image" && !imageSelectionAvailable) return;
     retrySearch();
-  }, [currentSearch, imageSelection?.available, retrySearch, semanticBlocked]);
+  }, [currentSearch, imageSelectionAvailable, retrySearch, semanticBlocked]);
+
+  const detailFocusGenerationRef = useRef(0);
+  const detailFocusFrameCancelRef = useRef<(() => void) | null>(null);
+  const libraryMountedRef = useRef(false);
+  const previousDetailAssetIdRef = useRef(selectedAssetId);
+  const initializedDetailFocusRef = useRef(false);
+  const invalidateDetailFocus = useCallback(() => {
+    detailFocusGenerationRef.current += 1;
+    detailFocusFrameCancelRef.current?.();
+    detailFocusFrameCancelRef.current = null;
+    invalidateFocusRestorations();
+  }, []);
+  useLayoutEffect(() => {
+    if (!initializedDetailFocusRef.current) {
+      initializedDetailFocusRef.current = true;
+      invalidateDetailFocus();
+      return;
+    }
+    if (previousDetailAssetIdRef.current === selectedAssetId) return;
+    const closeWasHandled = detailCloseHandledRef.current;
+    previousDetailAssetIdRef.current = selectedAssetId;
+    if (!closeWasHandled) invalidateDetailFocus();
+  }, [invalidateDetailFocus, selectedAssetId]);
+
+  useEffect(() => {
+    libraryMountedRef.current = true;
+    return () => {
+      libraryMountedRef.current = false;
+      detailFocusFrameCancelRef.current?.();
+      detailFocusFrameCancelRef.current = null;
+      detailFocusGenerationRef.current += 1;
+    };
+  }, []);
 
   const handleSelectAsset = useCallback(
     (assetId: string) => {
       // The card/View button remains the active element after its click. Keep
       // that trigger so closing this non-modal inspector restores focus to it.
+      invalidateDetailFocus();
       detailOpenerRef.current =
         document.activeElement instanceof HTMLElement && document.activeElement !== document.body
           ? { assetId, element: document.activeElement }
           : null;
       setAssetId(assetId);
     },
-    [setAssetId],
+    [invalidateDetailFocus, setAssetId],
   );
 
   const restoreDetailFocus = useCallback((closingAssetId: string) => {
+    invalidateDetailFocus();
+    const generation = detailFocusGenerationRef.current;
     const opener = detailOpenerRef.current;
     const openerAssetId = opener?.assetId === closingAssetId ? closingAssetId : null;
-    const openerElement = openerAssetId ? opener?.element : null;
+    const openerElement = openerAssetId ? opener?.element ?? null : null;
     const focusAvailableTarget = (retry: boolean) => {
-      const currentOpener = openerElement && openerElement !== document.body && openerElement.isConnected
+      if (!libraryMountedRef.current || generation !== detailFocusGenerationRef.current) return;
+      const active = document.activeElement;
+      const focusStillBelongsToClosingInspector =
+        active === document.body ||
+        (active instanceof HTMLElement && active.closest(".library-inspector") !== null);
+      if (!focusStillBelongsToClosingInspector) return;
+      const currentOpener = isRestorableFocusTarget(openerElement ?? null) && openerElement !== document.body
         ? openerElement
         : openerAssetId
           ? Array.from(document.querySelectorAll<HTMLElement>(".asset-card")).find(
               (card) => card.dataset.assetId === openerAssetId,
             )?.querySelector<HTMLElement>(".asset-card-open") ?? null
           : null;
-      if (currentOpener) {
+      if (isRestorableFocusTarget(currentOpener)) {
         currentOpener.focus({ preventScroll: true });
         return;
       }
       if (retry && openerAssetId) {
-        window.requestAnimationFrame(() => focusAvailableTarget(false));
+        detailFocusFrameCancelRef.current = scheduleFocusRestoration(() => {
+          detailFocusFrameCancelRef.current = null;
+          focusAvailableTarget(false);
+        });
         return;
       }
-      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+      const fallback = document.querySelector<HTMLElement>(".library-content");
+      if (isRestorableFocusTarget(fallback)) fallback.focus({ preventScroll: true });
     };
-    window.requestAnimationFrame(() => focusAvailableTarget(true));
-  }, []);
+    detailFocusFrameCancelRef.current = scheduleFocusRestoration(() => {
+      detailFocusFrameCancelRef.current = null;
+      focusAvailableTarget(true);
+    });
+  }, [invalidateDetailFocus]);
 
   const handleCloseDetail = useCallback(() => {
     const focusWasInInspector =
@@ -267,9 +449,12 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
       document.activeElement.closest(".library-inspector") !== null;
     detailCloseHandledRef.current = true;
     clearAssetId();
-    if (!focusWasInInspector) return;
+    if (!focusWasInInspector) {
+      invalidateDetailFocus();
+      return;
+    }
     restoreDetailFocus(selectedAssetId ?? "");
-  }, [clearAssetId, restoreDetailFocus, selectedAssetId]);
+  }, [clearAssetId, invalidateDetailFocus, restoreDetailFocus, selectedAssetId]);
 
   useEffect(() => {
     const opener = detailOpenerRef.current;
@@ -309,6 +494,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               isSearching={search.current.status === "loading"}
               semanticBlocked={semanticBlocked}
               isChoosingImage={isChoosingImage}
+              imagePickerError={imagePickerError}
               onQueryChange={handleQueryChange}
               onSubmit={handleSemanticSubmit}
               onClear={handleClearSearch}
@@ -344,10 +530,10 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
             search={search}
             onClearSearch={handleClearSearch}
             onRetrySearch={semanticBlocked ? undefined : handleRetrySearch}
-            onChooseImage={() => void handleImageSearch()}
+            onChooseImage={semanticBlocked ? undefined : () => void handleImageSearch()}
             imageQueryLabel={imageSelection?.label ?? null}
-            imageSelectionAvailable={imageSelection?.available ?? false}
-            onFindSimilar={handleFindSimilar}
+            imageSelectionAvailable={imageSelectionAvailable}
+            onFindSimilar={semanticBlocked ? undefined : handleFindSimilar}
           />
         }
         inspector={
@@ -357,6 +543,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
               client={client}
               onClose={handleCloseDetail}
               onFindSimilar={handleFindSimilar}
+              findSimilarDisabled={semanticBlocked}
             />
           ) : undefined
         }
@@ -374,21 +561,24 @@ function SettingsRoute({ state, client, onStateChanged }: { state: AppState; cli
 }
 
 function HelpDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  useEscapeSurface(true, onClose);
-
-  useEffect(() => {
-    closeButtonRef.current?.focus({ preventScroll: true });
+  useLayoutEffect(() => {
+    invalidateFocusRestorations();
   }, []);
+  useEscapeSurface(true, onClose);
+  useDialogFocus(dialogRef, closeButtonRef);
 
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-title"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <p className="eyebrow">Keyboard</p>
@@ -446,10 +636,23 @@ function ThemeSidebarControl() {
 function AppShell({ client }: { client: MemeSortClient }) {
   const [showHelp, setShowHelp] = useState(false);
   const helpTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const helpFrameCancelRef = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    invalidateFocusRestorations();
+  }, []);
+  useEffect(() => () => {
+    helpFrameCancelRef.current?.();
+    helpFrameCancelRef.current = null;
+    invalidateFocusRestorations();
+  }, []);
   const closeHelp = useCallback(() => {
     setShowHelp(false);
-    window.requestAnimationFrame(() => {
-      helpTriggerRef.current?.focus({ preventScroll: true });
+    helpFrameCancelRef.current?.();
+    helpFrameCancelRef.current = scheduleFocusRestoration(() => {
+      helpFrameCancelRef.current = null;
+      if (isRestorableFocusTarget(helpTriggerRef.current)) {
+        helpTriggerRef.current.focus({ preventScroll: true });
+      }
     });
   }, []);
   const windowControls = useWindowControls();

@@ -532,14 +532,48 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
   });
 
+  it("keeps the filtered ordered browse wall while meaning retrieval is pending", async () => {
+    const gate = deferred<{ results: SearchAsset[] } & Record<string, unknown>>();
+    const client = makeClient({
+      searchText: vi.fn(async () => gate.promise as never),
+    });
+    renderApp("/?media=still&status=indexed", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await typeQuery("sunset reaction");
+    await submitSearch();
+
+    expect(await screen.findByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
+    // The meaning text is not a filename filter: the active still/indexed
+    // wall remains visible in its existing sort order during the request.
+    expect(cardOrder()).toEqual(["Open cat-meme.png", "Open zebra.png"]);
+    expect(screen.queryByRole("heading", { name: /No local matches/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      gate.resolve({ results: [] });
+    });
+  });
+
   it("explains active filters and offers clear filters for an empty filename search", async () => {
     const client = makeClient();
     renderApp("/?q=cat&media=gif&status=failed", client);
-    expect(await screen.findByRole("heading", { name: /No local matches for/ })).toBeInTheDocument();
-    expect(screen.getByText("Active filters: GIFs · Failed may hide matches from this search.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1 local match is hidden by filters" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Active filters: GIFs · Failed excludes every match from this search.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
 
     expect(await screen.findByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
+  });
+
+  it("keeps a real zero filename match separate from filter-hidden matches", async () => {
+    const client = makeClient();
+    renderApp("/?q=not-a-real-file&media=gif&status=failed", client);
+
+    expect(
+      await screen.findByRole("heading", { name: /No local matches for/ }),
+    ).toHaveTextContent("not-a-real-file");
+    expect(screen.queryByLabelText("Local results filtered out")).not.toBeInTheDocument();
+    expect(screen.queryByText(/hidden by filters/i)).not.toBeInTheDocument();
   });
 
   it("keeps active-filter recovery in an empty semantic retrieval fallback", async () => {
@@ -552,7 +586,7 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await typeQuery("cat");
     await submitSearch();
 
-    expect(await screen.findByRole("heading", { name: /No local matches for/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No Assets match these filters" })).toBeInTheDocument();
     expect(screen.getByText("Active filters: GIFs · Failed may hide matches from this search.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(await screen.findByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
@@ -813,11 +847,12 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
-    // Older success must not overwrite the latest error feedback, and its
-    // stale semantic card must never appear (fallback stays local for "second").
+    // Older success must not overwrite the latest error feedback. Failure
+    // retains the filtered browse wall instead of treating "second" as a
+    // filename query.
     expect(screen.getByRole("alert", { name: "Semantic search error" })).toHaveTextContent("latest failed");
-    expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/No local matches for/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
+    expect(screen.queryByText(/No local matches for/)).not.toBeInTheDocument();
   });
 
   it("a late success for identical text cannot complete the newer request", async () => {
@@ -836,7 +871,12 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
       first.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
     });
     expect(screen.getByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
-    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
 
     await act(async () => {
       second.resolve({ results: [searchAsset({ asset_id: ZEBRA_ID })] });
@@ -942,7 +982,12 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     await submitSearch();
     const activeId = (client.searchText as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(await screen.findByText(/Searching the Active Index Recipe for/)).toBeInTheDocument();
-    expect(cardOrder()).toEqual(["Open cat-meme.png"]);
+    expect(cardOrder()).toEqual([
+      "Open bird-photo.png",
+      "Open dog-park.png",
+      "Open zebra.png",
+      "Open cat-meme.png",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(client.cancelSearch).toHaveBeenCalledWith(activeId);

@@ -12,6 +12,10 @@ import {
 } from "../import/import-status";
 import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 import { summarizeTasks } from "./taskVisibility";
+import {
+  isRestorableFocusTarget,
+  scheduleFocusRestoration,
+} from "../../components/useEscapeSurface";
 
 const MINIMIZED_STORAGE_KEY = "memesort.taskbar.minimized";
 const SUCCESS_NOTICE_VISIBLE_MS = 8_000;
@@ -22,12 +26,6 @@ function readMinimized(): boolean {
   } catch {
     return false;
   }
-}
-
-function focusAfterRuntimeRetry(): void {
-  const target = document.querySelector<HTMLElement>(".library-content")
-    ?? document.querySelector<HTMLElement>(".route-content > .page");
-  target?.focus({ preventScroll: true });
 }
 
 /**
@@ -47,6 +45,20 @@ export function TaskBar({ appState }: { appState: AppState | null }) {
   const [, setDismissTick] = useState(0);
   const dismissedNoticesRef = useRef(new Set<string>());
   const runtimeRetryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const runtimeFocusGenerationRef = useRef(0);
+  const runtimeFocusFrameCancelRef = useRef<(() => void) | null>(null);
+  const runtimeFocusScheduledRef = useRef(false);
+
+  useEffect(() => () => {
+    // A successful retry can make this bar disappear immediately after the
+    // frame is queued; let that expected frame complete. Route/surface
+    // teardown before a frame is queued cancels it instead.
+    if (!runtimeFocusScheduledRef.current) {
+      runtimeFocusGenerationRef.current += 1;
+      runtimeFocusFrameCancelRef.current?.();
+      runtimeFocusFrameCancelRef.current = null;
+    }
+  }, []);
 
   const summary = summarizeTasks({
     importTask: batch.snapshot,
@@ -93,10 +105,34 @@ export function TaskBar({ appState }: { appState: AppState | null }) {
       setRuntimeRetryError(tauriErrorDetail(error, "MemeSort could not retry the health check."));
     } finally {
       if (shouldRestoreFocus) {
+        const target = retryStatus === "healthy"
+          ? document.querySelector<HTMLElement>(".library-content")
+            ?? document.querySelector<HTMLElement>(".route-content > .page")
+          : runtimeRetryButtonRef.current;
+        const source = runtimeRetryButtonRef.current;
+        const generation = ++runtimeFocusGenerationRef.current;
+        runtimeFocusFrameCancelRef.current?.();
+        const focusTarget = () => {
+          if (generation !== runtimeFocusGenerationRef.current) return;
+          const active = document.activeElement;
+          if (
+            active instanceof HTMLElement &&
+            active !== document.body &&
+            active !== source
+          ) return;
+          if (isRestorableFocusTarget(target)) target.focus({ preventScroll: true });
+        };
         if (retryStatus === "healthy") {
-          focusAfterRuntimeRetry();
+          // The successful path preserves the existing synchronous focus
+          // contract because the bar can unmount in the same commit.
+          focusTarget();
         } else {
-          window.requestAnimationFrame(() => runtimeRetryButtonRef.current?.focus({ preventScroll: true }));
+          runtimeFocusScheduledRef.current = true;
+          runtimeFocusFrameCancelRef.current = scheduleFocusRestoration(() => {
+            runtimeFocusFrameCancelRef.current = null;
+            runtimeFocusScheduledRef.current = false;
+            focusTarget();
+          });
         }
       }
       setIsRetryingRuntime(false);

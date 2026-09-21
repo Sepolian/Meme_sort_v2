@@ -228,6 +228,24 @@ async function openInspectorSections() {
   fireEvent.click(more);
 }
 
+async function waitForAnimationFrames(count = 3) {
+  for (let index = 0; index < count; index += 1) {
+    await act(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -284,6 +302,44 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /first\.gif/i })).toHaveFocus();
     });
+  });
+
+  it("does not steal focus after direct close when another Library control takes focus", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    const search = screen.getByLabelText("Search Library");
+    search.focus();
+    await waitForAnimationFrames();
+
+    expect(search).toHaveFocus();
+  });
+
+  it.each([
+    ["disabled", ""],
+    ["aria-disabled", "true"],
+  ])("falls back when the Asset opener becomes %s before close", async (attribute, value) => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    opener.setAttribute(attribute, value);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    });
+    await waitForAnimationFrames();
+    expect(screen.getByRole("region", { name: "Library workspace" }).querySelector(".library-content")).toHaveFocus();
   });
 
   it("does not move Library focus when Escape closes an untouched inspector", async () => {
@@ -472,6 +528,31 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     });
   });
 
+  it("does not let canceled confirmation restoration steal focus after reopening before the next frame", async () => {
+    const client = makeClient();
+    renderApp("/", client);
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    await openInspectorSections();
+
+    const deleteButton = screen.getByRole("button", { name: "Delete Asset" });
+    fireEvent.click(deleteButton);
+    const firstDialog = await screen.findByRole("alertdialog", { name: "Delete this Asset?" });
+    fireEvent.click(within(firstDialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog", { name: "Delete this Asset?" })).not.toBeInTheDocument();
+
+    fireEvent.click(deleteButton);
+    const secondDialog = await screen.findByRole("alertdialog", { name: "Delete this Asset?" });
+    const confirmButton = within(secondDialog).getByRole("button", { name: "Delete Asset" });
+    await waitForAnimationFrames();
+
+    expect(confirmButton).toHaveFocus();
+    expect(deleteButton).not.toHaveFocus();
+  });
+
   it("deep-links the inspector from the URL on first load and closes by removing only asset", async () => {
     const client = makeClient();
     // Ticket 11: `q` now filters the waterfall locally, so use a matching
@@ -562,6 +643,41 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it("does not steal focus after browser back when another Library control takes focus", async () => {
+    const client = makeClient();
+    let goBack: (() => void) | null = null;
+    function HistoryBack() {
+      const navigate = useNavigate();
+      goBack = () => navigate(-1);
+      return null;
+    }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <HistoryBack />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const opener = await screen.findByRole("button", { name: /first\.gif/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    screen.getByRole("button", { name: "Close inspector" }).focus();
+
+    await act(async () => {
+      goBack?.();
+      await Promise.resolve();
+    });
+    const search = screen.getByLabelText("Search Library");
+    search.focus();
+    await waitForAnimationFrames();
+
+    expect(search).toHaveFocus();
+  });
+
   it("does not restore Asset A focus after navigation changes the inspector to Asset B", async () => {
     const client = makeClient();
     function OpenSecond() {
@@ -595,6 +711,27 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
       expect(document.activeElement).toBe(screen.getByRole("region", { name: "Library workspace" }).querySelector(".library-content"));
     });
     expect(document.activeElement).not.toBe(opener);
+  });
+
+  it("does not let a closed Asset A restoration steal focus after Asset B opens before the next frame", async () => {
+    const client = makeClient();
+    const { container } = renderApp("/", client);
+
+    const firstOpener = await screen.findByRole("button", { name: /first\.gif/i });
+    const secondOpener = await screen.findByRole("button", { name: /indexed\.png/i });
+    firstOpener.focus();
+    fireEvent.click(firstOpener);
+    await screen.findByRole("complementary", { name: "Inspector" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    fireEvent.click(secondOpener);
+    const inspector = await screen.findByRole("region", { name: "Asset inspector" });
+    expect(inspector).toHaveAttribute("data-asset-id", SECOND_ASSET);
+    await waitForAnimationFrames();
+
+    expect(screen.getByRole("button", { name: "Close inspector" })).toHaveFocus();
+    expect(firstOpener).not.toHaveFocus();
+    expect(container.querySelector(`article[data-asset-id="${SECOND_ASSET}"]`)).not.toBeNull();
   });
 
   it("renders all required sections: primary, secondary, collapsed advanced, and overflow", async () => {
@@ -701,6 +838,57 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
   });
 
+  it.each([
+    ["Clipboard Copy", "image"],
+    ["Copy original file", "original"],
+  ] as const)("ignores delayed %s success after switching from Asset A to Asset B", async (_label, kind) => {
+    const copyGate = deferred<void>();
+    const client = makeClient({
+      copyAssetToClipboard: vi.fn(async () => copyGate.promise),
+      copyOriginalFile: vi.fn(async () => copyGate.promise),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    if (kind === "original") await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: kind === "image" ? "Copy image" : "Copy original file" }));
+    await screen.findByText(kind === "image" ? "Copying…" : "Copying…");
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => copyGate.resolve());
+    await waitForAnimationFrames();
+
+    expect(screen.getByRole("region", { name: "Asset inspector" })).toHaveAttribute("data-asset-id", SECOND_ASSET);
+    expect(screen.queryByText("Copied to clipboard. Paste into QQ or WeChat.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Original file reference copied.")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["Clipboard Copy", "image"],
+    ["Copy original file", "original"],
+  ] as const)("ignores delayed %s failure after switching from Asset A to Asset B", async (_label, kind) => {
+    const copyGate = deferred<void>();
+    const client = makeClient({
+      copyAssetToClipboard: vi.fn(async () => copyGate.promise),
+      copyOriginalFile: vi.fn(async () => copyGate.promise),
+    });
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+    await screen.findByRole("complementary", { name: "Inspector" });
+    if (kind === "original") await openInspectorSections();
+    fireEvent.click(screen.getByRole("button", { name: kind === "image" ? "Copy image" : "Copy original file" }));
+    await screen.findByText("Copying…");
+
+    fireEvent.click(screen.getByRole("button", { name: /indexed\.png/i }));
+    await screen.findByRole("img", { name: "indexed.png preview" });
+    await act(async () => copyGate.reject({ error: "SidecarError", detail: "Asset A copy failed." }));
+    await waitForAnimationFrames();
+
+    expect(screen.getByRole("region", { name: "Asset inspector" })).toHaveAttribute("data-asset-id", SECOND_ASSET);
+    expect(screen.queryByText("Asset A copy failed.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert", { name: "Clipboard Copy failed" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Copy original file failed")).not.toBeInTheDocument();
+  });
+
   it("Find Similar exposes the ticket 12 action point with the Asset ID", async () => {
     const onFindSimilar = vi.fn();
     const client = makeClient();
@@ -785,6 +973,8 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(getLocation().search).not.toContain("asset=");
     expect(screen.queryByRole("button", { name: /first\.gif/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /indexed\.png/i })).toBeInTheDocument();
+    await waitForAnimationFrames();
+    expect(screen.getByRole("region", { name: "Library workspace" }).querySelector(".library-content")).toHaveFocus();
   });
 
   it("Reveal in Explorer passes only the Asset ID and recorded Source Paths come from server data", async () => {
@@ -983,9 +1173,8 @@ describe("Source Record removal and deletion cache coordination", () => {
     const sources = screen.getByRole("region", { name: "Source Records" });
     expect(sources).toHaveTextContent(EXTRA_SOURCE);
     expect(sources).not.toHaveTextContent(PRIMARY_SOURCE);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Close inspector" })).toHaveFocus();
-    });
+    await waitForAnimationFrames();
+    expect(screen.getByRole("button", { name: "Close inspector" })).toHaveFocus();
 
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
@@ -1019,7 +1208,8 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(alert).toHaveTextContent("Source Record is locked.");
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
-    await waitFor(() => expect(removeButton).toHaveFocus());
+    await waitForAnimationFrames();
+    expect(removeButton).toHaveFocus();
   });
 
   it("does not surface delayed Source Record removal success after selecting another Asset", async () => {
@@ -1188,6 +1378,8 @@ describe("Source Record removal and deletion cache coordination", () => {
     expect(getLocation().search).not.toContain("asset=");
     expect(screen.getByRole("button", { name: /indexed\.png/i })).toBeInTheDocument();
     expect(getAssetDetail.mock.calls.filter((call) => call[0] === FIRST_ASSET)).toHaveLength(1);
+    await waitForAnimationFrames();
+    expect(screen.getByRole("region", { name: "Library workspace" }).querySelector(".library-content")).toHaveFocus();
   });
 
   it("keeps the Asset and selection after a single-delete rejection", async () => {
@@ -1445,4 +1637,85 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(client.copyAssetToClipboard).toHaveBeenCalledWith(FIRST_ASSET);
     expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
   });
+
+  it.each(["success", "failure"] as const)(
+    "serializes primary Copy image before preview Copy original file on %s",
+    async (outcome) => {
+      const imageGate = deferred<void>();
+      const client = makeClient({
+        copyAssetToClipboard: vi.fn(async () => imageGate.promise),
+        copyOriginalFile: vi.fn(async () => undefined),
+      });
+      renderApp(`/?asset=${FIRST_ASSET}`, client);
+      const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+      const primaryCopy = within(inspector).getByRole("button", { name: "Copy image" });
+      fireEvent.click(primaryCopy);
+      expect(primaryCopy).toBeDisabled();
+
+      const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
+      fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
+      expect(screen.queryByRole("menu", { name: "Actions for first.gif" })).not.toBeInTheDocument();
+      expect(client.copyOriginalFile).not.toHaveBeenCalled();
+
+      await act(async () => {
+        if (outcome === "success") imageGate.resolve();
+        else imageGate.reject({ error: "SidecarError", detail: "Primary copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+
+      if (outcome === "success") {
+        expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
+      } else {
+        expect(await screen.findByRole("alert", { name: "Clipboard Copy failed" })).toHaveTextContent("Primary copy failed.");
+      }
+      expect(client.copyAssetToClipboard).toHaveBeenCalledTimes(1);
+      expect(client.copyOriginalFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["success", "failure"] as const)(
+    "serializes preview Copy original file before primary Copy image on %s",
+    async (outcome) => {
+      const originalGate = deferred<void>();
+      const client = makeClient({
+        copyAssetToClipboard: vi.fn(async () => undefined),
+        copyOriginalFile: vi.fn(async () => originalGate.promise),
+      });
+      renderApp(`/?asset=${FIRST_ASSET}`, client);
+      const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+      const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
+      fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
+      expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
+
+      await openInspectorSections();
+      const primaryCopy = within(inspector).getByRole("button", { name: "Copy image" });
+      const originalCopy = within(inspector).getByRole("button", { name: "Copying…" });
+      expect(primaryCopy).toBeDisabled();
+      expect(originalCopy).toBeDisabled();
+      fireEvent.click(primaryCopy);
+      expect(client.copyAssetToClipboard).not.toHaveBeenCalled();
+
+      fireEvent.contextMenu(within(inspector).getByRole("img", { name: "first.gif preview" }), {
+        button: 2,
+        clientX: 200,
+        clientY: 150,
+      });
+      expect(screen.queryByRole("menu", { name: "Actions for first.gif" })).not.toBeInTheDocument();
+
+      await act(async () => {
+        if (outcome === "success") originalGate.resolve();
+        else originalGate.reject({ error: "SidecarError", detail: "Original copy failed.", retryable: true });
+        await Promise.resolve();
+      });
+
+      if (outcome === "success") {
+        expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
+      } else {
+        expect(await screen.findByText("Original copy failed.")).toBeInTheDocument();
+      }
+      expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
+      expect(client.copyAssetToClipboard).not.toHaveBeenCalled();
+    },
+  );
 });

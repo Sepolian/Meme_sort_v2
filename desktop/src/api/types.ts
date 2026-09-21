@@ -177,7 +177,8 @@ export interface ImportTask {
   error: { error: string; detail: string } | null;
 }
 
-export interface FolderSelection {
+export interface SearchImageSelection {
+  request_id: string;
   selected_path: string | null;
 }
 

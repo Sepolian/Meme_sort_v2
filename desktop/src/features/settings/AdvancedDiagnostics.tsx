@@ -3,6 +3,7 @@ import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import type { AppState } from "../../api/types";
+import { useRuntimeHealth } from "../runtime/useRuntimeHealth";
 
 interface AdvancedDiagnosticsProps {
   client: MemeSortClient;
@@ -34,6 +35,7 @@ interface AdvancedDiagnosticsProps {
  * reappears. Invisibility only means absence from the returned list.
  */
 export function AdvancedDiagnostics({ client, appState, onStateChanged }: AdvancedDiagnosticsProps) {
+  const health = useRuntimeHealth();
   const [isWorking, setIsWorking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [selectedPendingJobIds, setSelectedPendingJobIds] = useState<Set<string>>(() => new Set());
@@ -52,7 +54,8 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
     setPendingJobDeleteConfirmation(false);
   }, [appState.pending_jobs, selectedPendingJobIds]);
 
-  const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string) => {
+  const runWorkerAction = async (action: () => Promise<unknown>, successMessage: string, requiresAuthorization = false) => {
+    if (requiresAuthorization && !health.isAuthorized) return;
     setIsWorking(true);
     setFeedback(null);
     try {
@@ -67,6 +70,7 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
   };
 
   const retryFailedJobs = async () => {
+    if (!health.isAuthorized) return;
     setIsWorking(true);
     setFeedback(null);
     try {
@@ -115,11 +119,12 @@ export function AdvancedDiagnostics({ client, appState, onStateChanged }: Advanc
         <h2 id="diagnostics-worker-loop-title">Worker Loop</h2>
         <p>Controls apply only to the background indexing loop. They do not cancel a running semantic inference call.</p>
         <div className="import-actions">
-          <button className="button" type="button" disabled={isWorking || !appState.worker_loop.paused} onClick={() => void runWorkerAction(client.resumeWorkerLoop, "Worker Loop resumed.")}>Resume worker</button>
+          <button className="button" type="button" disabled={isWorking || !health.isAuthorized || !appState.worker_loop.paused} onClick={() => void runWorkerAction(client.resumeWorkerLoop, "Worker Loop resumed.", true)}>Resume worker</button>
           <button className="button button-secondary" type="button" disabled={isWorking || appState.worker_loop.paused} onClick={() => void runWorkerAction(client.pauseWorkerLoop, "Worker Loop paused.")}>Pause worker</button>
-          <button className="button button-secondary" type="button" disabled={isWorking} onClick={() => void retryFailedJobs()}>Retry failed Jobs</button>
-          <button className="button button-secondary" type="button" disabled={isWorking || !appState.worker_loop.running} onClick={() => void runWorkerAction(client.triggerWorkerLoop, "Worker Loop tick requested.")}>Run one tick</button>
+          <button className="button button-secondary" type="button" disabled={isWorking || !health.isAuthorized} onClick={() => void retryFailedJobs()}>Retry failed Jobs</button>
+          <button className="button button-secondary" type="button" disabled={isWorking || !health.isAuthorized || !appState.worker_loop.running} onClick={() => void runWorkerAction(client.triggerWorkerLoop, "Worker Loop tick requested.", true)}>Run one tick</button>
         </div>
+        {!health.isAuthorized ? <p role="note">Indexing actions are unavailable until the current session passes the Runtime health check. Pause, delete, and log controls remain available.</p> : null}
         <p role="status">{feedback ?? (appState.worker_loop.paused ? "Worker Loop is paused." : "Worker Loop is running.")}</p>
       </section>
       <section className="surface import-card" aria-labelledby="diagnostics-pending-jobs-title">

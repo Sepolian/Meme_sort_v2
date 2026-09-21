@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
-import { tauriErrorDetail } from "../../api/tauri-error";
+import { tauriErrorCode, tauriErrorDetail } from "../../api/tauri-error";
 import type { SearchAsset } from "../../api/types";
 import type { LibraryResultMode } from "./libraryUrlState";
 
@@ -14,7 +14,7 @@ type RetrievalRequest = SearchTarget & { id: string };
 type CurrentSearch =
   | { status: "idle"; request: null; error: null }
   | { status: "loading" | "success"; request: RetrievalRequest; error: null }
-  | { status: "error"; request: RetrievalRequest; error: string; retryable: boolean };
+  | { status: "error"; request: RetrievalRequest; error: string; errorCode: string | null; retryable: boolean };
 
 interface CommittedResult {
   request: RetrievalRequest;
@@ -62,6 +62,21 @@ function visibleResult(mode: LibraryResultMode, committed: SearchState["committe
   }
 }
 
+function requestMatchesMode(request: RetrievalRequest, mode: LibraryResultMode): boolean {
+  switch (mode.kind) {
+    case "semantic":
+      // Retries get a fresh request ID while remaining the same semantic
+      // result mode; the query is the durable frontend identity here.
+      return request.kind === "text" && request.query === mode.query;
+    case "image":
+      return request.kind === "image" && request.selectionId === mode.selectionId;
+    case "similar":
+      return request.kind === "similar" && request.assetId === mode.assetId;
+    default:
+      return false;
+  }
+}
+
 /** Coordinates all Library retrieval; only the latest frontend identity may commit. */
 export function useLibrarySearch({ client, resultMode }: {
   client: MemeSortClient;
@@ -94,16 +109,24 @@ export function useLibrarySearch({ client, resultMode }: {
     };
   }, [cancelPrevious]);
 
+  // URL q changes can arrive from browser back/forward without going through
+  // the search bar. Once the URL-derived mode no longer owns the request,
+  // invalidate and cancel that obsolete visual/text work as well.
+  useEffect(() => {
+    const active = activeRequest.current;
+    if (active && !requestMatchesMode(active, resultMode)) cancelPrevious();
+  }, [cancelPrevious, resultMode]);
+
   const clearSearch = useCallback(() => {
     cancelPrevious();
     setState(EMPTY_STATE);
   }, [cancelPrevious]);
 
-  const execute = useCallback((target: SearchTarget): string | null => {
+  const execute = useCallback((target: SearchTarget, requestId: string = crypto.randomUUID()): string | null => {
     // A native picker can resolve after Library has unmounted.
     if (!mounted.current) return null;
     cancelPrevious();
-    const request: RetrievalRequest = { ...target, id: crypto.randomUUID() };
+    const request: RetrievalRequest = { ...target, id: requestId };
     activeRequest.current = request;
     setState((previous) => ({
       ...previous,
@@ -131,14 +154,21 @@ export function useLibrarySearch({ client, resultMode }: {
           const message = tauriErrorDetail(error, request.kind === "similar"
             ? "MemeSort could not find similar Assets."
             : "MemeSort could not complete this Search Request.");
-          const retryable = !(
+          const errorCode = tauriErrorCode(error);
+          const retryable = errorCode !== "ImageSelectionUnavailable" && !(
             typeof error === "object"
             && error !== null
             && (error as { retryable?: unknown }).retryable === false
           );
           setState((previous) => ({
             ...previous,
-            current: { status: "error", request, error: message, retryable },
+            current: {
+              status: "error",
+              request,
+              error: message,
+              errorCode,
+              retryable,
+            },
           }));
         }
       } finally {
@@ -152,10 +182,10 @@ export function useLibrarySearch({ client, resultMode }: {
     const trimmed = query.trim();
     return trimmed ? execute({ kind: "text", query: trimmed }) : null;
   }, [execute]);
-  const submitImageSearch = useCallback((selectionId: string, label: string) => {
+  const submitImageSearch = useCallback((selectionId: string, label: string, requestId?: string) => {
     const trimmedId = selectionId.trim();
     if (!trimmedId) return null;
-    return execute({ kind: "image", selectionId: trimmedId, label: label.trim() || "selected image" });
+    return execute({ kind: "image", selectionId: trimmedId, label: label.trim() || "selected image" }, requestId);
   }, [execute]);
   const submitSimilarSearch = useCallback((assetId: string) => {
     const trimmed = assetId.trim();
@@ -170,7 +200,7 @@ export function useLibrarySearch({ client, resultMode }: {
         kind: "image",
         selectionId: current.request.selectionId,
         label: current.request.label,
-      });
+      }, current.request.id);
       case "similar": return execute({ kind: "similar", assetId: current.request.assetId });
     }
   }, [execute, state]);

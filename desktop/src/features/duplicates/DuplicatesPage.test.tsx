@@ -6,7 +6,7 @@ import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState, AssetListResult, DuplicateScanResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
+import { resetRuntimeHealthForTesting, retryRuntimeHealthCheck } from "../runtime/runtimeHealthStore";
 
 const LEFT_ID = "123e4567-e89b-12d3-a456-426614174000";
 const RIGHT_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -71,6 +71,22 @@ function pairsFixture(): DuplicateScanResult {
         asset_b_matched_source_ref: "frame:7",
       },
     ],
+  };
+}
+
+function failedHealthResult() {
+  return {
+    runtime_fingerprint: "runtime-1",
+    backend_name: "llama.cpp",
+    device: "Vulkan0",
+    gpu_name: "Test GPU",
+    gpu_vendor: "amd",
+    gpu_vendor_id: "0x1002",
+    text_smoke_vector_dim: 2048,
+    image_smoke_vector_dim: 2048,
+    diagnostic_steps: [{ step: "image-embedding-smoke", status: "failed", detail: "Vulkan0 unavailable." }],
+    smoke_test_ok: false,
+    error: "Vulkan0 unavailable.",
   };
 }
 
@@ -150,7 +166,7 @@ function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType
     batchAssetAction: vi.fn(async () => {
       throw new Error("not under test");
     }),
-    chooseSearchImage: vi.fn(async () => ({ selected_path: null })),
+    chooseSearchImage: vi.fn(async (requestId: string) => ({ request_id: requestId, selected_path: null })),
     chooseLibraryFiles: vi.fn(async () => null),
     chooseLibraryFolder: vi.fn(async () => null),
     startLibraryImport: vi.fn(async () => {
@@ -289,7 +305,9 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     renderApp("/duplicates", client);
     await scanDuplicates();
 
-    fireEvent.click(screen.getByRole("button", { name: "Keep Left" }));
+    const keepLeft = screen.getByRole("button", { name: "Keep Left" });
+    keepLeft.focus();
+    fireEvent.click(keepLeft);
     const dialog = await screen.findByRole("alertdialog", { name: /keep originals\/left\.png/i });
     expect(dialog.textContent).toContain("originals/left.png");
     expect(dialog.textContent).toContain("originals/right.png");
@@ -300,6 +318,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     expect(client.deleteAsset).toHaveBeenCalledWith(RIGHT_ID);
     expect(client.acceptDuplicatePair).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Duplicate pairs" })).not.toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector("main.page")).toHaveFocus());
   });
 
   it("keeps Right with confirmation and deletes the left Asset via cascade", async () => {
@@ -406,12 +425,59 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     expect(screen.getByText("originals/left.png")).toBeInTheDocument();
   });
 
+  it("disables Rescan after a healthy scan loses current-session authorization", async () => {
+    const client = createClient({ getDuplicates: vi.fn(async () => stalePairsFixture()) });
+    renderApp("/duplicates", client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Scan duplicates" }));
+    await screen.findByRole("status", { name: "Stale duplicate pairs" });
+    const rescan = screen.getByRole("button", { name: "Rescan duplicates" });
+    expect(rescan).toBeEnabled();
+
+    (client.runRuntimeHealthCheck as ReturnType<typeof vi.fn>).mockResolvedValueOnce(failedHealthResult());
+    await act(async () => {
+      await retryRuntimeHealthCheck(client);
+    });
+
+    await waitFor(() => {
+      expect(rescan).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Scan duplicates" })).toBeDisabled();
+    });
+    fireEvent.click(rescan);
+    expect(client.getDuplicates).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status", { name: "Stale duplicate pairs" })).toBeInTheDocument();
+  });
+
+  it("disables Retry scan after a healthy scan loses current-session authorization", async () => {
+    const client = createClient({
+      getDuplicates: vi.fn(async () => {
+        throw new Error("scan failed");
+      }),
+    });
+    renderApp("/duplicates", client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Scan duplicates" }));
+    const retry = await screen.findByRole("button", { name: "Retry scan" });
+    expect(retry).toBeEnabled();
+
+    (client.runRuntimeHealthCheck as ReturnType<typeof vi.fn>).mockResolvedValueOnce(failedHealthResult());
+    await act(async () => {
+      await retryRuntimeHealthCheck(client);
+    });
+
+    await waitFor(() => expect(retry).toBeDisabled());
+    fireEvent.click(retry);
+    expect(client.getDuplicates).toHaveBeenCalledTimes(1);
+  });
+
   it("clears Accepted Pairs from Settings with confirmation without deleting Assets", async () => {
     const client = createClient();
     renderApp("/settings", client);
 
     expect(await screen.findByRole("heading", { name: "Accepted Duplicate Pairs" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Clear accepted pairs" }));
+    const clearAccepted = screen.getByRole("button", { name: "Clear accepted pairs" });
+    clearAccepted.focus();
+    fireEvent.click(clearAccepted);
     const dialog = await screen.findByRole("alertdialog", { name: "Clear all Accepted Duplicate Pairs?" });
     expect(dialog.textContent).toContain("without deleting Assets");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear accepted pairs" }));
@@ -420,6 +486,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
     expect(client.clearAcceptedPairs).toHaveBeenCalledTimes(1);
     expect(client.deleteAsset).not.toHaveBeenCalled();
     expect(client.batchAssetAction).not.toHaveBeenCalled();
+    await waitFor(() => expect(clearAccepted).toHaveFocus());
   });
 
   it("shows retryable feedback when clearing Accepted Pairs fails", async () => {

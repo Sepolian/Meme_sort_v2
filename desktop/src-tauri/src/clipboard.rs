@@ -8,6 +8,7 @@
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::{Condvar, Mutex};
 
 use crate::sidecar::SidecarError;
 
@@ -54,6 +55,100 @@ pub(crate) enum ClipboardPayload {
 pub(crate) trait ClipboardWriter {
     fn write_static_image(&self, dibv5: &[u8], png: &[u8]) -> Result<(), SidecarError>;
     fn write_file_drop(&self, hdrop: &[u8]) -> Result<(), SidecarError>;
+}
+
+// All three native copy commands share this gate. It covers preflight and
+// the OS write together, so requests publish in the order they enter this
+// native boundary. The gate lives here, beside the writer abstraction, rather
+// than in a UI owner: inspector, wall, and batch callers all share one queue.
+// ponytail: one FIFO gate; add per-window queues only if clipboard throughput
+// becomes a measured requirement.
+struct ClipboardWriteState {
+    next_ticket: u64,
+    serving_ticket: u64,
+}
+
+struct ClipboardWriteGate {
+    state: Mutex<ClipboardWriteState>,
+    turn: Condvar,
+}
+
+struct ClipboardWriteTurn<'a> {
+    gate: &'a ClipboardWriteGate,
+    ticket: u64,
+}
+
+impl ClipboardWriteGate {
+    const fn new() -> Self {
+        Self {
+            state: Mutex::new(ClipboardWriteState {
+                next_ticket: 0,
+                serving_ticket: 0,
+            }),
+            turn: Condvar::new(),
+        }
+    }
+
+    fn acquire(&self) -> ClipboardWriteTurn<'_> {
+        let ticket = {
+            let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let ticket = state.next_ticket;
+            state.next_ticket = state
+                .next_ticket
+                .checked_add(1)
+                .expect("clipboard write ticket counter exhausted");
+            ticket
+        };
+        // This notification is useful to waiters and makes ticket assignment
+        // observable to the deterministic concurrency tests below. Notify
+        // after releasing the state lock so a waiter cannot miss the change.
+        self.turn.notify_all();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while state.serving_ticket != ticket {
+            state = self
+                .turn
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        drop(state);
+        ClipboardWriteTurn {
+            gate: self,
+            ticket,
+        }
+    }
+
+    fn with<T>(&self, operation: impl FnOnce() -> T) -> T {
+        let _turn = self.acquire();
+        operation()
+    }
+}
+
+impl Drop for ClipboardWriteTurn<'_> {
+    fn drop(&mut self) {
+        let mut state = self
+            .gate
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        debug_assert_eq!(state.serving_ticket, self.ticket);
+        state.serving_ticket = self
+            .ticket
+            .checked_add(1)
+            .expect("clipboard write ticket counter exhausted");
+        self.gate.turn.notify_all();
+    }
+}
+
+static CLIPBOARD_WRITE_GATE: ClipboardWriteGate = ClipboardWriteGate::new();
+
+pub(crate) fn with_clipboard_write<T>(operation: impl FnOnce() -> T) -> T {
+    CLIPBOARD_WRITE_GATE.with(operation)
 }
 
 pub(crate) fn write_payload_via(
@@ -489,6 +584,73 @@ impl ClipboardWriter for FakeClipboardWriter {
 mod tests {
     use super::*;
     use image::{ImageBuffer, Rgba};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::sync::{mpsc, Arc};
+    use std::thread;
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum ClipboardEvent {
+        Started(&'static str),
+        Wrote(&'static str),
+        Completed(&'static str),
+    }
+
+    #[derive(Clone)]
+    struct OrderedClipboardWriter {
+        label: &'static str,
+        events: Arc<Mutex<Vec<ClipboardEvent>>>,
+    }
+
+    impl OrderedClipboardWriter {
+        fn record(&self, event: ClipboardEvent) {
+            self.events
+                .lock()
+                .expect("clipboard event lock")
+                .push(event);
+        }
+    }
+
+    impl ClipboardWriter for OrderedClipboardWriter {
+        fn write_static_image(
+            &self,
+            _dibv5: &[u8],
+            _png: &[u8],
+        ) -> Result<(), SidecarError> {
+            self.record(ClipboardEvent::Wrote(self.label));
+            Ok(())
+        }
+
+        fn write_file_drop(&self, _hdrop: &[u8]) -> Result<(), SidecarError> {
+            self.record(ClipboardEvent::Wrote(self.label));
+            Ok(())
+        }
+    }
+
+    fn wait_for_ticket(gate: &ClipboardWriteGate, ticket_count: u64) {
+        let mut state = gate
+            .state
+            .lock()
+            .expect("clipboard gate state should not be poisoned");
+        while state.next_ticket < ticket_count {
+            state = gate
+                .turn
+                .wait(state)
+                .expect("clipboard gate wait should not be poisoned");
+        }
+    }
+
+    fn test_image_payload() -> ClipboardPayload {
+        ClipboardPayload::StaticImage(StaticImagePayload {
+            dibv5: vec![1],
+            png: vec![2],
+            width: 1,
+            height: 1,
+        })
+    }
+
+    fn test_file_payload() -> ClipboardPayload {
+        ClipboardPayload::FileDrop { hdrop: vec![1] }
+    }
 
     fn solid_rgba(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {
         let frame: ImageBuffer<Rgba<u8>, Vec<u8>> =
@@ -682,5 +844,115 @@ mod tests {
             FakeClipboardWrite::StaticImage { .. }
         ));
         assert!(matches!(&writes[1], FakeClipboardWrite::FileDrop { .. }));
+    }
+
+    #[test]
+    fn serializes_image_wall_and_batch_writes_in_fifo_ticket_and_completion_order() {
+        let gate = Arc::new(ClipboardWriteGate::new());
+        let events = Arc::new(Mutex::new(Vec::<ClipboardEvent>::new()));
+        let (first_started_tx, first_started_rx) = mpsc::channel();
+        let (release_first_tx, release_first_rx) = mpsc::channel();
+
+        let first_events = Arc::clone(&events);
+        let first_gate = Arc::clone(&gate);
+        let first = thread::spawn(move || {
+            let writer = OrderedClipboardWriter {
+                label: "inspector/image A",
+                events: first_events,
+            };
+            first_gate.with(|| {
+                writer.record(ClipboardEvent::Started(writer.label));
+                first_started_tx
+                    .send(())
+                    .expect("first request should signal readiness");
+                release_first_rx
+                    .recv()
+                    .expect("first request should be released");
+                write_payload_via(&writer, &test_image_payload())
+                    .expect("image write should succeed");
+                writer.record(ClipboardEvent::Completed(writer.label));
+            });
+        });
+        first_started_rx
+            .recv()
+            .expect("first request should acquire the clipboard gate");
+
+        let second_events = Arc::clone(&events);
+        let second_gate = Arc::clone(&gate);
+        let second = thread::spawn(move || {
+            let writer = OrderedClipboardWriter {
+                label: "wall/original B",
+                events: second_events,
+            };
+            second_gate.with(|| {
+                writer.record(ClipboardEvent::Started(writer.label));
+                write_payload_via(&writer, &test_file_payload())
+                    .expect("wall original write should succeed");
+                writer.record(ClipboardEvent::Completed(writer.label));
+            });
+        });
+        wait_for_ticket(&gate, 2);
+
+        let third_events = Arc::clone(&events);
+        let third_gate = Arc::clone(&gate);
+        let third = thread::spawn(move || {
+            let writer = OrderedClipboardWriter {
+                label: "batch/originals A+B",
+                events: third_events,
+            };
+            third_gate.with(|| {
+                writer.record(ClipboardEvent::Started(writer.label));
+                write_payload_via(&writer, &test_file_payload())
+                    .expect("batch original write should succeed");
+                writer.record(ClipboardEvent::Completed(writer.label));
+            });
+        });
+        wait_for_ticket(&gate, 3);
+
+        assert_eq!(
+            events.lock().expect("clipboard event lock").as_slice(),
+            &[ClipboardEvent::Started("inspector/image A")]
+        );
+        release_first_tx
+            .send(())
+            .expect("first request should be released");
+
+        first.join().expect("first copy should finish");
+        second.join().expect("second copy should finish");
+        third.join().expect("third copy should finish");
+        let events = events.lock().expect("clipboard event lock").clone();
+        assert_eq!(
+            events,
+            vec![
+                ClipboardEvent::Started("inspector/image A"),
+                ClipboardEvent::Wrote("inspector/image A"),
+                ClipboardEvent::Completed("inspector/image A"),
+                ClipboardEvent::Started("wall/original B"),
+                ClipboardEvent::Wrote("wall/original B"),
+                ClipboardEvent::Completed("wall/original B"),
+                ClipboardEvent::Started("batch/originals A+B"),
+                ClipboardEvent::Wrote("batch/originals A+B"),
+                ClipboardEvent::Completed("batch/originals A+B"),
+            ]
+        );
+        let state = gate.state.lock().expect("clipboard gate state");
+        assert_eq!(state.next_ticket, 3);
+        assert_eq!(state.serving_ticket, 3);
+    }
+
+    #[test]
+    fn advances_fifo_gate_after_error_and_panic() {
+        let gate = ClipboardWriteGate::new();
+        let error = gate.with(|| Err::<(), _>("native write failed"));
+        assert_eq!(error, Err("native write failed"));
+
+        let panic_result = catch_unwind(AssertUnwindSafe(|| {
+            gate.with(|| -> () { panic!("native write panicked") });
+        }));
+        assert!(panic_result.is_err());
+        assert_eq!(gate.with(|| Ok::<_, &'static str>(())), Ok(()));
+        let state = gate.state.lock().expect("clipboard gate state");
+        assert_eq!(state.next_ticket, 3);
+        assert_eq!(state.serving_ticket, 3);
     }
 }

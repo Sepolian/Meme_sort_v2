@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { mediaUrl } from "../../api/media-url";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { useEscapeSurface } from "../../components/useEscapeSurface";
+import {
+  invalidateFocusRestorations,
+  isRestorableFocusTarget,
+  scheduleFocusRestoration,
+  useEscapeSurface,
+} from "../../components/useEscapeSurface";
 import { getAssetDisplayName } from "../library/libraryOrdering";
 import { AssetContextMenu } from "./AssetContextMenu";
 import { useAssetContextMenu } from "./useAssetContextMenu";
@@ -23,6 +28,7 @@ export interface AssetInspectorProps {
    * result composition and transient result mode.
    */
   onFindSimilar?: (assetId: string) => void;
+  findSimilarDisabled?: boolean;
 }
 
 type CopyStatus =
@@ -30,6 +36,15 @@ type CopyStatus =
   | { kind: "pending" }
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
+
+type CopyKind = "image" | "original";
+
+interface CopyOperation {
+  assetId: string;
+  identity: { assetId: string };
+  generation: number;
+  kind: CopyKind;
+}
 
 type ActionFeedback = {
   kind: "success" | "error";
@@ -86,6 +101,7 @@ export function AssetInspector({
   onClose,
   onDeleted,
   onFindSimilar,
+  findSimilarDisabled = false,
 }: AssetInspectorProps) {
   const queryClient = useQueryClient();
   const detailQuery = useQuery({
@@ -114,18 +130,71 @@ export function AssetInspector({
   );
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const confirmationOpenerRef = useRef<HTMLElement | null>(null);
+  const suppressConfirmationRestoreRef = useRef(false);
+  const confirmationFocusGenerationRef = useRef(0);
+  const confirmationFrameCancelRef = useRef<(() => void) | null>(null);
+  const initializedFocusRef = useRef(false);
+  const previousFocusAssetIdRef = useRef(assetId);
+  const copyGenerationRef = useRef(0);
+  const activeCopyRef = useRef<CopyOperation | null>(null);
+  const invalidateConfirmationFocus = useCallback(() => {
+    confirmationFocusGenerationRef.current += 1;
+    confirmationFrameCancelRef.current?.();
+    confirmationFrameCancelRef.current = null;
+    invalidateFocusRestorations();
+  }, []);
+  useLayoutEffect(() => {
+    if (!initializedFocusRef.current) {
+      initializedFocusRef.current = true;
+      invalidateConfirmationFocus();
+      return;
+    }
+    if (previousFocusAssetIdRef.current === assetId) return;
+    previousFocusAssetIdRef.current = assetId;
+    invalidateConfirmationFocus();
+  }, [assetId, invalidateConfirmationFocus]);
   const mountedRef = useRef(false);
-  const assetIdentityRef = useRef({ assetId });
-  if (assetIdentityRef.current.assetId !== assetId) {
+  // Both refs are published by committed layout effects. Event handlers may
+  // then use identity equality without letting an abandoned render strand a
+  // pending copy state or success message.
+  const assetIdentityRef = useRef<{ assetId: string }>({ assetId: "" });
+  useLayoutEffect(() => {
+    if (assetIdentityRef.current.assetId === assetId) return;
     assetIdentityRef.current = { assetId };
-  }
+    copyGenerationRef.current += 1;
+    activeCopyRef.current = null;
+  }, [assetId]);
   const isCurrentOperation = (identity: { assetId: string }) =>
     mountedRef.current && assetIdentityRef.current === identity;
+  const beginCopyOperation = (kind: CopyKind): CopyOperation | null => {
+    if (activeCopyRef.current) return null;
+    const operation = {
+      assetId,
+      identity: assetIdentityRef.current,
+      generation: copyGenerationRef.current + 1,
+      kind,
+    } satisfies CopyOperation;
+    copyGenerationRef.current = operation.generation;
+    activeCopyRef.current = operation;
+    return operation;
+  };
+  const isCurrentCopyOperation = (operation: CopyOperation): boolean =>
+    isCurrentOperation(operation.identity) &&
+    copyGenerationRef.current === operation.generation &&
+    activeCopyRef.current === operation;
+  const finishCopyOperation = (operation: CopyOperation) => {
+    if (activeCopyRef.current === operation) activeCopyRef.current = null;
+  };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      copyGenerationRef.current += 1;
+      activeCopyRef.current = null;
+      confirmationFrameCancelRef.current?.();
+      confirmationFrameCancelRef.current = null;
+      confirmationFocusGenerationRef.current += 1;
     };
   }, []);
 
@@ -141,34 +210,50 @@ export function AssetInspector({
     setIsRemovingSource(false);
     setActionFeedback(null);
     confirmationOpenerRef.current = null;
+    suppressConfirmationRestoreRef.current = false;
   }, [assetId]);
 
   useEffect(() => {
     closeButtonRef.current?.focus({ preventScroll: true });
   }, [assetId]);
 
-  const restoreConfirmationFocus = useCallback((preferUnderlying = false) => {
-    window.requestAnimationFrame(() => {
-      const opener = preferUnderlying ? null : confirmationOpenerRef.current;
-      if (opener && opener !== document.body && opener.isConnected) {
+  const restoreConfirmationFocus = useCallback((canRestoreFocus?: () => boolean) => {
+    if (suppressConfirmationRestoreRef.current) {
+      suppressConfirmationRestoreRef.current = false;
+      confirmationFrameCancelRef.current?.();
+      confirmationFrameCancelRef.current = null;
+      return;
+    }
+    const generation = confirmationFocusGenerationRef.current;
+    const opener = confirmationOpenerRef.current;
+    confirmationFrameCancelRef.current?.();
+    confirmationFrameCancelRef.current = scheduleFocusRestoration(() => {
+      confirmationFrameCancelRef.current = null;
+      if (generation !== confirmationFocusGenerationRef.current) return;
+      if (canRestoreFocus && !canRestoreFocus()) return;
+      if (isRestorableFocusTarget(opener) && opener !== document.body) {
         opener.focus({ preventScroll: true });
         return;
       }
-      if (closeButtonRef.current?.isConnected) {
+      if (isRestorableFocusTarget(closeButtonRef.current)) {
         closeButtonRef.current.focus({ preventScroll: true });
         return;
       }
-      document.querySelector<HTMLElement>(".library-content")?.focus({ preventScroll: true });
+      const fallback = document.querySelector<HTMLElement>(".library-content, .page");
+      if (isRestorableFocusTarget(fallback)) fallback.focus({ preventScroll: true });
     });
   }, []);
 
   useEscapeSurface(!confirmDelete && !confirmRemoveSource, onClose);
 
   const runClipboardCopy = async () => {
+    const operation = beginCopyOperation("image");
+    if (!operation) return;
     setCopyState({ kind: "pending" });
     try {
       // ID-only: Rust resolves the managed Library Copy; no WebView paths.
       await client.copyAssetToClipboard(assetId);
+      if (!isCurrentCopyOperation(operation)) return;
       // Success keeps the inspector open and preserves selection (no onClose,
       // no selection mutation here).
       setCopyState({
@@ -176,6 +261,7 @@ export function AssetInspector({
         message: "Copied to clipboard. Paste into QQ or WeChat.",
       });
     } catch (error) {
+      if (!isCurrentCopyOperation(operation)) return;
       setCopyState({
         kind: "error",
         message: tauriErrorDetail(
@@ -183,19 +269,25 @@ export function AssetInspector({
           "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.",
         ),
       });
+    } finally {
+      finishCopyOperation(operation);
     }
   };
 
   const runCopyOriginal = async () => {
+    const operation = beginCopyOperation("original");
+    if (!operation) return;
     setCopyOriginalState({ kind: "pending" });
     try {
       // Raw Library Copy reference command, ID-only.
       await client.copyOriginalFile(assetId);
+      if (!isCurrentCopyOperation(operation)) return;
       setCopyOriginalState({
         kind: "success",
         message: "Original file reference copied.",
       });
     } catch (error) {
+      if (!isCurrentCopyOperation(operation)) return;
       setCopyOriginalState({
         kind: "error",
         message: tauriErrorDetail(
@@ -203,6 +295,8 @@ export function AssetInspector({
           "Copy original file failed. The Library was not modified.",
         ),
       });
+    } finally {
+      finishCopyOperation(operation);
     }
   };
 
@@ -257,8 +351,8 @@ export function AssetInspector({
     try {
       const result = await client.removeSourceRecord(operationAssetId, sourcePath);
       if (isCurrentOperation(operationIdentity)) {
+        if (result.asset_deleted) suppressConfirmationRestoreRef.current = true;
         setConfirmRemoveSource(null);
-        restoreConfirmationFocus(true);
         setActionFeedback({
           kind: "success",
           message: result.asset_deleted
@@ -291,7 +385,6 @@ export function AssetInspector({
           ),
         });
         setConfirmRemoveSource(null);
-        restoreConfirmationFocus();
       }
     } finally {
       if (isCurrentOperation(operationIdentity)) setIsRemovingSource(false);
@@ -306,8 +399,8 @@ export function AssetInspector({
     try {
       await client.deleteAsset(operationAssetId);
       if (isCurrentOperation(operationIdentity)) {
+        suppressConfirmationRestoreRef.current = true;
         setConfirmDelete(false);
-        restoreConfirmationFocus(true);
       }
       onDeleted?.(operationAssetId);
       // Shared post-delete coordination removes the Asset from the visible
@@ -323,7 +416,6 @@ export function AssetInspector({
           ),
         );
         setConfirmDelete(false);
-        restoreConfirmationFocus();
       }
     } finally {
       if (isCurrentOperation(operationIdentity)) setIsDeleting(false);
@@ -395,6 +487,7 @@ export function AssetInspector({
           activeRecipeLabel={detailQuery.data.active_recipe_label}
           copyState={copyState}
           copyOriginalState={copyOriginalState}
+          copyBusy={copyState.kind === "pending" || copyOriginalState.kind === "pending"}
           revealState={revealState}
           actionFeedback={actionFeedback}
           deleteError={deleteError}
@@ -407,15 +500,20 @@ export function AssetInspector({
           onRevealManaged={runRevealManaged}
           onRevealSource={runRevealSource}
           onFindSimilar={handleFindSimilar}
+          findSimilarDisabled={findSimilarDisabled}
           onRequestDelete={(opener) => {
+            invalidateConfirmationFocus();
             confirmationOpenerRef.current = opener;
+            suppressConfirmationRestoreRef.current = false;
             setDeleteError(null);
             setConfirmDelete(true);
           }}
           onCancelDelete={() => setConfirmDelete(false)}
           onConfirmDelete={runConfirmedDelete}
           onRequestRemoveSource={(sourcePath, opener) => {
+            invalidateConfirmationFocus();
             confirmationOpenerRef.current = opener;
+            suppressConfirmationRestoreRef.current = false;
             setConfirmRemoveSource(sourcePath);
           }}
           onCancelRemoveSource={() => setConfirmRemoveSource(null)}
@@ -432,6 +530,7 @@ function InspectorBody({
   activeRecipeLabel,
   copyState,
   copyOriginalState,
+  copyBusy,
   revealState,
   actionFeedback,
   deleteError,
@@ -444,6 +543,7 @@ function InspectorBody({
   onRevealManaged,
   onRevealSource,
   onFindSimilar,
+  findSimilarDisabled,
   onRequestDelete,
   onCancelDelete,
   onConfirmDelete,
@@ -456,6 +556,7 @@ function InspectorBody({
   activeRecipeLabel: string;
   copyState: CopyStatus;
   copyOriginalState: CopyStatus;
+  copyBusy: boolean;
   revealState: CopyStatus;
   actionFeedback: ActionFeedback | null;
   deleteError: string | null;
@@ -468,17 +569,18 @@ function InspectorBody({
   onRevealManaged: () => void;
   onRevealSource: (sourcePath: string) => void;
   onFindSimilar: () => void;
+  findSimilarDisabled: boolean;
   onRequestDelete: (opener: HTMLElement) => void;
   onCancelDelete: () => void;
   onConfirmDelete: () => void;
   onRequestRemoveSource: (sourcePath: string, opener: HTMLElement) => void;
   onCancelRemoveSource: () => void;
   onConfirmRemoveSource: (sourcePath: string) => void;
-  onRestoreConfirmationFocus: (preferUnderlying?: boolean) => void;
+  onRestoreConfirmationFocus: (canRestoreFocus?: () => boolean) => void;
 }) {
   const name = assetName(asset);
   const preview = mediaUrl(asset.library_url);
-  const previewMenu = useAssetContextMenu();
+  const previewMenu = useAssetContextMenu(copyBusy);
   const copyPending = copyState.kind === "pending";
   const copyOriginalPending = copyOriginalState.kind === "pending";
   const revealing = revealState.kind === "pending";
@@ -507,15 +609,15 @@ function InspectorBody({
             aria-label={`${name} preview unavailable`}
           />
         )}
-        {previewMenu.anchor ? (
+        {previewMenu.anchor && !copyBusy ? (
           <AssetContextMenu
             x={previewMenu.anchor.x}
             y={previewMenu.anchor.y}
             opener={previewMenu.anchor.opener}
             menuLabel={`Actions for ${name}`}
             items={[
-              { label: "Copy image", onSelect: onCopy },
-              { label: "Copy original file", onSelect: onCopyOriginal },
+              { label: "Copy image", onSelect: onCopy, disabled: copyBusy },
+              { label: "Copy original file", onSelect: onCopyOriginal, disabled: copyBusy },
             ]}
             onClose={previewMenu.closeMenu}
           />
@@ -524,7 +626,7 @@ function InspectorBody({
           <button
             className="button"
             type="button"
-            disabled={copyPending}
+            disabled={copyBusy}
             onClick={onCopy}
           >
             {copyPending ? "Copying…" : "Copy image"}
@@ -532,6 +634,7 @@ function InspectorBody({
           <button
             className="button button-secondary"
             type="button"
+            disabled={findSimilarDisabled}
             onClick={onFindSimilar}
           >
             Find Similar
@@ -710,7 +813,7 @@ function InspectorBody({
               <button
                 className="button button-secondary"
                 type="button"
-                disabled={copyOriginalPending}
+                disabled={copyBusy}
                 onClick={onCopyOriginal}
               >
                 {copyOriginalPending ? "Copying…" : "Copy original file"}
@@ -766,7 +869,7 @@ function InspectorBody({
           onCancel={onCancelDelete}
           onConfirm={onConfirmDelete}
           onEscape={onCancelDelete}
-          onRestoreFocus={() => onRestoreConfirmationFocus()}
+          onRestoreFocus={(canRestoreFocus) => onRestoreConfirmationFocus(canRestoreFocus)}
         />
       ) : null}
 
@@ -780,7 +883,7 @@ function InspectorBody({
           onCancel={onCancelRemoveSource}
           onConfirm={() => onConfirmRemoveSource(confirmRemoveSource)}
           onEscape={onCancelRemoveSource}
-          onRestoreFocus={() => onRestoreConfirmationFocus()}
+          onRestoreFocus={(canRestoreFocus) => onRestoreConfirmationFocus(canRestoreFocus)}
         />
       ) : null}
     </div>

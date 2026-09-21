@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AcceptDuplicatePairResult, AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, ClearAcceptedPairsResult, DeletePendingJobsResult, DuplicateScanResult, FolderSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
+import type { AcceptDuplicatePairResult, AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, ClearAcceptedPairsResult, DeletePendingJobsResult, DuplicateScanResult, SearchImageSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -13,7 +13,7 @@ export interface MemeSortClient {
   deleteAsset(assetId: string): Promise<AssetMutationResult>;
   removeSourceRecord(assetId: string, sourcePath: string): Promise<AssetMutationResult>;
   batchAssetAction(action: "delete" | "rebuild-active-index", assetIds: string[]): Promise<BatchAssetActionResult>;
-  chooseSearchImage(): Promise<FolderSelection>;
+  chooseSearchImage(requestId: string): Promise<SearchImageSelection>;
   chooseLibraryFiles(): Promise<LibrarySelectionSummary | null>;
   chooseLibraryFolder(): Promise<LibrarySelectionSummary | null>;
   startLibraryImport(selectionId: string): Promise<ImportTask>;
@@ -49,7 +49,7 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     deleteAsset: (assetId) => invokeCommand<AssetMutationResult>("delete_asset", { assetId }),
     removeSourceRecord: (assetId, sourcePath) => invokeCommand<AssetMutationResult>("remove_source_record", { assetId, sourcePath }),
     batchAssetAction: (action, assetIds) => invokeCommand<BatchAssetActionResult>("batch_asset_action", { action, assetIds }),
-    chooseSearchImage: () => invokeCommand<FolderSelection>("choose_search_image"),
+    chooseSearchImage: (requestId) => invokeCommand<SearchImageSelection>("choose_search_image", { requestId }),
     chooseLibraryFiles: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_files"),
     chooseLibraryFolder: () => invokeCommand<LibrarySelectionSummary | null>("choose_library_folder"),
     startLibraryImport: (selectionId) => invokeCommand<ImportTask>("start_library_import", { selectionId }),

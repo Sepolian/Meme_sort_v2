@@ -1,11 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult, SearchAsset } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
+import {
+  resetRuntimeHealthForTesting,
+  retryRuntimeHealthCheck,
+} from "./features/runtime/runtimeHealthStore";
 
 const CAT_ID = "123e4567-e89b-12d3-a456-426614174001";
 const DOG_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -122,6 +125,42 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function selectedImage(requestId: string, selectedPath: string | null) {
+  return { request_id: requestId, selected_path: selectedPath };
+}
+
+function healthyHealthResult() {
+  return {
+    runtime_fingerprint: "runtime-1",
+    backend_name: "llama.cpp",
+    device: "Vulkan0",
+    gpu_name: "Test GPU",
+    gpu_vendor: "amd",
+    gpu_vendor_id: "0x1002",
+    text_smoke_vector_dim: 2048,
+    image_smoke_vector_dim: 2048,
+    diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "ok" }],
+    smoke_test_ok: true,
+    error: null,
+  };
+}
+
+function failedHealthResult() {
+  return {
+    runtime_fingerprint: "runtime-1",
+    backend_name: "llama.cpp",
+    device: "Vulkan0",
+    gpu_name: "Test GPU",
+    gpu_vendor: "amd",
+    gpu_vendor_id: "0x1002",
+    text_smoke_vector_dim: 2048,
+    image_smoke_vector_dim: 2048,
+    diagnostic_steps: [{ step: "image-embedding-smoke", status: "failed", detail: "Vulkan0 unavailable." }],
+    smoke_test_ok: false,
+    error: "Vulkan0 unavailable.",
+  };
+}
+
 function makeClient(overrides: Record<string, unknown> = {}) {
   return {
     getAppState: async () => ({
@@ -152,7 +191,7 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     batchAssetAction: async () => {
       throw new Error("not under test");
     },
-    chooseSearchImage: vi.fn(async () => ({ selected_path: "C:/Source/query.png" })),
+    chooseSearchImage: vi.fn(async (requestId: string) => selectedImage(requestId, "C:/Source/query.png")),
     chooseLibraryFiles: async () => {
       throw new Error("not under test");
     },
@@ -259,6 +298,16 @@ function flush() {
   });
 }
 
+function UrlHistoryControls() {
+  const navigate = useNavigate();
+  return (
+    <div>
+      <button type="button" onClick={() => navigate(-1)}>Back</button>
+      <button type="button" onClick={() => navigate(1)}>Forward</button>
+    </div>
+  );
+}
+
 describe("Image search and Find Similar (ticket 12)", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -268,7 +317,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
 
   it("cancelling the native picker leaves Library state unchanged", async () => {
     const client = makeClient({
-      chooseSearchImage: vi.fn(async () => ({ selected_path: null })),
+      chooseSearchImage: vi.fn(async (requestId: string) => selectedImage(requestId, null)),
     });
     renderApp("/", client);
     await screen.findByRole("button", { name: /cat-meme\.png/ });
@@ -285,9 +334,262 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(screen.queryByRole("status", { name: "Similar search results" })).not.toBeInTheDocument();
   });
 
+  it("surfaces non-cancellation native picker detail without entering image mode", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => {
+        throw {
+          status: 500,
+          error: "NativeDialogError",
+          detail: "The native image picker could not access the selected volume.",
+          retryable: false,
+        };
+      }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    const error = await screen.findByRole("alert", { name: "Image picker error" });
+    expect(error).toHaveTextContent("The native image picker could not access the selected volume.");
+    expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
+    expect(client.searchImage).not.toHaveBeenCalled();
+    expect(cardOrder()).toEqual([
+      "Open cat-meme.png",
+      "Open zebra.png",
+      "Open dog-park.png",
+      "Open bird-photo.png",
+    ]);
+  });
+
+  it("clears an obsolete picker error when the committed filename query changes", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => {
+        throw { error: "NativeDialogError", detail: "Picker failed for the old query.", retryable: false };
+      }),
+    });
+    renderApp("/?q=cat", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    expect(await screen.findByRole("alert", { name: "Image picker error" })).toHaveTextContent("Picker failed for the old query.");
+
+    fireEvent.change(screen.getByLabelText("Search Library"), { target: { value: "zebra" } });
+    await waitFor(() => {
+      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("clears an obsolete picker error when the search mode changes", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => {
+        throw { error: "NativeDialogError", detail: "Picker failed before mode switch.", retryable: false };
+      }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    await screen.findByRole("alert", { name: "Image picker error" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search mode" }), {
+      target: { value: "filename" },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("clears an obsolete picker error when current-session authorization changes", async () => {
+    const runRuntimeHealthCheck = vi
+      .fn()
+      .mockResolvedValueOnce(healthyHealthResult())
+      .mockResolvedValueOnce(failedHealthResult());
+    const client = makeClient({
+      runRuntimeHealthCheck,
+      chooseSearchImage: vi.fn(async () => {
+        throw { error: "NativeDialogError", detail: "Picker failed before health changed.", retryable: false };
+      }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+
+    await clickImageSearch();
+    await screen.findByRole("alert", { name: "Image picker error" });
+    await act(async () => {
+      await retryRuntimeHealthCheck(client as never);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Search by image" })).toBeDisabled();
+    });
+  });
+
+  it("clears an obsolete picker error as soon as a newer picker supersedes it", async () => {
+    const secondPicker = deferred<{ request_id: string; selected_path: string | null }>();
+    const client = makeClient({
+      chooseSearchImage: vi
+        .fn()
+        .mockRejectedValueOnce({ error: "NativeDialogError", detail: "The first picker failed.", retryable: false })
+        .mockReturnValueOnce(secondPicker.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+
+    await clickImageSearch();
+    await screen.findByRole("alert", { name: "Image picker error" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+    await clickImageSearch();
+
+    expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
+    expect(client.chooseSearchImage).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Search by image" })).toBeDisabled();
+    await act(async () => {
+      secondPicker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[1][0] as string, null));
+      await Promise.resolve();
+    });
+  });
+
+  it("does not complete a picker after current-session authorization is lost", async () => {
+    const picker = deferred<{ request_id: string; selected_path: string | null }>();
+    const runRuntimeHealthCheck = vi
+      .fn()
+      .mockResolvedValueOnce(healthyHealthResult())
+      .mockResolvedValueOnce(failedHealthResult());
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => picker.promise),
+      runRuntimeHealthCheck,
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+
+    await clickImageSearch();
+    expect(client.chooseSearchImage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await retryRuntimeHealthCheck(client as never);
+    });
+    await act(async () => {
+      picker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string, "C:/Source/query.png"));
+    });
+    await flush();
+
+    expect(client.searchImage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
+  });
+
+  it("does not complete a picker after the Library search mode changes", async () => {
+    const picker = deferred<{ request_id: string; selected_path: string | null }>();
+    const client = makeClient({
+      chooseSearchImage: vi.fn(async () => picker.promise),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+
+    await clickImageSearch();
+    fireEvent.change(screen.getByRole("combobox", { name: "Search mode" }), {
+      target: { value: "filename" },
+    });
+    expect(screen.getByRole("combobox", { name: "Search mode" })).toHaveValue("filename");
+
+    await act(async () => {
+      picker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string, "C:/Source/query.png"));
+    });
+    await flush();
+
+    expect(client.searchImage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
+  });
+
+  it("only the latest overlapping picker can start image search", async () => {
+    const firstReplacement = deferred<{ request_id: string; selected_path: string | null }>();
+    const latestReplacement = deferred<{ request_id: string; selected_path: string | null }>();
+    const client = makeClient({
+      chooseSearchImage: vi
+        .fn()
+        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, "C:/Source/initial.png"))
+        .mockReturnValueOnce(firstReplacement.promise)
+        .mockReturnValueOnce(latestReplacement.promise),
+      searchImage: vi
+        .fn()
+        .mockRejectedValueOnce({ error: "SidecarError", detail: "initial image search failed", retryable: false })
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          query_path: "C:/Source/latest.png",
+          query_media_type: "image/png",
+          top_k: 18,
+          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.9 })],
+        }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
+
+    await clickImageSearch();
+    await screen.findByRole("alert", { name: "Image search error" });
+    const chooseAnother = screen.getByRole("button", { name: "Choose another image" });
+    fireEvent.click(chooseAnother);
+    fireEvent.click(chooseAnother);
+    expect(client.chooseSearchImage).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      firstReplacement.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[1][0] as string, "C:/Source/obsolete.png"));
+    });
+    await flush();
+    expect(client.searchImage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      latestReplacement.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[2][0] as string, "C:/Source/latest.png"));
+    });
+    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent(
+      "Query image: “latest.png”",
+    );
+    expect(client.searchImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaving a visual mode through URL back/forward cancels obsolete image work", async () => {
+    const gate = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      searchImage: vi.fn(async () => gate.promise as never),
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/", "/?q=zebra"]} initialIndex={0}>
+          <UrlHistoryControls />
+          <App client={client as never} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+    await clickImageSearch();
+    const imageRequestId = (client.searchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    await screen.findByRole("status", { name: "Image search results" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Search Library")).toHaveValue("zebra");
+      expect(client.cancelSearch).toHaveBeenCalledWith(imageRequestId);
+    });
+    await act(async () => {
+      gate.resolve({ results: [searchAsset({ asset_id: CAT_ID })] });
+    });
+    expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
+  });
+
   it("picker cancel after semantic results keeps the semantic results", async () => {
     const client = makeClient({
-      chooseSearchImage: vi.fn(async () => ({ selected_path: null })),
+      chooseSearchImage: vi.fn(async (requestId: string) => selectedImage(requestId, null)),
       searchText: vi.fn(async () => ({
         library_root: "C:/Library",
         active_recipe_id: "recipe-1",
@@ -311,6 +613,39 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(client.searchImage).not.toHaveBeenCalled();
     expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
     expect(cardOrder()).toEqual(["Open zebra.png"]);
+  });
+
+  it("uses the filtered ordered browse wall while visual search launched from meaning is pending", async () => {
+    const imageGate = deferred<Record<string, unknown>>();
+    const client = makeClient({
+      searchText: vi.fn(async () => ({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Vulkan0 recipe",
+        query: "sunset reaction",
+        top_k: 18,
+        results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.9 })],
+      })),
+      searchImage: vi.fn(async () => imageGate.promise as never),
+    });
+    renderApp("/?media=still&status=indexed", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await typeQuery("sunset reaction");
+    await submitTextSearch();
+    expect(await screen.findByText(/Semantic results for/)).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    await clickImageSearch();
+    await screen.findByRole("status", { name: "Image search results" });
+    // The semantic query has no filename match. Visual pending fallback must
+    // still show the active filtered browse wall, not an empty local wall.
+    expect(cardOrder()).toEqual(["Open cat-meme.png", "Open zebra.png"]);
+    expect(screen.queryByRole("heading", { name: /No local matches/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      imageGate.resolve({ results: [] });
+    });
   });
 
   it("a selected query image starts a fresh UUID-scoped Search Request", async () => {
@@ -347,7 +682,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(cardOrder()).toEqual(["Open cat-meme.png"]);
   });
 
-  it("identifies the selected image and retries the same visual query", async () => {
+  it("identifies the selected image and retries the same native request without replaying a new selection", async () => {
     const client = makeClient({
       searchImage: vi
         .fn()
@@ -376,17 +711,19 @@ describe("Image search and Find Similar (ticket 12)", () => {
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByLabelText("Search Library")).toHaveFocus());
     expect(client.searchImage).toHaveBeenCalledTimes(2);
+    expect((client.searchImage as ReturnType<typeof vi.fn>).mock.calls[1][0]).toBe(
+      (client.searchImage as ReturnType<typeof vi.fn>).mock.calls[0][0],
+    );
     expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “query.png”");
     expect(cardOrder()).toEqual(["Open zebra.png"]);
   });
 
-  it("keeps the image query visible and offers re-selection after picker cancellation", async () => {
+  it("keeps the current image query and Retry recovery after a replacement picker is cancelled", async () => {
     const client = makeClient({
       chooseSearchImage: vi.fn()
-        .mockResolvedValueOnce({ selected_path: "C:/Source/query.png" })
-        .mockResolvedValueOnce({ selected_path: null })
-        .mockResolvedValueOnce({ selected_path: "C:/Source/replacement.png" }),
+        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, "C:/Source/query.png"))
+        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, null)),
       searchImage: vi
         .fn()
         .mockRejectedValueOnce({ error: "SidecarError", detail: "image search failed", retryable: true })
@@ -394,7 +731,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
           library_root: "C:/Library",
           active_recipe_id: "recipe-1",
           active_recipe_label: "Vulkan0 recipe",
-          query_path: "C:/Source/replacement.png",
+          query_path: "C:/Source/query.png",
           query_media_type: "image/png",
           top_k: 18,
           results: [searchAsset({ asset_id: CAT_ID, score: 0.9 })],
@@ -410,13 +747,16 @@ describe("Image search and Find Similar (ticket 12)", () => {
     await clickImageSearch();
     await flush();
     expect(screen.getByRole("alert", { name: "Image search error" })).toHaveTextContent("Query image: “query.png”");
-    expect(screen.queryByRole("button", { name: "Retry image search" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose another image" })).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "Retry image search" });
+    expect(screen.queryByRole("button", { name: "Choose another image" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose another image" }));
+    fireEvent.click(retry);
     expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
-    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “replacement.png”");
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “query.png”");
     expect(client.searchImage).toHaveBeenCalledTimes(2);
+    expect((client.searchImage as ReturnType<typeof vi.fn>).mock.calls[1][0]).toBe(
+      (client.searchImage as ReturnType<typeof vi.fn>).mock.calls[0][0],
+    );
   });
 
   it("does not offer retry for a non-retryable visual failure", async () => {
@@ -434,6 +774,49 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(error).toHaveTextContent("cannot be retried");
     expect(within(error).queryByRole("button", { name: "Retry image search" })).not.toBeInTheDocument();
     expect(within(error).getByRole("button", { name: "Choose another image" })).toBeInTheDocument();
+  });
+
+  it("retires an unavailable native selection and re-selects without retrying its stale request", async () => {
+    const client = makeClient({
+      chooseSearchImage: vi
+        .fn()
+        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, "C:/Source/expired.png"))
+        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, "C:/Source/replacement.png")),
+      searchImage: vi
+        .fn()
+        .mockRejectedValueOnce({
+          error: "ImageSelectionUnavailable",
+          detail: "The selected image is no longer available. Choose another image.",
+          retryable: false,
+        })
+        .mockResolvedValueOnce({
+          library_root: "C:/Library",
+          active_recipe_id: "recipe-1",
+          active_recipe_label: "Vulkan0 recipe",
+          query_path: "C:/Source/replacement.png",
+          query_media_type: "image/png",
+          top_k: 18,
+          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.91 })],
+        }),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    await clickImageSearch();
+    const error = await screen.findByRole("alert", { name: "Image search error" });
+    await waitFor(() => {
+      expect(error).toHaveTextContent("The selected image is no longer available. Choose another image.");
+      expect(within(error).queryByRole("button", { name: "Retry image search" })).not.toBeInTheDocument();
+      expect(within(error).getByRole("button", { name: "Choose another image" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “expired.png”");
+    const staleRequestId = (client.searchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+
+    fireEvent.click(within(error).getByRole("button", { name: "Choose another image" }));
+    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
+    expect(client.searchImage).toHaveBeenCalledTimes(2);
+    expect((client.searchImage as ReturnType<typeof vi.fn>).mock.calls[1][0]).not.toBe(staleRequestId);
+    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent("Query image: “replacement.png”");
   });
 
   it("starting image search cancels an older cancellable Search Request", async () => {
@@ -1088,6 +1471,106 @@ describe("Image search and Find Similar (ticket 12)", () => {
     expect(client.cancelSearch).not.toHaveBeenCalled();
   });
 
+  it("applies active media filters to visual result modes without changing relevance order", async () => {
+    const filteredAssets: AssetListResult = {
+      ...assets,
+      assets: assets.assets.map((asset) =>
+        asset.asset_id === CAT_ID
+          ? {
+              ...asset,
+              library_path: "originals/cat-meme.gif",
+              library_url: "/media/originals/cat-meme.gif",
+              media_type: "image/gif",
+              source_records: [{ source_path: "C:/Source/cat-meme.gif" }],
+            }
+          : asset,
+      ),
+    };
+    const response = {
+      library_root: "C:/Library",
+      active_recipe_id: "recipe-1",
+      active_recipe_label: "Vulkan0 recipe",
+      top_k: 18,
+      results: [searchAsset({ asset_id: CAT_ID, score: 0.95 }), searchAsset({ asset_id: ZEBRA_ID, score: 0.8 })],
+    };
+    const client = makeClient({
+      getAssets: vi.fn(async () => filteredAssets),
+      searchText: vi.fn(async () => ({ ...response, query: "reaction" })),
+      searchImage: vi.fn(async () => ({ ...response, query_path: "C:/Source/query.png", query_media_type: "image/png" })),
+      findSimilar: vi.fn(async () => ({ ...response, asset_id: CAT_ID })),
+    });
+    renderApp("/?media=still", client);
+    await screen.findByRole("button", { name: /Open zebra\.png/ });
+
+    await typeQuery("reaction");
+    await submitTextSearch();
+    expect(await screen.findByText("Semantic results for \u201creaction\u201d \u00B7 1")).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    await clickImageSearch();
+    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    await screen.findByRole("button", { name: /Open cat-meme\.gif/ });
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    expect(await screen.findByText("Similar results · 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stills" }));
+    expect(cardOrder()).toEqual(["Open zebra.png"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "failed" } });
+    expect(await screen.findByText("Similar results · 0")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Open / })).not.toBeInTheDocument();
+  });
+
+  it("distinguishes semantic, image, and similar matches hidden entirely by active filters", async () => {
+    const response = {
+      library_root: "C:/Library",
+      active_recipe_id: "recipe-1",
+      active_recipe_label: "Vulkan0 recipe",
+      top_k: 18,
+      results: [searchAsset({ asset_id: CAT_ID, score: 0.95 })],
+    };
+    const client = makeClient({
+      searchText: vi.fn(async () => ({ ...response, query: "reaction" })),
+      searchImage: vi.fn(async () => ({ ...response, query_path: "C:/Source/query.png", query_media_type: "image/png" })),
+      findSimilar: vi.fn(async () => ({ ...response, asset_id: CAT_ID })),
+    });
+    renderApp("/", client);
+    await screen.findByRole("button", { name: /cat-meme\.png/ });
+
+    const assertFilteredRecovery = async (label: "Semantic" | "Image" | "Similar") => {
+      if (!screen.queryByLabelText("Status")) {
+        fireEvent.click(screen.getByRole("button", { name: "View" }));
+      }
+      fireEvent.change(screen.getByLabelText("Status"), { target: { value: "failed" } });
+      const filtered = await screen.findByLabelText(`${label} results filtered out`);
+      expect(filtered).toHaveTextContent(`1 ${label.toLowerCase()} match is hidden by filters`);
+      expect(within(filtered).queryByText(/No .*matches/i)).not.toBeInTheDocument();
+      expect(within(filtered).queryByText(/index more Assets/i)).not.toBeInTheDocument();
+      fireEvent.click(within(filtered).getByRole("button", { name: "Clear filters" }));
+      await waitFor(() => expect(cardOrder()).toEqual(["Open cat-meme.png"]));
+    };
+
+    await typeQuery("reaction");
+    await submitTextSearch();
+    await screen.findByText("Semantic results for “reaction” · 1");
+    await assertFilteredRecovery("Semantic");
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    await clickImageSearch();
+    await screen.findByText("Image results · 1");
+    await assertFilteredRecovery("Image");
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    fireEvent.click(screen.getByRole("button", { name: `Find Similar for asset ${CAT_ID}` }));
+    await screen.findByText("Similar results · 1");
+    await assertFilteredRecovery("Similar");
+  });
+
   it("unmounting a pending similar search never sends a backend cancellation", async () => {
     const gate = deferred<Record<string, unknown>>();
     const client = makeClient({
@@ -1116,7 +1599,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
   });
 
   it("a picker resolving after Library unmount never starts image search", async () => {
-    const picker = deferred<{ selected_path: string | null }>();
+    const picker = deferred<{ request_id: string; selected_path: string | null }>();
     const client = makeClient({
       chooseSearchImage: vi.fn(async () => picker.promise),
     });
@@ -1128,7 +1611,7 @@ describe("Image search and Find Similar (ticket 12)", () => {
     unmount();
 
     await act(async () => {
-      picker.resolve({ selected_path: "C:/Source/query.png" });
+      picker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string, "C:/Source/query.png"));
     });
     await flush();
     expect(client.searchImage).not.toHaveBeenCalled();

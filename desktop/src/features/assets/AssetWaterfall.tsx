@@ -42,6 +42,8 @@ interface AssetWaterfallProps {
    */
   onCopyImage?: (assetId: string) => void;
   onCopyOriginal?: (assetId: string) => void;
+  /** Disable card copy actions while a workspace-owned copy is pending. */
+  copyBusy?: boolean;
   /**
    * Parent-owned ref to the wall section (used for native-drag hit-testing).
    * The waterfall only reads it for measurement/scroll preservation.
@@ -154,6 +156,7 @@ interface AssetWaterfallCardProps {
   onFindSimilar?: (assetId: string) => void;
   onCopyImage?: (assetId: string) => void;
   onCopyOriginal?: (assetId: string) => void;
+  copyBusy: boolean;
 }
 
 /**
@@ -184,10 +187,11 @@ function AssetWaterfallCard({
   onFindSimilar,
   onCopyImage,
   onCopyOriginal,
+  copyBusy,
 }: AssetWaterfallCardProps) {
   const name = getAssetDisplayName(asset);
   const gif = isGifAsset(asset);
-  const menu = useAssetContextMenu();
+  const menu = useAssetContextMenu(copyBusy);
   // Both handlers are required: offering only one copy flavor would keep
   // the misleading native menu one right-click away for the other.
   const hasCopyMenu = onCopyImage !== undefined && onCopyOriginal !== undefined;
@@ -277,7 +281,7 @@ function AssetWaterfallCard({
           Select {name}
         </label>
       </div>
-      {menu.anchor && hasCopyMenu ? (
+      {menu.anchor && hasCopyMenu && !copyBusy ? (
         <AssetContextMenu
           x={menu.anchor.x}
           y={menu.anchor.y}
@@ -287,10 +291,12 @@ function AssetWaterfallCard({
             {
               label: "Copy image",
               onSelect: () => onCopyImage?.(asset.asset_id),
+              disabled: copyBusy,
             },
             {
               label: "Copy original file",
               onSelect: () => onCopyOriginal?.(asset.asset_id),
+              disabled: copyBusy,
             },
           ]}
           onClose={menu.closeMenu}
@@ -513,6 +519,7 @@ export function AssetWaterfall({
   onFindSimilar,
   onCopyImage,
   onCopyOriginal,
+  copyBusy = false,
   sectionRef,
   accepting = false,
   columnCount,
@@ -611,6 +618,7 @@ export function AssetWaterfall({
               onFindSimilar={onFindSimilar}
               onCopyImage={onCopyImage}
               onCopyOriginal={onCopyOriginal}
+              copyBusy={copyBusy}
             />
           ))}
         </div>

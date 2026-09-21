@@ -80,8 +80,9 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
   // Keep transient local/browse mode aligned with URL q while never
   // auto-entering semantic/image/similar from URL or storage. A mismatched
   // semantic query is stale once the user types a new q, so fall back to
-  // local; image/similar are query-independent and stay sticky until tickets
-  // 11-12 explicitly reset them.
+  // local. Image/similar modes are transient too: URL q transitions,
+  // including browser back/forward, restore filename/browse mode instead of
+  // letting visual results stick to a different query.
   useEffect(() => {
     setResultModeState((current) => {
       if (current.kind === "semantic") {
@@ -89,7 +90,9 @@ export function useLibraryUrlState(explicitStorage?: Storage | null): LibraryUrl
         if (current.query !== urlState.q) return { kind: "local", query: urlState.q };
         return current;
       }
-      if (current.kind === "image" || current.kind === "similar") return current;
+      if (current.kind === "image" || current.kind === "similar") {
+        return urlState.q === "" ? { kind: "browse" } : { kind: "local", query: urlState.q };
+      }
       if (urlState.q !== "" && (current.kind !== "local" || current.query !== urlState.q)) {
         return { kind: "local", query: urlState.q };
       }
