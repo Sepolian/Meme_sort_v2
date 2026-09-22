@@ -182,10 +182,10 @@ export function useLibrarySearch({ client, resultMode }: {
     const trimmed = query.trim();
     return trimmed ? execute({ kind: "text", query: trimmed }) : null;
   }, [execute]);
-  const submitImageSearch = useCallback((selectionId: string, label: string, requestId?: string) => {
+  const submitImageSearch = useCallback((selectionId: string, label: string) => {
     const trimmedId = selectionId.trim();
     if (!trimmedId) return null;
-    return execute({ kind: "image", selectionId: trimmedId, label: label.trim() || "selected image" }, requestId);
+    return execute({ kind: "image", selectionId: trimmedId, label: label.trim() || "selected image" }, trimmedId);
   }, [execute]);
   const submitSimilarSearch = useCallback((assetId: string) => {
     const trimmed = assetId.trim();

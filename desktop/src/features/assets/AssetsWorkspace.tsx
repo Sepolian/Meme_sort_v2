@@ -444,6 +444,64 @@ export function AssetsWorkspace({
   const allResultsFiltered = unfilteredIndexedCount > 0 && indexedItems.length === 0;
   const searchSummaries = useMemo(() => indexedItems.map((item) => item.summary), [indexedItems]);
   const staleCount = composedResults?.stale.length ?? 0;
+  const retrievalView = isSemanticMode
+    ? {
+        label: "Semantic",
+        kind: "semantic",
+        title: isSearching && !hasResults
+          ? `Searching the Active Index Recipe for “${semanticModeQuery}”…`
+          : `Semantic results for “${semanticModeQuery}” · ${searchSummaries.length}`,
+        context: null,
+        order: "Semantic results in relevance order · only Indexed Assets appear here · raw scores stay in advanced details.",
+        pending: <>Searching the Active Index Recipe for &ldquo;{semanticModeQuery}&rdquo;&hellip;</>,
+        errorTitle: "Semantic search unavailable",
+        retryLabel: "Retry search",
+        canRetry: true,
+        cannotRetry: "This request cannot be retried. Clear search to return to browsing.",
+        emptyTitle: <>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</>,
+        emptyCopy: <>Only Indexed Assets appear in semantic results. Try a different description, or index more Assets with the Active Index Recipe.</>,
+        fallbackContext: null,
+        actionsClassName: undefined,
+      }
+    : isImageMode
+      ? {
+          label: "Image",
+          kind: "image",
+          title: isSearching && !hasResults
+            ? "Searching the Active Index Recipe for the chosen image…"
+            : `Image results · ${searchSummaries.length}`,
+          context: <>Query image: &ldquo;{visualImageLabel}&rdquo;</>,
+          order: "Image results in relevance order · only Indexed Assets appear here · raw scores stay in advanced details.",
+          pending: <>Searching the Active Index Recipe for the chosen image&hellip;</>,
+          errorTitle: "Image search unavailable",
+          retryLabel: "Retry image search",
+          canRetry: imageSelectionAvailable,
+          cannotRetry: "This request cannot be retried. Choose another image or clear search.",
+          emptyTitle: <>No image matches</>,
+          emptyCopy: <>Query image: &ldquo;{visualImageLabel}&rdquo;. Only Indexed Assets appear in image results. Try another image, or index more Assets with the Active Index Recipe.</>,
+          fallbackContext: <>Query image: &ldquo;{visualImageLabel}&rdquo;. </>,
+          actionsClassName: "import-actions",
+        }
+      : isSimilarMode
+        ? {
+            label: "Similar",
+            kind: "similar",
+            title: isSearching && !hasResults
+              ? "Finding similar Assets…"
+              : `Similar results · ${searchSummaries.length}`,
+            context: <>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</>,
+            order: "Similar results in similarity order · only Indexed Assets appear here · raw scores stay in advanced details.",
+            pending: <>Finding similar Assets in the Active Index Recipe&hellip;</>,
+            errorTitle: "Find Similar unavailable",
+            retryLabel: "Retry similar search",
+            canRetry: true,
+            cannotRetry: "This request cannot be retried. Clear search to return to browsing.",
+            emptyTitle: <>No similar Assets</>,
+            emptyCopy: <>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. Only Indexed Assets appear in similar results. Index more Assets with the Active Index Recipe to expand this search.</>,
+            fallbackContext: <>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. </>,
+            actionsClassName: "import-actions",
+          }
+        : null;
 
   // Ticket 10: prune checkbox selection when the Asset list no longer
   // contains an ID (e.g. the inspector deleted it via its own mutation that
@@ -653,115 +711,31 @@ export function AssetsWorkspace({
         ) : null}
       </section>
     ) : null}
-    {isSemanticMode ? (
+    {retrievalView ? (
       <section
         className="notice"
         role="status"
         aria-live={searchError || staleCount ? "off" : "polite"}
-        aria-label="Semantic search results"
+        aria-label={`${retrievalView.label} search results`}
       >
-        <strong>
-          {isSearching && !hasResults
-            ? `Searching the Active Index Recipe for \u201C${semanticModeQuery}\u201D\u2026`
-            : `Semantic results for \u201C${semanticModeQuery}\u201D \u00B7 ${searchSummaries.length}`}
-        </strong>
-        <span>Semantic results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching && hasResults ? <span>Searching the Active Index Recipe for &ldquo;{semanticModeQuery}&rdquo;&hellip;</span> : null}
+        <strong>{retrievalView.title}</strong>
+        {retrievalView.context ? <span>{retrievalView.context}</span> : null}
+        <span>{retrievalView.order}</span>
+        {isSearching && hasResults ? <span>{retrievalView.pending}</span> : null}
         {searchError ? (
-          <section className="notice notice-warning" role="alert" aria-label="Semantic search error">
-            <strong>Semantic search unavailable</strong>
+          <section className="notice notice-warning" role="alert" aria-label={`${retrievalView.label} search error`}>
+            <strong>{retrievalView.errorTitle}</strong>
             <span>{searchError}</span>
+            {retrievalView.context ? <span>{retrievalView.context}</span> : null}
             <span>Library browsing remains available with the active Media and Status filters below.</span>
-            {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry search</button> : null}
-            {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
+            {searchRetryable && retrievalView.canRetry && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>{retrievalView.retryLabel}</button> : null}
+            {isImageMode && onChooseImage && (!searchRetryable || !retrievalView.canRetry) ? <button className="button button-secondary" type="button" onClick={onChooseImage}>Choose another image</button> : null}
+            {!searchRetryable ? <span>{retrievalView.cannotRetry}</span> : null}
           </section>
         ) : null}
         {staleCount ? (
-          <section className="notice notice-warning" role="status" aria-label="Stale semantic results">
-            <strong>{staleCount} semantic result{staleCount === 1 ? "" : "s"} omitted</strong>
-            <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
-          </section>
-        ) : null}
-        {hasResults && indexedItems.length ? <AdvancedDetails items={indexedItems} /> : null}
-        {onClearSearch ? (
-          <div className="import-actions">
-            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
-              Clear search
-            </button>
-          </div>
-        ) : null}
-      </section>
-    ) : null}
-    {isImageMode ? (
-      <section
-        className="notice"
-        role="status"
-        aria-live={searchError || staleCount ? "off" : "polite"}
-        aria-label="Image search results"
-      >
-        <strong>
-          {isSearching && !hasResults
-            ? `Searching the Active Index Recipe for the chosen image\u2026`
-            : `Image results \u00B7 ${searchSummaries.length}`}
-        </strong>
-        <span>Query image: &ldquo;{visualImageLabel}&rdquo;</span>
-        <span>Image results in relevance order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching && hasResults ? <span>Searching the Active Index Recipe for the chosen image&hellip;</span> : null}
-        {searchError ? (
-          <section className="notice notice-warning" role="alert" aria-label="Image search error">
-            <strong>Image search unavailable</strong>
-            <span>{searchError}</span>
-            <span>Query image: &ldquo;{visualImageLabel}&rdquo;</span>
-            <span>Library browsing remains available with the active Media and Status filters below.</span>
-            {searchRetryable && imageSelectionAvailable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry image search</button> : null}
-            {onChooseImage && (!searchRetryable || !imageSelectionAvailable) ? <button className="button button-secondary" type="button" onClick={onChooseImage}>Choose another image</button> : null}
-            {!searchRetryable ? <span>This request cannot be retried. Choose another image or clear search.</span> : null}
-          </section>
-        ) : null}
-        {staleCount ? (
-          <section className="notice notice-warning" role="status" aria-label="Stale image results">
-            <strong>{staleCount} image result{staleCount === 1 ? "" : "s"} omitted</strong>
-            <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
-          </section>
-        ) : null}
-        {hasResults && indexedItems.length ? <AdvancedDetails items={indexedItems} /> : null}
-        {onClearSearch ? (
-          <div className="import-actions">
-            <button className="button button-secondary" type="button" onClick={() => onClearSearch()}>
-              Clear search
-            </button>
-          </div>
-        ) : null}
-      </section>
-    ) : null}
-    {isSimilarMode ? (
-      <section
-        className="notice"
-        role="status"
-        aria-live={searchError || staleCount ? "off" : "polite"}
-        aria-label="Similar search results"
-      >
-        <strong>
-          {isSearching && !hasResults
-            ? `Finding similar Assets\u2026`
-            : `Similar results \u00B7 ${searchSummaries.length}`}
-        </strong>
-        <span>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</span>
-        <span>Similar results in similarity order &middot; only Indexed Assets appear here &middot; raw scores stay in advanced details.</span>
-        {isSearching && hasResults ? <span>Finding similar Assets in the Active Index Recipe&hellip;</span> : null}
-        {searchError ? (
-          <section className="notice notice-warning" role="alert" aria-label="Similar search error">
-            <strong>Find Similar unavailable</strong>
-            <span>{searchError}</span>
-            <span>Source Asset: &ldquo;{visualSimilarLabel}&rdquo;</span>
-            <span>Library browsing remains available with the active Media and Status filters below.</span>
-            {searchRetryable && onRetrySearch ? <button className="button button-secondary" type="button" onClick={retrySearch}>Retry similar search</button> : null}
-            {!searchRetryable ? <span>This request cannot be retried. Clear search to return to browsing.</span> : null}
-          </section>
-        ) : null}
-        {staleCount ? (
-          <section className="notice notice-warning" role="status" aria-label="Stale similar results">
-            <strong>{staleCount} similar result{staleCount === 1 ? "" : "s"} omitted</strong>
+          <section className="notice notice-warning" role="status" aria-label={`Stale ${retrievalView.kind} results`}>
+            <strong>{staleCount} {retrievalView.kind} result{staleCount === 1 ? "" : "s"} omitted</strong>
             <span>Their Assets are no longer in the current Asset list. Nothing was rendered with invented dimensions or Source Records.</span>
           </section>
         ) : null}
@@ -802,19 +776,16 @@ export function AssetsWorkspace({
             </div>
           </div>
         )
-      ) : isSemanticMode ? (
+      ) : retrievalView ? (
         hasResults && searchSummaries.length ? (
           <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
         ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
-          <FilteredRetrievalEmpty label="Semantic" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
+          <FilteredRetrievalEmpty label={retrievalView.label} count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
         ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
-          <div className="empty-state" aria-label="No semantic matches" ref={wallRef}>
-            <h2>No semantic matches for &ldquo;{semanticModeQuery}&rdquo;</h2>
-            <p>
-              Only Indexed Assets appear in semantic results. Try a different description, or index
-              more Assets with the Active Index Recipe.
-            </p>
-            <div>
+          <div className="empty-state" aria-label={`No ${retrievalView.kind} matches`} ref={wallRef}>
+            <h2>{retrievalView.emptyTitle}</h2>
+            <p>{retrievalView.emptyCopy}</p>
+            <div className={retrievalView.actionsClassName}>
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>
@@ -822,94 +793,16 @@ export function AssetsWorkspace({
             </div>
           </div>
         ) : retrievalFallbackAssets.length ? (
-          // Failed semantic work keeps the filtered browse wall intact;
-          // meaning text is never treated as a filename query. Pending work
-          // uses the same filtered, sorted browse wall.
           <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
         ) : (
           <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
             <h2>No Assets match these filters</h2>
             <p>
+              {retrievalView.fallbackContext}
               The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
               Adjust the Media and Status filters, or clear them to browse the full Library.
             </p>
-            <div>
-              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
-                Clear search
-              </button>
-              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
-            </div>
-          </div>
-        )
-      ) : isImageMode ? (
-        hasResults && searchSummaries.length ? (
-          <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
-        ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
-          <FilteredRetrievalEmpty label="Image" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
-        ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
-          <div className="empty-state" aria-label="No image matches" ref={wallRef}>
-            <h2>No image matches</h2>
-            <p>
-              Query image: &ldquo;{visualImageLabel}&rdquo;. Only Indexed Assets appear in image results. Try another image, or index
-              more Assets with the Active Index Recipe.
-            </p>
-            <div className="import-actions">
-              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
-                Clear search
-              </button>
-              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
-            </div>
-          </div>
-        ) : retrievalFallbackAssets.length ? (
-          // In-progress or failed image work keeps the filtered browse wall
-          // visible instead of treating the image label as a filename query.
-          <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
-        ) : (
-          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
-            <h2>No Assets match these filters</h2>
-            <p>
-              Query image: &ldquo;{visualImageLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Adjust the Media and Status filters, or clear them to browse the full Library.
-            </p>
-            <div className="import-actions">
-              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
-                Clear search
-              </button>
-              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
-            </div>
-          </div>
-        )
-      ) : isSimilarMode ? (
-        hasResults && searchSummaries.length ? (
-          <AssetWaterfall assets={searchSummaries} {...waterfallProps} />
-        ) : hasResults && allResultsFiltered && !isSearching && !searchError ? (
-          <FilteredRetrievalEmpty label="Similar" count={unfilteredIndexedCount} media={media} status={status} onClearFilters={onClearFilters} onClearSearch={onClearSearch} wallRef={wallRef} />
-        ) : hasResults && !searchSummaries.length && !isSearching && !searchError ? (
-          <div className="empty-state" aria-label="No similar matches" ref={wallRef}>
-            <h2>No similar Assets</h2>
-            <p>
-              Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. Only Indexed Assets appear in similar results. Index more Assets with
-              the Active Index Recipe to expand this search.
-            </p>
-            <div className="import-actions">
-              <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
-                Clear search
-              </button>
-              <ActiveFilterRecovery media={media} status={status} onClearFilters={onClearFilters} />
-            </div>
-          </div>
-        ) : retrievalFallbackAssets.length ? (
-          // In-progress or failed similar work keeps the filtered browse wall
-          // visible instead of treating the source label as a filename query.
-          <AssetWaterfall assets={retrievalFallbackAssets} {...waterfallProps} />
-        ) : (
-          <div className="empty-state" aria-label="No filtered Assets" ref={wallRef}>
-            <h2>No Assets match these filters</h2>
-            <p>
-              Source Asset: &ldquo;{visualSimilarLabel}&rdquo;. The Library still holds {assets.length} Asset{assets.length === 1 ? "" : "s"}.
-              Adjust the Media and Status filters, or clear them to browse the full Library.
-            </p>
-            <div className="import-actions">
+            <div className={retrievalView.actionsClassName}>
               <button className="button button-secondary" type="button" onClick={() => onClearSearch?.()}>
                 Clear search
               </button>

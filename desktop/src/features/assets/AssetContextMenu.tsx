@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
-  invalidateFocusRestorations,
   isRestorableFocusTarget,
   scheduleFocusRestoration,
   useEscapeSurface,
@@ -32,46 +31,11 @@ export function AssetContextMenu({
   opener?: HTMLElement | null;
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const openerRef = useRef(opener ?? null);
-  const focusGenerationRef = useRef(0);
-  const frameCancelRef = useRef<(() => void) | null>(null);
-  const restoreRequestedRef = useRef(false);
-
-  useLayoutEffect(() => {
-    // A newly opened menu owns the next focus frame and supersedes a menu or
-    // panel that was just dismissed before its restoration frame ran.
-    invalidateFocusRestorations();
-  }, []);
-
-  useEffect(() => {
-    if (openerRef.current === (opener ?? null)) return;
-    openerRef.current = opener ?? null;
-    focusGenerationRef.current += 1;
-    frameCancelRef.current?.();
-    frameCancelRef.current = null;
-    restoreRequestedRef.current = false;
-  }, [opener]);
-
-  useEffect(() => () => {
-    // An expected menu selection/cancel keeps its scheduled frame alive long
-    // enough to restore the opener after this portal unmounts. Other teardown
-    // (route change, replacement, or owner change) cancels it.
-    if (!restoreRequestedRef.current) {
-      focusGenerationRef.current += 1;
-      frameCancelRef.current?.();
-      frameCancelRef.current = null;
-    }
-  }, []);
 
   const restoreFocus = useCallback(() => {
-    restoreRequestedRef.current = true;
-    const generation = ++focusGenerationRef.current;
-    const openerForRestore = openerRef.current;
+    const openerForRestore = opener ?? null;
     const menu = menuRef.current;
-    frameCancelRef.current?.();
-    frameCancelRef.current = scheduleFocusRestoration(() => {
-      frameCancelRef.current = null;
-      if (generation !== focusGenerationRef.current) return;
+    scheduleFocusRestoration(() => {
       const active = document.activeElement;
       // Let an explicit focus move made after dismissal win over restoration.
       if (
@@ -88,15 +52,9 @@ export function AssetContextMenu({
       const fallback = document.querySelector<HTMLElement>(".library-content");
       if (isRestorableFocusTarget(fallback)) fallback.focus({ preventScroll: true });
     });
-  }, []);
+  }, [opener]);
 
   const dismissMenu = useCallback((restore: boolean) => {
-    if (!restore) {
-      focusGenerationRef.current += 1;
-      frameCancelRef.current?.();
-      frameCancelRef.current = null;
-      restoreRequestedRef.current = false;
-    }
     onClose();
     if (restore) restoreFocus();
   }, [onClose, restoreFocus]);

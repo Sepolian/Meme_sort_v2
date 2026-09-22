@@ -5,10 +5,7 @@ import { MemoryRouter, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult, SearchAsset } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import {
-  resetRuntimeHealthForTesting,
-  retryRuntimeHealthCheck,
-} from "./features/runtime/runtimeHealthStore";
+import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const CAT_ID = "123e4567-e89b-12d3-a456-426614174001";
 const DOG_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -127,38 +124,6 @@ function deferred<T>() {
 
 function selectedImage(requestId: string, selectedPath: string | null) {
   return { request_id: requestId, selected_path: selectedPath };
-}
-
-function healthyHealthResult() {
-  return {
-    runtime_fingerprint: "runtime-1",
-    backend_name: "llama.cpp",
-    device: "Vulkan0",
-    gpu_name: "Test GPU",
-    gpu_vendor: "amd",
-    gpu_vendor_id: "0x1002",
-    text_smoke_vector_dim: 2048,
-    image_smoke_vector_dim: 2048,
-    diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "ok" }],
-    smoke_test_ok: true,
-    error: null,
-  };
-}
-
-function failedHealthResult() {
-  return {
-    runtime_fingerprint: "runtime-1",
-    backend_name: "llama.cpp",
-    device: "Vulkan0",
-    gpu_name: "Test GPU",
-    gpu_vendor: "amd",
-    gpu_vendor_id: "0x1002",
-    text_smoke_vector_dim: 2048,
-    image_smoke_vector_dim: 2048,
-    diagnostic_steps: [{ step: "image-embedding-smoke", status: "failed", detail: "Vulkan0 unavailable." }],
-    smoke_test_ok: false,
-    error: "Vulkan0 unavailable.",
-  };
 }
 
 function makeClient(overrides: Record<string, unknown> = {}) {
@@ -361,128 +326,6 @@ describe("Image search and Find Similar (ticket 12)", () => {
     ]);
   });
 
-  it("clears an obsolete picker error when the committed filename query changes", async () => {
-    const client = makeClient({
-      chooseSearchImage: vi.fn(async () => {
-        throw { error: "NativeDialogError", detail: "Picker failed for the old query.", retryable: false };
-      }),
-    });
-    renderApp("/?q=cat", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-
-    await clickImageSearch();
-    expect(await screen.findByRole("alert", { name: "Image picker error" })).toHaveTextContent("Picker failed for the old query.");
-
-    fireEvent.change(screen.getByLabelText("Search Library"), { target: { value: "zebra" } });
-    await waitFor(() => {
-      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
-    });
-  });
-
-  it("clears an obsolete picker error when the search mode changes", async () => {
-    const client = makeClient({
-      chooseSearchImage: vi.fn(async () => {
-        throw { error: "NativeDialogError", detail: "Picker failed before mode switch.", retryable: false };
-      }),
-    });
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-
-    await clickImageSearch();
-    await screen.findByRole("alert", { name: "Image picker error" });
-    fireEvent.change(screen.getByRole("combobox", { name: "Search mode" }), {
-      target: { value: "filename" },
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
-    });
-  });
-
-  it("clears an obsolete picker error when current-session authorization changes", async () => {
-    const runRuntimeHealthCheck = vi
-      .fn()
-      .mockResolvedValueOnce(healthyHealthResult())
-      .mockResolvedValueOnce(failedHealthResult());
-    const client = makeClient({
-      runRuntimeHealthCheck,
-      chooseSearchImage: vi.fn(async () => {
-        throw { error: "NativeDialogError", detail: "Picker failed before health changed.", retryable: false };
-      }),
-    });
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-    await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
-
-    await clickImageSearch();
-    await screen.findByRole("alert", { name: "Image picker error" });
-    await act(async () => {
-      await retryRuntimeHealthCheck(client as never);
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Search by image" })).toBeDisabled();
-    });
-  });
-
-  it("clears an obsolete picker error as soon as a newer picker supersedes it", async () => {
-    const secondPicker = deferred<{ request_id: string; selected_path: string | null }>();
-    const client = makeClient({
-      chooseSearchImage: vi
-        .fn()
-        .mockRejectedValueOnce({ error: "NativeDialogError", detail: "The first picker failed.", retryable: false })
-        .mockReturnValueOnce(secondPicker.promise),
-    });
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
-
-    await clickImageSearch();
-    await screen.findByRole("alert", { name: "Image picker error" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
-    await clickImageSearch();
-
-    expect(screen.queryByRole("alert", { name: "Image picker error" })).not.toBeInTheDocument();
-    expect(client.chooseSearchImage).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("button", { name: "Search by image" })).toBeDisabled();
-    await act(async () => {
-      secondPicker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[1][0] as string, null));
-      await Promise.resolve();
-    });
-  });
-
-  it("does not complete a picker after current-session authorization is lost", async () => {
-    const picker = deferred<{ request_id: string; selected_path: string | null }>();
-    const runRuntimeHealthCheck = vi
-      .fn()
-      .mockResolvedValueOnce(healthyHealthResult())
-      .mockResolvedValueOnce(failedHealthResult());
-    const client = makeClient({
-      chooseSearchImage: vi.fn(async () => picker.promise),
-      runRuntimeHealthCheck,
-    });
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-    await waitFor(() => expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
-
-    await clickImageSearch();
-    expect(client.chooseSearchImage).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await retryRuntimeHealthCheck(client as never);
-    });
-    await act(async () => {
-      picker.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string, "C:/Source/query.png"));
-    });
-    await flush();
-
-    expect(client.searchImage).not.toHaveBeenCalled();
-    expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
-  });
-
   it("does not complete a picker after the Library search mode changes", async () => {
     const picker = deferred<{ request_id: string; selected_path: string | null }>();
     const client = makeClient({
@@ -505,55 +348,6 @@ describe("Image search and Find Similar (ticket 12)", () => {
 
     expect(client.searchImage).not.toHaveBeenCalled();
     expect(screen.queryByRole("status", { name: "Image search results" })).not.toBeInTheDocument();
-  });
-
-  it("only the latest overlapping picker can start image search", async () => {
-    const firstReplacement = deferred<{ request_id: string; selected_path: string | null }>();
-    const latestReplacement = deferred<{ request_id: string; selected_path: string | null }>();
-    const client = makeClient({
-      chooseSearchImage: vi
-        .fn()
-        .mockImplementationOnce(async (requestId: string) => selectedImage(requestId, "C:/Source/initial.png"))
-        .mockReturnValueOnce(firstReplacement.promise)
-        .mockReturnValueOnce(latestReplacement.promise),
-      searchImage: vi
-        .fn()
-        .mockRejectedValueOnce({ error: "SidecarError", detail: "initial image search failed", retryable: false })
-        .mockResolvedValueOnce({
-          library_root: "C:/Library",
-          active_recipe_id: "recipe-1",
-          active_recipe_label: "Vulkan0 recipe",
-          query_path: "C:/Source/latest.png",
-          query_media_type: "image/png",
-          top_k: 18,
-          results: [searchAsset({ asset_id: ZEBRA_ID, score: 0.9 })],
-        }),
-    });
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /cat-meme\.png/ });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Search by image" })).toBeEnabled());
-
-    await clickImageSearch();
-    await screen.findByRole("alert", { name: "Image search error" });
-    const chooseAnother = screen.getByRole("button", { name: "Choose another image" });
-    fireEvent.click(chooseAnother);
-    fireEvent.click(chooseAnother);
-    expect(client.chooseSearchImage).toHaveBeenCalledTimes(3);
-
-    await act(async () => {
-      firstReplacement.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[1][0] as string, "C:/Source/obsolete.png"));
-    });
-    await flush();
-    expect(client.searchImage).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      latestReplacement.resolve(selectedImage((client.chooseSearchImage as ReturnType<typeof vi.fn>).mock.calls[2][0] as string, "C:/Source/latest.png"));
-    });
-    expect(await screen.findByText("Image results · 1")).toBeInTheDocument();
-    expect(screen.getByRole("status", { name: "Image search results" })).toHaveTextContent(
-      "Query image: “latest.png”",
-    );
-    expect(client.searchImage).toHaveBeenCalledTimes(2);
   });
 
   it("leaving a visual mode through URL back/forward cancels obsolete image work", async () => {

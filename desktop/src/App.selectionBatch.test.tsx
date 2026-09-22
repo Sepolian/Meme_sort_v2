@@ -702,8 +702,8 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
 
     await waitFor(() => {
       expect(deletedDetail.getLocation().search).not.toContain("asset=");
+      expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
     });
-    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
     // Only the deleted Asset left the selection.
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect((screen.getByLabelText("Select third.png") as HTMLInputElement).checked).toBe(true);

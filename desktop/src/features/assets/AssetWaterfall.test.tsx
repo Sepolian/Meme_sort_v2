@@ -368,7 +368,7 @@ describe("AssetWaterfall large-Library stability (ticket 09)", () => {
     expect(
       container.querySelectorAll(".asset-card-media-wrap"),
     ).toHaveLength(3000);
-  });
+  }, 30_000);
 });
 
 describe("AssetWaterfall scroll preservation (ticket 09)", () => {

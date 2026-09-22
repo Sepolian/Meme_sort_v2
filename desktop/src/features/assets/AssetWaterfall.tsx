@@ -145,7 +145,6 @@ function LazyAssetMedia({
 
 interface AssetWaterfallCardProps {
   asset: AssetSummary;
-  assetIndex: number;
   columnIndex: number;
   checked: boolean;
   gifActive: boolean;
@@ -176,7 +175,6 @@ interface AssetWaterfallCardProps {
  */
 function AssetWaterfallCard({
   asset,
-  assetIndex,
   columnIndex,
   checked,
   gifActive,
@@ -208,7 +206,6 @@ function AssetWaterfallCard({
     <article
       className="asset-card"
       data-asset-id={asset.asset_id}
-      data-asset-index={assetIndex}
       data-column={columnIndex}
       data-gif={gif ? "true" : "false"}
       data-gif-active={gif && gifActive ? "true" : "false"}
@@ -313,7 +310,6 @@ type LibraryScrollPosition = {
 
 type LibraryScrollAnchor = {
   assetId: string;
-  index: number;
   offsetTop: number;
   order: readonly string[];
 };
@@ -359,11 +355,6 @@ function visibleLibraryCard(scroller: HTMLElement): HTMLElement | null {
     : scroller.querySelector<HTMLElement>(".asset-card");
 }
 
-function assetIndex(card: HTMLElement, fallback: number): number {
-  const index = Number(card.dataset.assetIndex);
-  return Number.isInteger(index) && index >= 0 ? index : fallback;
-}
-
 function captureLibraryScroll(
   scroller: HTMLElement,
   assetOrder: readonly string[],
@@ -378,7 +369,6 @@ function captureLibraryScroll(
     const rect = card.getBoundingClientRect();
     anchorRef.current = {
       assetId: card.dataset.assetId ?? "",
-      index: assetIndex(card, anchorRef.current?.index ?? 0),
       offsetTop: rect.top - scrollerTop,
       order: assetOrder,
     };
@@ -439,7 +429,6 @@ function restoreLibraryScroll(
   const restoredOffsetTop = target.getBoundingClientRect().top - scrollerTop;
   anchorRef.current = {
     assetId: target.dataset.assetId ?? "",
-    index: assetIndex(target, 0),
     offsetTop: restoredOffsetTop,
     order: assetOrder,
   };
@@ -584,11 +573,6 @@ export function AssetWaterfall({
       ),
     [assets, resolvedColumnCount],
   );
-  const assetIndices = useMemo(
-    () => new Map(assetOrder.map((assetId, index) => [assetId, index] as const)),
-    [assetOrder],
-  );
-
   return (
     <section
       className={`asset-grid${accepting ? " asset-grid-accepting" : ""}`}
@@ -607,7 +591,6 @@ export function AssetWaterfall({
             <AssetWaterfallCard
               key={asset.asset_id}
               asset={asset}
-              assetIndex={assetIndices.get(asset.asset_id) ?? 0}
               columnIndex={columnIndex}
               checked={checkedIds.has(asset.asset_id)}
               gifActive={effectiveActiveGifId === asset.asset_id}

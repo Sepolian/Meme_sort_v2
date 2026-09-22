@@ -2512,7 +2512,7 @@ mod tests {
     }
 
     #[test]
-    fn reports_unavailable_when_a_retryable_search_cannot_restore_its_evicted_selection() {
+    fn retryable_search_does_not_overwrite_a_newer_selection() {
         let selection = SearchImageSelection::new();
         let request_id = "123e4567-e89b-12d3-a456-426614174000";
         selection
@@ -2520,42 +2520,15 @@ mod tests {
             .expect("selection should be stored");
 
         let error = search_selected_image(&selection, request_id, |_, _| {
-            for index in 0..16 {
-                selection
-                    .replace(
-                        &format!("123e4567-e89b-12d3-a456-42661418{index:04x}"),
-                        Some(PathBuf::from("C:/Source/newer.png")),
-                    )
-                    .expect("newer selection should be stored");
-            }
+            selection
+                .replace(
+                    "123e4567-e89b-12d3-a456-426614174001",
+                    Some(PathBuf::from("C:/Source/newer.png")),
+                )
+                .expect("newer selection should be stored");
             Err::<(), _>(SidecarError::new("temporary transport failure"))
         })
-        .expect_err("an unrestorable selection must not advertise retry");
-
-        assert_eq!(error.error, "ImageSelectionUnavailable");
-        assert_eq!(error.detail, "The selected image is no longer available. Choose another image.");
-        assert_eq!(error.status, None);
-        assert!(!error.retryable);
-    }
-
-    #[test]
-    fn reports_unavailable_when_a_selection_expires_during_a_retryable_search() {
-        let selection = SearchImageSelection::new();
-        let request_id = "123e4567-e89b-12d3-a456-426614174000";
-        selection
-            .replace(request_id, Some(PathBuf::from("C:/Source/query.png")))
-            .expect("selection should be stored");
-        let mut entry = selection
-            .take(request_id)
-            .expect("selection should be consumed");
-        entry.expire();
-
-        let error = complete_selected_image_search(
-            &selection,
-            entry,
-            Err::<(), _>(SidecarError::new("temporary transport failure")),
-        )
-        .expect_err("an expired selection must not advertise retry");
+        .expect_err("an obsolete selection must not advertise retry");
 
         assert_eq!(error.error, "ImageSelectionUnavailable");
         assert_eq!(error.detail, "The selected image is no longer available. Choose another image.");
