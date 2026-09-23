@@ -5,9 +5,9 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
 
 from . import job_queue
+from .ocr_backend import OcrBackend
 
 DEFAULT_OCR_RECIPE = {
     "engine": "paddleocr",
@@ -20,11 +20,6 @@ DEFAULT_OCR_RECIPE = {
 
 OCR_ASSET_JOB_TYPE = job_queue.JobType.OCR_ASSET.value
 GIF_MEDIA_TYPE = "image/gif"
-
-
-class OcrBackend(Protocol):
-    def recognize_image(self, image_path: Path) -> dict[str, object]:
-        ...
 
 
 def _utc_now() -> str:
