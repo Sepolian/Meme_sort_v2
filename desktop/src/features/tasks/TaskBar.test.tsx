@@ -6,7 +6,6 @@ import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState, ImportTask, RuntimeHealthResult } from "../../api/types";
 import { importResultSummary, importSnapshot } from "../import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
 import { summarizeTasks } from "./taskVisibility";
 
 function healthyResult(): RuntimeHealthResult {
@@ -188,7 +187,6 @@ describe("task visibility summary", () => {
 
 describe("Activity entry", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
     currentImportStatus = importSnapshot();
@@ -460,6 +458,7 @@ describe("Activity entry", () => {
     renderApp("/", client);
 
     const activity = await screen.findByRole("region", { name: "Activity" });
+    await within(activity).findByRole("button", { name: "Retry health check" });
     expect(within(activity).getByRole("button", { name: "Retry health check" })).toBeVisible();
 
     fireEvent.click(within(activity).getByRole("button", { name: "Collapse Activity" }));
@@ -503,6 +502,7 @@ describe("Activity entry", () => {
     const { container } = renderApp("/", client);
 
     const activity = await screen.findByRole("region", { name: "Activity" });
+    await within(activity).findByRole("button", { name: "Retry health check" });
     const retryButton = within(activity).getByRole("button", { name: "Retry health check" });
     retryButton.focus();
     fireEvent.click(retryButton);
@@ -529,6 +529,7 @@ describe("Activity entry", () => {
     renderApp("/", client);
 
     const activity = await screen.findByRole("region", { name: "Activity" });
+    await within(activity).findByRole("button", { name: "Retry health check" });
     const retryButton = within(activity).getByRole("button", { name: "Retry health check" });
     retryButton.focus();
     fireEvent.click(retryButton);

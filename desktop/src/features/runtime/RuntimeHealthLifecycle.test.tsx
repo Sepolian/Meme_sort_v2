@@ -1,13 +1,12 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AssetListResult, RuntimeHealthResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./runtimeHealthStore";
 
 function healthyResult(): RuntimeHealthResult {
   return {
@@ -57,7 +56,6 @@ function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: false },
       library_status: { total_assets: 1, job_counts: { pending: 0 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -106,7 +104,6 @@ function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },
@@ -138,10 +135,6 @@ function renderApp(route: string, client: MemeSortClient, strict = false) {
 }
 
 describe("startup Runtime health-check lifecycle (ticket 14)", () => {
-  beforeEach(() => {
-    resetRuntimeHealthForTesting();
-  });
-
   it("runs exactly one automatic health check under StrictMode", async () => {
     const client = makeClient();
     renderApp("/", client, true);
@@ -226,7 +219,6 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
 
     // Library browsing still works on another route with the same session.
     view.unmount();
-    resetRuntimeHealthForTesting();
     const browsingClient = makeClient({ runRuntimeHealthCheck: vi.fn(async () => failedResult()) });
     renderApp("/", browsingClient);
     await screen.findByRole("heading", { name: "Your library" });
@@ -249,44 +241,4 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
     await waitFor(() => expect(screen.queryByRole("alert", { name: "Runtime health failure" })).not.toBeInTheDocument());
   });
 
-  it("distinguishes persisted informational health from current-session authorization", async () => {
-    // Server claims persisted health ok, but the current session check fails:
-    // semantic search must still be blocked.
-    const persistedOkClient = makeClient({
-      getAppState: async () => ({
-        library_root: "C:/Library",
-        runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-        setup_state: { health_check_ok: true },
-        library_status: { total_assets: 1, job_counts: { pending: 0 } },
-        worker_loop: { paused: false, running: true },
-        import_task: importSnapshot(),
-        pending_jobs: [],
-      }),
-      runRuntimeHealthCheck: vi.fn(async () => failedResult()),
-    });
-    const first = renderApp("/", persistedOkClient);
-    await screen.findByRole("alert", { name: "Runtime health failure" });
-    first.unmount();
-
-    // Server has no session health, but the current session check passes:
-    // semantic search must be authorized.
-    resetRuntimeHealthForTesting();
-    const sessionOkClient = makeClient({
-      getAppState: async () => ({
-        library_root: "C:/Library",
-        runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-        setup_state: { health_check_ok: false },
-        library_status: { total_assets: 1, job_counts: { pending: 0 } },
-        worker_loop: { paused: false, running: true },
-        import_task: importSnapshot(),
-        pending_jobs: [],
-      }),
-      runRuntimeHealthCheck: vi.fn(async () => healthyResult()),
-    });
-    renderApp("/", sessionOkClient);
-    await waitFor(() => expect(sessionOkClient.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(screen.queryByRole("alert", { name: "Runtime health failure" })).not.toBeInTheDocument(),
-    );
-  });
 });

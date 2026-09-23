@@ -105,15 +105,15 @@ export function TaskBar({ appState }: { appState: AppState | null }) {
       setRuntimeRetryError(tauriErrorDetail(error, "MemeSort could not retry the health check."));
     } finally {
       if (shouldRestoreFocus) {
-        const target = retryStatus === "healthy"
-          ? document.querySelector<HTMLElement>(".library-content")
-            ?? document.querySelector<HTMLElement>(".route-content > .page")
-          : runtimeRetryButtonRef.current;
         const source = runtimeRetryButtonRef.current;
         const generation = ++runtimeFocusGenerationRef.current;
         runtimeFocusFrameCancelRef.current?.();
         const focusTarget = () => {
           if (generation !== runtimeFocusGenerationRef.current) return;
+          const target = retryStatus === "healthy"
+            ? document.querySelector<HTMLElement>(".library-content")
+              ?? document.querySelector<HTMLElement>(".route-content > .page")
+            : runtimeRetryButtonRef.current;
           const active = document.activeElement;
           if (
             active instanceof HTMLElement &&

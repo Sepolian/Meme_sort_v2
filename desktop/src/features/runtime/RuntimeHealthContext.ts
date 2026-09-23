@@ -1,10 +1,14 @@
 import { createContext } from "react";
-import type { RuntimeHealthSnapshot } from "./runtimeHealthStore";
+import type { RuntimeHealthResult } from "../../api/types";
+
+export interface RuntimeHealthSnapshot {
+  status: "idle" | "checking" | "healthy" | "failed";
+  result: RuntimeHealthResult | null;
+  error: string | null;
+}
 
 export interface RuntimeHealthContextValue extends RuntimeHealthSnapshot {
-  /** Current-session authorization for semantic search/indexing. */
   isAuthorized: boolean;
-  /** Failure blocks semantic search/indexing; browsing/import remain enabled. */
   isBlocked: boolean;
   retry: () => Promise<RuntimeHealthSnapshot>;
 }

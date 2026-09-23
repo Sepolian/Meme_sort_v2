@@ -7,7 +7,6 @@ import { App } from "./App";
 import { scheduleFocusRestoration } from "./components/useEscapeSurface";
 import type { AssetDetail, AssetListResult, PendingJob } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const pendingJobSnapshot: PendingJob = {
   job_id: "123e4567-e89b-12d3-a456-426614174003",
@@ -104,10 +103,6 @@ const client = {
   getAppState: async () => ({
     library_root: "C:/Library",
     runtime: { backend_name: "llama.cpp", device: "Vulkan0", model_label: "Qwen3-VL", output_dimension: 2048, storage_dtype: "float32" },
-    setup_state: {
-      health_check_ok: false,
-      checklist: [{ id: "health-check", label: "Run runtime health check", done: false, detail: "Vulkan health has not been checked." }],
-    },
     library_status: {
       total_assets: 3,
       job_counts: { pending: 2 },
@@ -245,7 +240,6 @@ const client = {
     retried_jobs: 2,
     failed_jobs_remaining: 0,
   })),
-  getPendingJobs: vi.fn(async () => ({ jobs: [pendingJobSnapshot] })),
   deletePendingJobs: vi.fn(async (jobIds: string[]) => ({ requested_job_ids: jobIds, deleted_job_ids: jobIds, skipped_job_ids: [] })),
   cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
   copyAssetToClipboard: vi.fn(async () => undefined),
@@ -262,7 +256,6 @@ const client = {
 
 describe("App", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 

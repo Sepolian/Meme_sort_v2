@@ -6,7 +6,6 @@ import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 import { LIBRARY_PREFERENCE_KEYS } from "./features/library/libraryUrlState";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -84,7 +83,6 @@ function makeClient() {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: true },
       library_status: { total_assets: 3, job_counts: { pending: 1 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -158,7 +156,6 @@ function makeClient() {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },
@@ -205,7 +202,6 @@ function LocationCapture() {
 describe("Library sorting, filtering, and density controls", () => {
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 

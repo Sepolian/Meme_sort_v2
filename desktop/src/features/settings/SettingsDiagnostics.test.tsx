@@ -6,7 +6,6 @@ import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState, PendingJob, RuntimeHealthResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -218,7 +217,6 @@ function renderApp(route: string, client: MemeSortClient) {
 
 describe("Settings Runtime and installation (ticket 15)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -275,7 +273,6 @@ describe("Settings Runtime and installation (ticket 15)", () => {
 
 describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -403,7 +400,6 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
 
 describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -543,7 +539,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
 
 describe("Advanced Diagnostics selection follows the queue snapshot (ticket 03)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });

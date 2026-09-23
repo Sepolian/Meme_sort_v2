@@ -5,7 +5,6 @@ import { MemoryRouter, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult, SearchAsset } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const CAT_ID = "123e4567-e89b-12d3-a456-426614174001";
 const DOG_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -131,7 +130,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: true },
       library_status: { total_assets: 4, job_counts: { pending: 1 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -203,7 +201,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },
@@ -276,7 +273,6 @@ function UrlHistoryControls() {
 describe("Image search and Find Similar (ticket 12)", () => {
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 

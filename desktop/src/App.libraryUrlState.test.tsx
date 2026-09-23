@@ -48,7 +48,6 @@ function makeClient() {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: true },
       library_status: { total_assets: 1, job_counts: { pending: 0 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -112,7 +111,6 @@ function makeClient() {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },

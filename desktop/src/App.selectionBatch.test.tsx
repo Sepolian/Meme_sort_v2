@@ -5,10 +5,6 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { App } from "./App";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import {
-  resetRuntimeHealthForTesting,
-  retryRuntimeHealthCheck,
-} from "./features/runtime/runtimeHealthStore";
 
 const FIRST_ASSET = "123e4567-e89b-12d3-a456-426614174000";
 const SECOND_ASSET = "123e4567-e89b-12d3-a456-426614174001";
@@ -108,7 +104,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: true },
       library_status: { total_assets: 3, job_counts: { pending: 0 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -188,7 +183,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },
@@ -254,7 +248,6 @@ async function selectByLabel(label: string) {
 describe("Selection toolbar and batch actions (ticket 17)", () => {
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 
@@ -535,7 +528,7 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
       .mockResolvedValueOnce(healthyCheck())
       .mockResolvedValueOnce({ ...healthyCheck(), smoke_test_ok: false, error: "Vulkan0 authorization was lost." });
     const client = makeClient({ runRuntimeHealthCheck });
-    renderApp("/", client);
+    const { queryClient } = renderApp("/", client);
 
     await screen.findByLabelText("Select first.gif");
     fireEvent.click(screen.getByLabelText("Select first.gif"));
@@ -546,8 +539,9 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     const dialog = await screen.findByRole("alertdialog", { name: "Rebuild 1 selected Asset(s)?" });
 
     await act(async () => {
-      await retryRuntimeHealthCheck(client as never);
+      await queryClient.refetchQueries({ queryKey: ["runtime-health"] });
     });
+    await waitFor(() => expect(rebuild).toBeDisabled());
     fireEvent.click(within(dialog).getByRole("button", { name: "Queue rebuild" }));
 
     expect(client.batchAssetAction).not.toHaveBeenCalled();

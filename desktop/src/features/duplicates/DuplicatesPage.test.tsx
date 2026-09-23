@@ -6,7 +6,6 @@ import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState, AssetListResult, DuplicateScanResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
-import { resetRuntimeHealthForTesting, retryRuntimeHealthCheck } from "../runtime/runtimeHealthStore";
 
 const LEFT_ID = "123e4567-e89b-12d3-a456-426614174000";
 const RIGHT_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -116,7 +115,6 @@ function appStateFixture() {
   return {
     library_root: "C:/Library",
     runtime: { backend_name: "llama.cpp", device: "Vulkan0", model_label: "Qwen3-VL", output_dimension: 2048, storage_dtype: "float32" },
-    setup_state: { health_check_ok: false },
     library_status: { total_assets: 2, job_counts: { pending: 0 } },
     worker_loop: { paused: false, running: true },
     import_task: importSnapshot(),
@@ -201,7 +199,6 @@ function createClient(overrides: Partial<Record<keyof MemeSortClient, ReturnType
       error: null,
     })),
     retryFailedJobs: vi.fn(async () => ({ library_root: "C:/Library", retried_jobs: 0, failed_jobs_remaining: 0 })),
-    getPendingJobs: vi.fn(async () => ({ jobs: [] })),
     deletePendingJobs: vi.fn(async (jobIds: string[]) => ({ requested_job_ids: jobIds, deleted_job_ids: jobIds, skipped_job_ids: [] })),
     cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
     copyAssetToClipboard: vi.fn(async () => undefined),
@@ -238,7 +235,6 @@ async function scanDuplicates() {
 
 describe("Duplicates redesigned workflow (ticket 16)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -427,7 +423,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
 
   it("disables Rescan after a healthy scan loses current-session authorization", async () => {
     const client = createClient({ getDuplicates: vi.fn(async () => stalePairsFixture()) });
-    renderApp("/duplicates", client);
+    const { queryClient } = renderApp("/duplicates", client);
 
     fireEvent.click(await screen.findByRole("button", { name: "Scan duplicates" }));
     await screen.findByRole("status", { name: "Stale duplicate pairs" });
@@ -436,7 +432,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
 
     (client.runRuntimeHealthCheck as ReturnType<typeof vi.fn>).mockResolvedValueOnce(failedHealthResult());
     await act(async () => {
-      await retryRuntimeHealthCheck(client);
+      await queryClient.refetchQueries({ queryKey: ["runtime-health"] });
     });
 
     await waitFor(() => {
@@ -454,7 +450,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
         throw new Error("scan failed");
       }),
     });
-    renderApp("/duplicates", client);
+    const { queryClient } = renderApp("/duplicates", client);
 
     fireEvent.click(await screen.findByRole("button", { name: "Scan duplicates" }));
     const retry = await screen.findByRole("button", { name: "Retry scan" });
@@ -462,7 +458,7 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
 
     (client.runRuntimeHealthCheck as ReturnType<typeof vi.fn>).mockResolvedValueOnce(failedHealthResult());
     await act(async () => {
-      await retryRuntimeHealthCheck(client);
+      await queryClient.refetchQueries({ queryKey: ["runtime-health"] });
     });
 
     await waitFor(() => expect(retry).toBeDisabled());
@@ -527,7 +523,6 @@ describe("Duplicates redesigned workflow (ticket 16)", () => {
 
 describe("Duplicate Review deletion coordination (ticket 01)", () => {
   beforeEach(() => {
-    resetRuntimeHealthForTesting();
     window.localStorage.clear();
     vi.clearAllMocks();
   });

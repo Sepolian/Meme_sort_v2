@@ -6,7 +6,6 @@ import { App } from "./App";
 import { AssetInspector } from "./features/assets/AssetInspector";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "./features/runtime/runtimeHealthStore";
 
 const FIRST_ASSET = "123e4567-e89b-12d3-a456-426614174000";
 const SECOND_ASSET = "123e4567-e89b-12d3-a456-426614174002";
@@ -88,7 +87,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-      setup_state: { health_check_ok: true },
       library_status: { total_assets: 2, job_counts: { pending: 0 } },
       worker_loop: { paused: false, running: true },
       import_task: importSnapshot(),
@@ -176,7 +174,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },
@@ -249,7 +246,6 @@ function deferred<T>() {
 describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 
@@ -716,7 +712,6 @@ describe("Source Record removal and deletion cache coordination", () => {
 
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 
@@ -1103,7 +1098,6 @@ describe("Source Record removal and deletion cache coordination", () => {
 describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
   beforeEach(() => {
     localStorage.clear();
-    resetRuntimeHealthForTesting();
     vi.clearAllMocks();
   });
 

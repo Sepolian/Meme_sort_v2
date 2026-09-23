@@ -13,7 +13,6 @@ import type {
   ImportTask,
 } from "../../api/types";
 import { importResultSummary, importSnapshot } from "./import-test-fixtures";
-import { resetRuntimeHealthForTesting } from "../runtime/runtimeHealthStore";
 
 let currentImportStatus: ImportTask;
 const getImportStatus = vi.fn(async (): Promise<ImportTask> => currentImportStatus);
@@ -80,7 +79,6 @@ function healthyRuntimeCheck() {
 }
 
 beforeEach(() => {
-  resetRuntimeHealthForTesting();
 });
 
 function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
