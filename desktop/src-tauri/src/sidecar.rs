@@ -18,13 +18,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 
 use crate::clipboard::{
-    build_hdrop_payload, build_static_image_payload, classify_managed_path,
-    with_clipboard_write, write_payload_via, ClipboardPayload, ClipboardWriter, ManagedCopyKind,
-    WindowsClipboardWriter,
+    build_hdrop_payload, build_static_image_payload, classify_managed_path, with_clipboard_write,
+    write_payload_via, ClipboardPayload, ClipboardWriter, ManagedCopyKind, WindowsClipboardWriter,
 };
 use crate::native_selection::{
-    validate_library_paths, LibraryImportSelection, SearchImageSelection,
-    SearchImageSelectionEntry,
+    validate_library_paths, LibraryImportSelection, SearchImageSelection, SearchImageSelectionEntry,
 };
 
 #[cfg(test)]
@@ -1861,8 +1859,7 @@ fn normalize_uuid(identifier: &str) -> Option<String> {
 }
 
 pub(crate) fn validate_asset_id(asset_id: &str) -> Result<String, SidecarError> {
-    normalize_uuid(asset_id)
-        .ok_or_else(|| SidecarError::new("Invalid MemeSort Asset identifier."))
+    normalize_uuid(asset_id).ok_or_else(|| SidecarError::new("Invalid MemeSort Asset identifier."))
 }
 
 pub(crate) fn validate_search_request_id(request_id: &str) -> Result<String, SidecarError> {
@@ -1997,14 +1994,13 @@ mod tests {
         authenticated_get_json, authenticated_get_media, authenticated_post_json,
         default_library_root, logical_drag_position, managed_media_path, native_drag_counts,
         native_drag_summary, parse_handshake, parse_json_response, process_native_drag_event,
-        complete_selected_image_search, search_selected_image, validate_asset_id,
-        validate_asset_ids, validate_duplicate_threshold, validate_import_sources,
-        validate_library_paths, validate_search_query, validate_search_request_id,
-        validate_source_path, ApiRoute, AssetIdPayload, AssetRevealTarget, BatchAssetAction,
-        BatchAssetActionPayload, EmptyPayload, IndexingPolicy, LibraryImportSelection,
-        LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute, NativeDragContext,
-        NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload, SearchImageSelection,
-        SidecarSession, StartImportPayload,
+        search_selected_image, validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
+        validate_import_sources, validate_library_paths, validate_search_query,
+        validate_search_request_id, validate_source_path, ApiRoute, AssetIdPayload,
+        AssetRevealTarget, BatchAssetAction, BatchAssetActionPayload, EmptyPayload, IndexingPolicy,
+        LibraryImportSelection, LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute,
+        NativeDragContext, NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload,
+        SearchImageSelection, SidecarError, SidecarSession, StartImportPayload,
     };
     use std::sync::Mutex;
     use tauri::http::{Method, Request, StatusCode};
@@ -2531,7 +2527,10 @@ mod tests {
         .expect_err("an obsolete selection must not advertise retry");
 
         assert_eq!(error.error, "ImageSelectionUnavailable");
-        assert_eq!(error.detail, "The selected image is no longer available. Choose another image.");
+        assert_eq!(
+            error.detail,
+            "The selected image is no longer available. Choose another image."
+        );
         assert_eq!(error.status, None);
         assert!(!error.retryable);
     }

@@ -92,9 +92,9 @@ impl ClipboardWriteGate {
     fn acquire(&self) -> ClipboardWriteTurn<'_> {
         let ticket = {
             let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let ticket = state.next_ticket;
             state.next_ticket = state
                 .next_ticket
@@ -117,10 +117,7 @@ impl ClipboardWriteGate {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
         }
         drop(state);
-        ClipboardWriteTurn {
-            gate: self,
-            ticket,
-        }
+        ClipboardWriteTurn { gate: self, ticket }
     }
 
     fn with<T>(&self, operation: impl FnOnce() -> T) -> T {
@@ -156,9 +153,7 @@ pub(crate) fn write_payload_via(
     payload: &ClipboardPayload,
 ) -> Result<(), SidecarError> {
     match payload {
-        ClipboardPayload::StaticImage(image) => {
-            writer.write_static_image(&image.dibv5, &image.png)
-        }
+        ClipboardPayload::StaticImage(image) => writer.write_static_image(&image.dibv5, &image.png),
         ClipboardPayload::FileDrop { hdrop } => writer.write_file_drop(hdrop),
     }
 }
@@ -177,9 +172,7 @@ pub(crate) fn classify_managed_path(path: &Path) -> Result<ManagedCopyKind, Side
     match extension.as_str() {
         "png" | "jpg" | "jpeg" | "webp" | "bmp" => Ok(ManagedCopyKind::StaticImage),
         "gif" => Ok(ManagedCopyKind::GifFile),
-        _ => Err(SidecarError::new(
-            "Unsupported Clipboard Copy media type.",
-        )),
+        _ => Err(SidecarError::new("Unsupported Clipboard Copy media type.")),
     }
 }
 
@@ -188,11 +181,7 @@ pub(crate) fn classify_managed_path(path: &Path) -> Result<ManagedCopyKind, Side
 /// The header is a 124-byte `BITMAPV5HEADER` with `BI_BITFIELDS` 32-bit BGRA
 /// masks followed by bottom-up pixel rows. Width and height are preserved
 /// exactly; no scaling, cropping, or rotation is applied.
-pub(crate) fn build_dibv5(
-    width: u32,
-    height: u32,
-    rgba: &[u8],
-) -> Result<Vec<u8>, SidecarError> {
+pub(crate) fn build_dibv5(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, SidecarError> {
     if width == 0 || height == 0 {
         return Err(SidecarError::new(
             "Clipboard Copy image dimensions must be positive.",
@@ -266,9 +255,7 @@ pub(crate) fn build_static_image_payload(
     file_bytes: &[u8],
 ) -> Result<StaticImagePayload, SidecarError> {
     if file_bytes.is_empty() {
-        return Err(SidecarError::new(
-            "Clipboard Copy source image is empty.",
-        ));
+        return Err(SidecarError::new("Clipboard Copy source image is empty."));
     }
     let image = image::load_from_memory(file_bytes)
         .map_err(|_| SidecarError::new("Clipboard Copy source image could not be decoded."))?;
@@ -361,7 +348,9 @@ pub(crate) fn build_hdrop_payload(paths: &[PathBuf]) -> Result<Vec<u8>, SidecarE
 #[cfg(test)]
 pub(crate) fn parse_hdrop_payload(payload: &[u8]) -> Result<Vec<PathBuf>, SidecarError> {
     if payload.len() < 20 {
-        return Err(SidecarError::new("Clipboard Copy file payload is truncated."));
+        return Err(SidecarError::new(
+            "Clipboard Copy file payload is truncated.",
+        ));
     }
     let p_files = u32::from_le_bytes(payload[0..4].try_into().expect("header slice"));
     let wide_flag = u32::from_le_bytes(payload[16..20].try_into().expect("header slice"));
@@ -444,7 +433,9 @@ fn write_clipboard_formats(formats: &[(u32, &[u8])]) -> Result<(), SidecarError>
     use windows_sys::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
-    use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows_sys::Win32::System::Memory::{
+        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+    };
 
     for format in formats {
         if format.1.is_empty() {
@@ -558,12 +549,13 @@ impl ClipboardWriter for FakeClipboardWriter {
         if dibv5.is_empty() || png.is_empty() {
             return Err(SidecarError::new("Clipboard Copy payload is empty."));
         }
-        self.writes.lock().expect("fake clipboard lock").push(
-            FakeClipboardWrite::StaticImage {
+        self.writes
+            .lock()
+            .expect("fake clipboard lock")
+            .push(FakeClipboardWrite::StaticImage {
                 dibv5: dibv5.to_vec(),
                 png: png.to_vec(),
-            },
-        );
+            });
         Ok(())
     }
 
@@ -571,11 +563,12 @@ impl ClipboardWriter for FakeClipboardWriter {
         if hdrop.is_empty() {
             return Err(SidecarError::new("Clipboard Copy payload is empty."));
         }
-        self.writes.lock().expect("fake clipboard lock").push(
-            FakeClipboardWrite::FileDrop {
+        self.writes
+            .lock()
+            .expect("fake clipboard lock")
+            .push(FakeClipboardWrite::FileDrop {
                 hdrop: hdrop.to_vec(),
-            },
-        );
+            });
         Ok(())
     }
 }
@@ -588,7 +581,7 @@ mod tests {
     use std::sync::{mpsc, Arc};
     use std::thread;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     enum ClipboardEvent {
         Started(&'static str),
         Wrote(&'static str),
@@ -611,11 +604,7 @@ mod tests {
     }
 
     impl ClipboardWriter for OrderedClipboardWriter {
-        fn write_static_image(
-            &self,
-            _dibv5: &[u8],
-            _png: &[u8],
-        ) -> Result<(), SidecarError> {
+        fn write_static_image(&self, _dibv5: &[u8], _png: &[u8]) -> Result<(), SidecarError> {
             self.record(ClipboardEvent::Wrote(self.label));
             Ok(())
         }
@@ -795,10 +784,10 @@ mod tests {
         // Minimal 1x1 GIF89a payload. The static builder has no GIF decoder,
         // so even raw GIF bytes fail closed instead of publishing frame one.
         let gif = vec![
-            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00,
-            0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02,
-            0x44, 0x01, 0x00, 0x3B,
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C,
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+            0x3B,
         ];
         assert!(build_static_image_payload(&gif).is_err());
     }
@@ -833,16 +822,13 @@ mod tests {
         let png = encode_png(2, 2, [1, 2, 3, 255]);
 
         fake.write_static_image(&dibv5, &png).expect("static write");
-        let hdrop = build_hdrop_payload(&[PathBuf::from(r"C:\MemeSort\originals\a.png")])
-            .expect("hdrop");
+        let hdrop =
+            build_hdrop_payload(&[PathBuf::from(r"C:\MemeSort\originals\a.png")]).expect("hdrop");
         fake.write_file_drop(&hdrop).expect("file write");
 
         assert_eq!(fake.write_count(), 2);
         let writes = fake.writes.lock().expect("lock");
-        assert!(matches!(
-            &writes[0],
-            FakeClipboardWrite::StaticImage { .. }
-        ));
+        assert!(matches!(&writes[0], FakeClipboardWrite::StaticImage { .. }));
         assert!(matches!(&writes[1], FakeClipboardWrite::FileDrop { .. }));
     }
 

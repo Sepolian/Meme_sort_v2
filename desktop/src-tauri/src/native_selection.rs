@@ -143,10 +143,7 @@ impl SearchImageSelection {
             .ok_or_else(SidecarError::image_selection_unavailable)
     }
 
-    pub(crate) fn take(
-        &self,
-        request_id: &str,
-    ) -> Result<SearchImageSelectionEntry, SidecarError> {
+    pub(crate) fn take(&self, request_id: &str) -> Result<SearchImageSelectionEntry, SidecarError> {
         let mut selection = self
             .0
             .lock()
@@ -287,6 +284,52 @@ pub(crate) fn validate_library_paths(
     Ok(sources)
 }
 
+fn validate_library_path(
+    path: &Path,
+    origin: LibrarySelectionOrigin,
+) -> Result<String, SidecarError> {
+    if !path.is_absolute() {
+        return Err(SidecarError::new(
+            "Library Import sources must use absolute paths.",
+        ));
+    }
+    let source = path
+        .to_str()
+        .ok_or_else(|| SidecarError::new("Library Import source paths must be valid Unicode."))?;
+    let source = validate_source_path(source)?;
+    let metadata = fs::symlink_metadata(path).map_err(|_| {
+        SidecarError::new("A Library Import source is missing or cannot be accessed.")
+    })?;
+    if is_reparse_point(&metadata) {
+        return Err(SidecarError::new(
+            "Library Import sources cannot be symlinks, junctions, or reparse points.",
+        ));
+    }
+    let is_file = metadata.file_type().is_file();
+    let is_dir = metadata.file_type().is_dir();
+    let valid = match origin {
+        LibrarySelectionOrigin::Files => is_file,
+        LibrarySelectionOrigin::Folder => is_dir,
+        LibrarySelectionOrigin::Drop => is_file || is_dir,
+    };
+    if !valid {
+        return Err(SidecarError::new(
+            "A Library Import source has an irregular file type.",
+        ));
+    }
+    Ok(source)
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
 #[cfg(test)]
 mod tests {
     use super::SearchImageSelection;
@@ -371,50 +414,4 @@ mod tests {
             "C:/Source/newer.png"
         );
     }
-}
-
-fn validate_library_path(
-    path: &Path,
-    origin: LibrarySelectionOrigin,
-) -> Result<String, SidecarError> {
-    if !path.is_absolute() {
-        return Err(SidecarError::new(
-            "Library Import sources must use absolute paths.",
-        ));
-    }
-    let source = path
-        .to_str()
-        .ok_or_else(|| SidecarError::new("Library Import source paths must be valid Unicode."))?;
-    let source = validate_source_path(source)?;
-    let metadata = fs::symlink_metadata(path).map_err(|_| {
-        SidecarError::new("A Library Import source is missing or cannot be accessed.")
-    })?;
-    if is_reparse_point(&metadata) {
-        return Err(SidecarError::new(
-            "Library Import sources cannot be symlinks, junctions, or reparse points.",
-        ));
-    }
-    let is_file = metadata.file_type().is_file();
-    let is_dir = metadata.file_type().is_dir();
-    let valid = match origin {
-        LibrarySelectionOrigin::Files => is_file,
-        LibrarySelectionOrigin::Folder => is_dir,
-        LibrarySelectionOrigin::Drop => is_file || is_dir,
-    };
-    if !valid {
-        return Err(SidecarError::new(
-            "A Library Import source has an irregular file type.",
-        ));
-    }
-    Ok(source)
-}
-
-#[cfg(windows)]
-fn is_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
 }
