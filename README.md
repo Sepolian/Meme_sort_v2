@@ -155,7 +155,7 @@ If `Vulkan0` is absent or its vendor is not AMD, Intel, or NVIDIA, update the di
 ## Repository layout
 
 - `runtime-manifest.json`: the sole developer-controlled semantic runtime and model definition
-- `memesort_worker/`: application, indexing, retrieval, OCR coordination, Web API, and UI
+- `memesort_worker/`: application, indexing, retrieval, OCR coordination, and authenticated sidecar API
 - `scripts/setup_windows_llama.ps1`: manifest-driven Windows runtime setup
 - `scripts/evaluate_*.py`: still-image, GIF, and OCR evaluation tools
 - `tests/`: Vulkan runtime, worker, OCR, and UI regression tests

@@ -1,7 +1,7 @@
 """Characterization tests for public read projections.
 
-These tests pin the payloads produced by the read interfaces the web
-routes call today, across the six documented asset states: no assets,
+These tests pin the payloads produced by the sidecar read interfaces
+across the six documented asset states: no assets,
 pending initial index, indexed, failed, stale-only, and reindex-pending.
 The oracle is a set of frozen expected fixtures plus raw SQL facts, so
 the projections are verified independently of the projection code.
@@ -21,17 +21,8 @@ import numpy as np
 from PIL import Image
 
 from memesort_worker import asset_catalog
-from memesort_worker import runtime_service
-from memesort_worker.app_commands import import_and_start_indexing
 from memesort_worker.indexing_pipeline import run_pending_jobs
-from memesort_worker.library import (
-    get_asset_detail,
-    get_library_status,
-    import_folder,
-    initialize_library,
-    list_assets,
-    scan_duplicate_assets,
-)
+from memesort_worker.asset_catalog import import_folder, initialize_library
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from runtime_fakes import FakeIndexingRuntime
@@ -116,20 +107,6 @@ LIBRARY_STATUS_KEYS = {
     "total_assets",
     "total_jobs",
     "recent_jobs",
-}
-
-SETUP_STATE_KEYS = {
-    "library_root",
-    "health_check_has_run",
-    "health_check_ok",
-    "health_check_summary",
-    "import_source_hint",
-    "assets_present",
-    "indexed_assets_present",
-    "pending_assets_present",
-    "active_recipe_label",
-    "runtime_readiness",
-    "checklist",
 }
 
 _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -284,35 +261,6 @@ class StubOcrBackend:
 
     def close(self) -> None:
         return
-
-
-class RecordingWorkerLoop:
-    def __init__(self) -> None:
-        self.resume_calls = 0
-
-    def resume(self) -> None:
-        self.resume_calls += 1
-
-    def snapshot(self):
-        loop = self
-
-        class _Snapshot:
-            @staticmethod
-            def to_dict() -> dict[str, object]:
-                return {"state": "running", "resume_calls": loop.resume_calls}
-
-        return _Snapshot()
-
-
-class StubRuntimeGate:
-    def __init__(self, ready: bool, message: str) -> None:
-        self._verdict = (ready, message)
-
-    def is_ready_for_indexing(self) -> tuple[bool, str]:
-        return self._verdict
-
-    def current_health_check(self):
-        return None
 
 
 class ReadProjectionCharacterizationTests(unittest.TestCase):
@@ -470,27 +418,25 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             "status": EXPECTED_STATUS_BY_STATE[state],
         }
 
-    def test_status_matrix_old_and_new_projections_agree(self) -> None:
+    def test_status_matrix_full_and_summary_projections_agree(self) -> None:
         for state in ASSET_STATES:
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 library_root = self._build_state(root, state)
                 literals = self._oracle_literals(root, library_root)
-                old_assets = self._freeze(list_assets(library_root).assets, literals)
                 with LibraryStore(library_root) as store:
-                    new_assets = self._freeze(
-                        store.list_asset_summaries().assets, literals
-                    )
+                    full_assets = self._freeze(store.list_assets_detailed().assets, literals)
+                    summary_assets = self._freeze(store.list_asset_summaries().assets, literals)
 
                 if EXPECTED_STATUS_BY_STATE[state] is None:
-                    self.assertEqual([], old_assets)
-                    self.assertEqual([], new_assets)
+                    self.assertEqual([], full_assets)
+                    self.assertEqual([], summary_assets)
                     continue
 
                 expected_summary = self._expected_summary(root, state)
-                self.assertEqual([expected_summary], new_assets, state)
-                self.assertEqual(1, len(old_assets))
-                full = old_assets[0]
+                self.assertEqual([expected_summary], summary_assets, state)
+                self.assertEqual(1, len(full_assets))
+                full = full_assets[0]
                 self.assertEqual(FULL_ASSET_PROJECTION_KEYS, set(full))
                 for key in SHARED_PROJECTION_KEYS:
                     self.assertEqual(
@@ -500,24 +446,19 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
                 self.assertEqual(indexed_labels, full["indexed_recipe_labels"], state)
                 self.assertEqual(stale_labels, full["stale_recipe_labels"], state)
 
-    def test_library_status_payloads_agree_across_implementations(self) -> None:
+    def test_library_status_payloads_match_frozen_fixtures(self) -> None:
         for state in ASSET_STATES:
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 library_root = self._build_state(root, state)
                 literals = self._oracle_literals(root, library_root)
-                old_status = get_library_status(library_root).to_dict()
                 with LibraryStore(library_root) as store:
-                    new_status = store.get_library_status().to_dict()
+                    status = store.get_library_status().to_dict()
 
-                expected = EXPECTED_LIBRARY_STATUS_BY_STATE[state]
-                for payload in (old_status, new_status):
-                    frozen = self._freeze(payload, literals)
-                    self.assertEqual(LIBRARY_STATUS_KEYS, set(frozen))
-                    frozen["recent_jobs"] = sorted(
-                        frozen["recent_jobs"], key=_job_sort_key
-                    )
-                    self.assertEqual(expected, frozen, state)
+                frozen = self._freeze(status, literals)
+                self.assertEqual(LIBRARY_STATUS_KEYS, set(frozen))
+                frozen["recent_jobs"] = sorted(frozen["recent_jobs"], key=_job_sort_key)
+                self.assertEqual(EXPECTED_LIBRARY_STATUS_BY_STATE[state], frozen, state)
 
     def _expected_asset_detail(self, root: Path) -> dict[str, object]:
         content_hash = hashlib.sha256(
@@ -617,7 +558,8 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             finally:
                 conn.close()
 
-            detail = get_asset_detail(library_root, asset_id=asset_id)
+            with LibraryStore(library_root) as store:
+                detail = store.get_asset_detail(asset_id)
             frozen = self._freeze(detail.to_dict(), literals)
             frozen["asset"]["jobs"] = sorted(
                 frozen["asset"]["jobs"], key=_job_sort_key
@@ -627,8 +569,9 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
     def test_asset_detail_unknown_id_raises(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = self._build_state(Path(temp_dir), "no_assets")
-            with self.assertRaisesRegex(ValueError, "Unknown asset id"):
-                get_asset_detail(library_root, asset_id="missing")
+            with LibraryStore(library_root) as store:
+                with self.assertRaisesRegex(ValueError, "Unknown asset id"):
+                    store.get_asset_detail("missing")
 
     def test_pending_jobs_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -656,12 +599,12 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
             import_folder(library_root, source_root)
             self._run_all_jobs_with_stubs(library_root, expected_completed=6)
 
-            for bad_threshold in (-0.1, 1.5):
-                with self.assertRaisesRegex(ValueError, "threshold"):
-                    scan_duplicate_assets(library_root, threshold=bad_threshold)
+            with LibraryStore(library_root) as store:
+                for bad_threshold in (-0.1, 1.5):
+                    with self.assertRaisesRegex(ValueError, "threshold"):
+                        store.scan_duplicate_assets(threshold=bad_threshold)
 
-            result = scan_duplicate_assets(library_root, threshold=0.9)
-            payload = result.to_dict()
+                payload = store.scan_duplicate_assets(threshold=0.9).to_dict()
 
         self.assertEqual(
             {"library_root", "active_recipe_id", "active_recipe_label", "threshold", "pairs"},
@@ -673,90 +616,6 @@ class ReadProjectionCharacterizationTests(unittest.TestCase):
         self.assertGreaterEqual(float(pair["score"]), 0.9)
         self.assertNotEqual(pair["asset_a_id"], pair["asset_b_id"])
 
-    def test_import_and_start_indexing_rejects_unready_runtime_before_importing(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            library_root = root / "library"
-            source_root = root / "source"
-            source_root.mkdir()
-            self._write_image(source_root / "reaction.png")
-            worker_loop = RecordingWorkerLoop()
-
-            with self.assertRaisesRegex(ValueError, "runtime is not ready"):
-                import_and_start_indexing(
-                    library_root,
-                    source_root,
-                    worker_loop,
-                    StubRuntimeGate(False, "runtime is not ready"),
-                )
-
-            self.assertEqual(0, worker_loop.resume_calls)
-            self.assertEqual([], list_assets(library_root).assets)
-
-    def test_import_and_start_indexing_response_payload(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            library_root = root / "library"
-            source_root = root / "source"
-            source_root.mkdir()
-            self._write_image(source_root / "reaction.png")
-            worker_loop = RecordingWorkerLoop()
-
-            response = import_and_start_indexing(
-                library_root,
-                source_root,
-                worker_loop,
-                StubRuntimeGate(True, "ready"),
-            )
-
-        self.assertEqual({"import_result", "worker_loop"}, set(response))
-        self.assertEqual(1, worker_loop.resume_calls)
-        self.assertEqual(1, response["import_result"]["new_assets"])
-        self.assertEqual(3, response["import_result"]["jobs_created"])
-        self.assertEqual(
-            {"state": "running", "resume_calls": 1}, response["worker_loop"]
-        )
-
-    def test_setup_state_payload_for_fresh_library(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = self._build_state(Path(temp_dir), "no_assets")
-            state = runtime_service.get_setup_state(
-                library_root,
-                StubRuntimeGate(False, "runtime health has not been checked"),
-            ).to_dict()
-
-        self.assertEqual(SETUP_STATE_KEYS, set(state))
-        self.assertFalse(state["health_check_has_run"])
-        self.assertFalse(state["health_check_ok"])
-        self.assertFalse(state["assets_present"])
-        self.assertFalse(state["indexed_assets_present"])
-        self.assertFalse(state["pending_assets_present"])
-        self.assertIsNone(state["import_source_hint"])
-        self.assertEqual(
-            ["runtime-files", "health-check", "import-assets", "indexed-assets"],
-            [item["id"] for item in state["checklist"]],
-        )
-        self.assertFalse(state["runtime_readiness"]["ready"])
-        self.assertEqual(
-            "Vulkan health has not been checked in this app session.",
-            state["health_check_summary"],
-        )
-
-    def test_setup_state_reports_import_hint_and_pending_assets(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            library_root = self._build_state(root, "pending_initial_index")
-            state = runtime_service.get_setup_state(
-                library_root,
-                StubRuntimeGate(False, "runtime health has not been checked"),
-            ).to_dict()
-
-            self.assertTrue(state["assets_present"])
-            self.assertTrue(state["pending_assets_present"])
-            self.assertFalse(state["indexed_assets_present"])
-            self.assertEqual(
-                str(root / "source" / "reaction.png"), state["import_source_hint"]
-            )
 
 
 if __name__ == "__main__":

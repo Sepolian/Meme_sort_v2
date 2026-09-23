@@ -22,20 +22,18 @@ from PIL import Image
 from memesort_worker.app_state import build_app_state
 from memesort_worker.cli import run
 from memesort_worker.indexing_pipeline import run_pending_jobs
-from memesort_worker.library import (
+from memesort_worker.asset_catalog import (
     BatchAssetActionResult,
     DATABASE_NAME,
     delete_asset,
     delete_pending_jobs,
-    get_library_status,
     import_folder,
     initialize_library,
-    list_assets,
     remove_source_record,
     rebuild_active_indexes,
     retry_failed_jobs,
-    search_text,
 )
+from memesort_worker.retrieval_service import search_text
 from runtime_fakes import FakeIndexingRuntime
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.pinned_runtime import PinnedRuntime
@@ -128,6 +126,14 @@ class BlockingSearchBackend(StubEmbeddingBackend):
 
 
 class LibraryTests(unittest.TestCase):
+    def _list_assets(self, library_root: Path):
+        with LibraryStore(library_root) as store:
+            return store.list_assets_detailed()
+
+    def _library_status(self, library_root: Path):
+        with LibraryStore(library_root) as store:
+            return store.get_library_status()
+
     def _write_image(self, path: Path, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         image = Image.new("RGB", (40, 30), color)
         image.save(path, format="PNG")
@@ -241,7 +247,7 @@ class LibraryTests(unittest.TestCase):
 
             first = import_folder(library_root, source_root)
             second = import_folder(library_root, source_root)
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(3, first.discovered_files)
         self.assertEqual(2, first.supported_files)
@@ -264,7 +270,7 @@ class LibraryTests(unittest.TestCase):
             # _write_image creates a 40x30 PNG
             self._write_image(source_root / "sized.png")
             import_folder(library_root, source_root)
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(1, len(assets.assets))
         self.assertEqual(40, assets.assets[0]["width"])
@@ -274,7 +280,7 @@ class LibraryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
             backend = self._run_all_jobs_with_stubs(library_root)
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
             conn = sqlite3.connect(library_root / DATABASE_NAME)
             try:
@@ -333,7 +339,7 @@ class LibraryTests(unittest.TestCase):
     def test_remove_last_source_record_deletes_managed_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, source_root = self._import_one_image(Path(temp_dir))
-            asset = list_assets(library_root).assets[0]
+            asset = self._list_assets(library_root).assets[0]
             managed_path = library_root / str(asset["library_path"])
 
             result = remove_source_record(
@@ -344,15 +350,15 @@ class LibraryTests(unittest.TestCase):
 
             self.assertTrue(result.asset_deleted)
             self.assertFalse(managed_path.exists())
-            self.assertEqual([], list_assets(library_root).assets)
+            self.assertEqual([], self._list_assets(library_root).assets)
 
     def test_delete_asset_removes_all_queued_work(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
-            asset_id = str(list_assets(library_root).assets[0]["asset_id"])
+            asset_id = str(self._list_assets(library_root).assets[0]["asset_id"])
 
             result = delete_asset(library_root, asset_id)
-            status = get_library_status(library_root)
+            status = self._library_status(library_root)
 
         self.assertTrue(result.asset_deleted)
         self.assertEqual(3, result.removed_jobs)
@@ -371,7 +377,7 @@ class LibraryTests(unittest.TestCase):
                 conn.close()
 
             result = delete_pending_jobs(library_root, [thumbnail_job_id])
-            status = get_library_status(library_root)
+            status = self._library_status(library_root)
 
         self.assertEqual([thumbnail_job_id], result.deleted_job_ids)
         self.assertEqual(2, status.total_jobs)
@@ -403,13 +409,13 @@ class LibraryTests(unittest.TestCase):
             import_folder(library_root, source_root)
             self._run_all_jobs_with_stubs(library_root, expected_completed_jobs=6)
             before_by_id = {
-                str(asset["asset_id"]): asset for asset in list_assets(library_root).assets
+                str(asset["asset_id"]): asset for asset in self._list_assets(library_root).assets
             }
             selected_id, retained_id = sorted(before_by_id)
 
             result = rebuild_active_indexes(library_root, [selected_id])
             after_by_id = {
-                str(asset["asset_id"]): asset for asset in list_assets(library_root).assets
+                str(asset["asset_id"]): asset for asset in self._list_assets(library_root).assets
             }
             conn = sqlite3.connect(library_root / DATABASE_NAME)
             try:
@@ -486,9 +492,7 @@ class LibraryTests(unittest.TestCase):
                 autospec=True,
                 side_effect=LibraryStore.list_asset_summaries,
             ) as list_asset_summaries:
-                payload = build_app_state(
-                    Path(temp_dir) / "library", FakeIndexingRuntime()
-                ).to_dict()
+                payload = build_app_state(Path(temp_dir) / "library").to_dict()
 
         self.assertEqual(get_runtime_descriptor().to_dict(), payload["runtime"])
         self.assertEqual(1, list_asset_summaries.call_count)
@@ -496,7 +500,7 @@ class LibraryTests(unittest.TestCase):
             {"runtime_profiles", "model_variants", "runtime_settings"} & set(payload)
         )
 
-    def test_web_startup_runs_current_session_vulkan_authorization(self) -> None:
+    def test_sidecar_startup_runs_current_session_vulkan_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
             runtime = PinnedRuntime(library_root)
@@ -514,7 +518,7 @@ class LibraryTests(unittest.TestCase):
             embedding_backend_factory=runtime.get_embedding_backend,
         )
 
-    def test_web_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
+    def test_sidecar_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
             runtime = PinnedRuntime(library_root)
@@ -529,7 +533,7 @@ class LibraryTests(unittest.TestCase):
             finally:
                 runtime.close()
 
-    def test_web_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
+    def test_sidecar_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             app = create_app(str(Path(temp_dir) / "library"))
             try:
@@ -543,7 +547,7 @@ class LibraryTests(unittest.TestCase):
         self.assertNotIn("model_variants", payload)
         self.assertNotIn("runtime_settings", payload)
 
-    def test_web_batch_rebuild_routes_selected_assets_to_active_index_service(self) -> None:
+    def test_sidecar_batch_rebuild_routes_selected_assets_to_active_index_service(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
             app = create_app(str(library_root))
@@ -577,33 +581,31 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(expected.to_dict(), payload)
         rebuild.assert_called_once_with(library_root.resolve(), ["asset-a"])
 
-    def test_web_resolve_asset_reveal_target_validates_the_managed_library_copy_without_opening_explorer(
+    def test_sidecar_resolve_asset_reveal_target_validates_the_managed_library_copy(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root, _ = self._import_one_image(Path(temp_dir))
-            asset_id = str(list_assets(library_root).assets[0]["asset_id"])
+            asset_id = str(self._list_assets(library_root).assets[0]["asset_id"])
             app = create_app(str(library_root))
             try:
-                with patch("memesort_worker.webapp.reveal_path_in_file_explorer") as reveal:
-                    status, payload = self._request(
-                        app,
-                        "POST",
-                        "/api/resolve-asset-reveal-target",
-                        {"asset_id": asset_id, "target": "managed"},
-                    )
+                status, payload = self._request(
+                    app,
+                    "POST",
+                    "/api/resolve-asset-reveal-target",
+                    {"asset_id": asset_id, "target": "managed"},
+                )
             finally:
                 app.shutdown()
 
             self.assertEqual("200 OK", status)
             self.assertEqual("managed", payload["target"])
             self.assertEqual(
-                str((library_root / list_assets(library_root).assets[0]["library_path"]).resolve()),
+                str((library_root / self._list_assets(library_root).assets[0]["library_path"]).resolve()),
                 payload["resolved_path"],
             )
-            reveal.assert_not_called()
 
-    def test_web_resolve_log_directory_returns_only_the_library_logs_root(self) -> None:
+    def test_sidecar_resolve_log_directory_returns_only_the_library_logs_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
             app = create_app(str(library_root))

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from wsgiref.simple_server import make_server
 
-from .app_paths import AppPaths
 from .pinned_runtime import InferenceEngineManager, PinnedRuntime
 from .runtime_service import RuntimeAuthorizationError
 from .web_security import SessionGate
@@ -29,7 +28,6 @@ class LocalAppHostConfig:
     host: str = "127.0.0.1"
     port: int = 0
     authorize_runtime: bool = True
-    static_root: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -115,13 +113,11 @@ class LocalAppHost:
         origin = f"http://{origin_host}"
         gate = SessionGate(origin_host=origin_host)
 
-        static_root = self._config.static_root or AppPaths.discover().static_root
         runtime = PinnedRuntime(library_root, self._engine_manager)
         self._runtime = runtime
         app = create_app(
             str(library_root),
             security=gate,
-            static_root=static_root,
             runtime=runtime,
         )
         self._app = app

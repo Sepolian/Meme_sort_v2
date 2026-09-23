@@ -172,7 +172,8 @@ class SidecarEntryTests(unittest.TestCase):
                     urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
                 )
                 with opener.open(handshake["bootstrap_url"], timeout=5) as response:
-                    self.assertIn(b'id="searchNavGroup"', response.read())
+                    self.assertEqual(200, response.status)
+                    self.assertEqual(f'{handshake["origin"]}/api/state', response.geturl())
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(handshake["bootstrap_url"], timeout=5)
                 self.assertEqual(403, ctx.exception.code)

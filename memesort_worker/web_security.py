@@ -11,9 +11,7 @@ from typing import Mapping
 SESSION_COOKIE_NAME = "memesort_session"
 BOOTSTRAP_PARAM = "bootstrap"
 
-# Applied to every response the gate authorizes. The UI ships one external
-# script and stylesheet and only loads same-origin media, so a tight policy
-# does not require any inline allowances beyond styles the browser injects.
+# Applied to every authenticated sidecar response.
 SECURITY_HEADERS: tuple[tuple[str, str], ...] = (
     (
         "Content-Security-Policy",
@@ -43,7 +41,7 @@ class SessionGate:
 
     Binding to ``127.0.0.1`` is not enough: any local process or web page could
     reach the API. The gate requires a per-session cookie, established through a
-    one-time bootstrap secret that the window loads first, and rejects requests
+    one-time bootstrap secret that Rust consumes, and rejects requests
     with a foreign ``Host`` or cross-origin mutation ``Origin``.
     """
 
@@ -107,7 +105,7 @@ class SessionGate:
             "bootstrap",
             HTTPStatus.SEE_OTHER,
             set_cookie=self._session_cookie_header(),
-            location="/",
+            location="/api/state",
         )
 
     def _session_cookie_header(self) -> str:

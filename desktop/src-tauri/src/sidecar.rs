@@ -493,13 +493,6 @@ impl SidecarSession {
         )
     }
 
-    fn pending_jobs_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(origin, session_cookie, ApiRoute::PendingJobs)
-    }
-
     fn delete_pending_jobs_for_connection(
         origin: &str,
         session_cookie: &str,
@@ -766,7 +759,6 @@ enum ApiRoute {
     TextSearch { query: String, request_id: String },
     SimilarAssets { asset_id: String },
     Duplicates { threshold: f64 },
-    PendingJobs,
 }
 
 #[derive(Clone, Copy)]
@@ -952,7 +944,6 @@ impl ApiRoute {
                 format!("/api/find-similar?asset_id={asset_id}&top_k=18")
             }
             Self::Duplicates { threshold } => format!("/api/duplicates?threshold={threshold}"),
-            Self::PendingJobs => "/api/pending-jobs".to_owned(),
         }
     }
 }
@@ -1331,13 +1322,6 @@ pub fn run_runtime_health_check(app: AppHandle) -> Result<serde_json::Value, Sid
 pub fn retry_failed_jobs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::retry_failed_jobs_for_connection(origin, session_cookie)
-    })
-}
-
-#[tauri::command]
-pub fn get_pending_jobs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
-    with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::pending_jobs_for_connection(origin, session_cookie)
     })
 }
 
@@ -2654,26 +2638,10 @@ mod tests {
     }
 
     #[test]
-    fn forwards_pending_job_management_only_to_fixed_routes() {
+    fn forwards_pending_job_deletion_only_to_fixed_route() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener.local_addr().expect("listener address").port();
         let server = thread::spawn(move || {
-            let (mut list_stream, _) = listener.accept().expect("pending jobs should connect");
-            let mut list_request = [0_u8; 1024];
-            let size = list_stream
-                .read(&mut list_request)
-                .expect("pending jobs should read");
-            let list_request =
-                std::str::from_utf8(&list_request[..size]).expect("request must be UTF-8");
-            assert!(list_request.starts_with("GET /api/pending-jobs HTTP/1.1"));
-            assert!(list_request.contains("Cookie: memesort_session=test-token"));
-            list_stream
-                .write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"jobs\":[]}",
-                )
-                .expect("pending jobs response should write");
-            drop(list_stream);
-
             let (mut delete_stream, _) = listener.accept().expect("pending delete should connect");
             let mut delete_request = Vec::new();
             loop {
@@ -2713,8 +2681,6 @@ mod tests {
         let origin = format!("http://127.0.0.1:{port}");
         let job_ids = vec!["123e4567-e89b-12d3-a456-426614174000".to_owned()];
 
-        SidecarSession::pending_jobs_for_connection(&origin, "memesort_session=test-token")
-            .expect("pending jobs should succeed");
         SidecarSession::delete_pending_jobs_for_connection(
             &origin,
             "memesort_session=test-token",

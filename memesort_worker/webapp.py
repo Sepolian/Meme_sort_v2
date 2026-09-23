@@ -7,14 +7,13 @@ from http import HTTPStatus
 from pathlib import Path
 from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, urlparse
-from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
+from wsgiref.simple_server import WSGIRequestHandler, WSGIServer
 
 from .app_runtime import WorkerLoopController
 from .import_controller import ImportBatchConflictError, ImportController
 from .inference_service import InferenceCancelledError
 from .app_state import build_app_state
 from .app_commands import (
-    import_and_start_indexing,
     parse_import_start_request,
     rebuild_assets_and_resume,
     resolve_asset_reveal_path,
@@ -27,14 +26,11 @@ from .asset_catalog import (
     delete_asset,
     delete_assets,
     delete_pending_jobs,
-    import_folder,
     initialize_library,
     remove_source_record,
     retry_failed_jobs,
 )
-from .indexing_pipeline import run_pending_jobs
 from .library_store import LibraryStore
-from .native_shell import pick_file, pick_folder, reveal_path_in_file_explorer
 from .pinned_runtime import PinnedRuntime
 from .retrieval_service import find_similar_assets, search_image_path, search_text
 from .web_security import (
@@ -44,8 +40,6 @@ from .web_security import (
     request_headers_from_environ,
 )
 
-
-STATIC_DIR = Path(__file__).with_name("web_static")
 
 DEFAULT_MAX_REQUEST_BODY_BYTES = 32 * 1024 * 1024
 
@@ -127,20 +121,6 @@ def _read_json_body(environ: dict[str, object], max_bytes: int) -> dict[str, obj
     return json.loads(raw.decode("utf-8"))
 
 
-def _serve_static(static_dir: Path, path: str) -> tuple[str, list[tuple[str, str]], bytes]:
-    relative = "index.html" if path in {"", "/"} else path.lstrip("/")
-    candidate = (static_dir / relative).resolve()
-    if static_dir.resolve() not in candidate.parents and candidate != static_dir.resolve():
-        return _json_response(HTTPStatus.NOT_FOUND, {"error": "Not found"})
-    if not candidate.exists() or not candidate.is_file():
-        candidate = static_dir / "index.html"
-    body = candidate.read_bytes()
-    content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
-    if content_type.startswith("text/") or candidate.suffix in {".js", ".css"}:
-        content_type = f"{content_type}; charset=utf-8"
-    return _text_response(HTTPStatus.OK, body, content_type)
-
-
 def _apply_gate_outcome(
     outcome: GateOutcome,
     extra_headers: list[tuple[str, str]],
@@ -216,7 +196,6 @@ def create_app(
     library_root: str,
     *,
     security: SessionGate | None = None,
-    static_root: Path | None = None,
     max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
     runtime: PinnedRuntime | None = None,
 ) -> "LocalWebApp":
@@ -233,7 +212,6 @@ def create_app(
         )
     worker_loop = WorkerLoopController(library_root_path, runtime)
     import_controller = ImportController(library_root_path)
-    static_dir = static_root or STATIC_DIR
     stopping = threading.Event()
 
     def app(environ, start_response):
@@ -271,25 +249,8 @@ def create_app(
                     library_root_path,
                     worker_loop_snapshot=worker_loop.snapshot(),
                     import_task_snapshot=import_controller.snapshot().to_dict(),
-                    runtime=runtime,
                 ).to_dict()
                 status_line, headers, body = _json_response(HTTPStatus.OK, payload)
-            elif path == "/api/library-status" and method == "GET":
-                with LibraryStore(library_root_path) as store:
-                    result = store.get_library_status()
-                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
-            elif path == "/api/pending-jobs" and method == "GET":
-                with LibraryStore(library_root_path) as store:
-                    jobs = store.list_pending_jobs()
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    {"jobs": jobs},
-                )
-            elif path == "/api/worker-loop" and method == "GET":
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    worker_loop.snapshot().to_dict(),
-                )
             elif path == "/api/worker-loop/resume" and method == "POST":
                 worker_loop.resume()
                 status_line, headers, body = _json_response(
@@ -312,10 +273,6 @@ def create_app(
                 _read_json_body(environ, max_body_bytes)
                 result = runtime.run_health_check()
                 status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
-            elif path == "/api/import-folder" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                result = import_folder(library_root_path, str(payload["path"]))
-                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
             elif path == "/api/import" and method == "GET":
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.snapshot().to_dict())
             elif path == "/api/import/start" and method == "POST":
@@ -333,63 +290,6 @@ def create_app(
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.pause().to_dict())
             elif path == "/api/import/resume" and method == "POST":
                 status_line, headers, body = _json_response(HTTPStatus.OK, import_controller.resume().to_dict())
-            elif path == "/api/pick-folder" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                title = str(payload.get("title") or "Choose a folder")
-                initial_path = (
-                    str(payload["initial_path"])
-                    if payload.get("initial_path")
-                    else None
-                )
-                selected_path = pick_folder(title=title, initial_path=initial_path)
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    {
-                        "selected_path": selected_path,
-                    },
-                )
-            elif path == "/api/pick-file" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                title = str(payload.get("title") or "Choose a file")
-                initial_path = (
-                    str(payload["initial_path"])
-                    if payload.get("initial_path")
-                    else None
-                )
-                filter_string = str(
-                    payload.get("filter_string")
-                    or "Image Files|*.jpg;*.jpeg;*.png;*.webp;*.gif;*.bmp|All Files|*.*"
-                )
-                selected_path = pick_file(
-                    title=title,
-                    initial_path=initial_path,
-                    filter_string=filter_string,
-                )
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    {
-                        "selected_path": selected_path,
-                    },
-                )
-            elif path == "/api/run-jobs" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                result = run_pending_jobs(
-                    library_root_path,
-                    runtime,
-                    max_jobs=int(payload.get("max_jobs", 20)),
-                )
-                status_line, headers, body = _json_response(HTTPStatus.OK, result.to_dict())
-            elif path == "/api/import-and-start-index" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    import_and_start_indexing(
-                        library_root_path,
-                        str(payload["path"]),
-                        worker_loop,
-                        runtime,
-                    ),
-                )
             elif path == "/api/assets" and method == "GET":
                 with LibraryStore(library_root_path) as store:
                     result = store.list_assets_detailed()
@@ -453,23 +353,6 @@ def create_app(
                 status_line, headers, body = _json_response(
                     HTTPStatus.OK,
                     {"resolved_path": str(logs_directory)},
-                )
-            elif path == "/api/reveal-asset-file" and method == "POST":
-                payload = _read_json_body(environ, max_body_bytes)
-                target = str(payload.get("target") or "managed")
-                target_path = resolve_asset_reveal_path(
-                    library_root_path,
-                    asset_id=str(payload["asset_id"]),
-                    target=target,
-                    source_path=str(payload.get("source_path") or ""),
-                )
-                reveal_path_in_file_explorer(target_path)
-                status_line, headers, body = _json_response(
-                    HTTPStatus.OK,
-                    {
-                        "revealed_path": str(target_path),
-                        "target": target,
-                    },
                 )
             elif path == "/api/retry-failed-jobs" and method == "POST":
                 result = retry_failed_jobs(library_root_path)
@@ -553,7 +436,9 @@ def create_app(
                     {"error": "NotFound", "detail": f"Unknown API endpoint: {path}"},
                 )
             else:
-                status_line, headers, body = _serve_static(static_dir, path)
+                status_line, headers, body = _json_response(
+                    HTTPStatus.NOT_FOUND, {"error": "NotFound", "detail": f"Unknown endpoint: {path}"}
+                )
         except InferenceCancelledError as exc:
             status_line, headers, body = _json_response(
                 HTTPStatus.CONFLICT,
@@ -586,34 +471,3 @@ def create_app(
         runtime=runtime,
         owns_runtime=owns_runtime,
     )
-
-
-def run_web_app(
-    library_root: str,
-    host: str = "127.0.0.1",
-    port: int = 8765,
-    on_started=None,
-) -> None:
-    app = create_app(library_root)
-    try:
-        app.runtime.authorize()
-        with make_server(
-            host,
-            port,
-            app,
-            server_class=ThreadedWSGIServer,
-            handler_class=QuietWSGIRequestHandler,
-        ) as server:
-            socket_host, socket_port = server.socket.getsockname()[:2]
-            payload = {
-                "host": socket_host,
-                "port": socket_port,
-                "url": f"http://{socket_host}:{socket_port}/",
-                "library_root": str(Path(library_root).resolve()),
-            }
-            print(json.dumps(payload))
-            if on_started is not None:
-                on_started(payload)
-            server.serve_forever()
-    finally:
-        app.shutdown()

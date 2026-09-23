@@ -19,11 +19,8 @@ from memesort_worker.app_state import build_app_state
 from memesort_worker.asset_preprocessing import preprocess_image_bytes
 from memesort_worker.embedding_backend import LlamaCppEmbeddingBackend
 from memesort_worker.inference_service import InferenceScheduler
-from memesort_worker.library import (
-    initialize_library,
-    import_folder,
-    list_assets,
-)
+from memesort_worker.asset_catalog import initialize_library, import_folder
+from memesort_worker.library_store import LibraryStore
 from memesort_worker import library as library_module
 from memesort_worker.recipe_provider import default_provider
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
@@ -32,6 +29,10 @@ from runtime_fakes import FakeIndexingRuntime
 
 
 class VulkanOnlyRuntimeTests(unittest.TestCase):
+    def _list_assets(self, library_root: Path):
+        with LibraryStore(library_root) as store:
+            return store.list_assets_detailed()
+
     def test_runtime_descriptor_is_derived_from_the_manifest(self) -> None:
         manifest = load_runtime_manifest()
         runtime = get_runtime_descriptor()
@@ -50,8 +51,8 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "library"
             initialize_library(root)
-            assets = list_assets(root)
-            state = build_app_state(root, FakeIndexingRuntime())
+            assets = self._list_assets(root)
+            state = build_app_state(root)
 
         self.assertEqual(get_runtime_descriptor().to_dict(), state.runtime)
         self.assertIn(" / vulkan", assets.active_recipe_label)

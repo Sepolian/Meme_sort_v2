@@ -50,7 +50,6 @@ function baseAppState(): AppState {
       output_dimension: 2048,
       storage_dtype: "float32",
     },
-    setup_state: { health_check_ok: false },
     library_status: { total_assets: 1, job_counts: { pending: 0 } },
     worker_loop: { paused: false, running: true },
     import_task: importSnapshot(),
@@ -109,7 +108,6 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
     retryFailedJobs: async () => {
       throw new Error("not under test");
     },
-    getPendingJobs: async () => ({ jobs: [] }),
     deletePendingJobs: async () => {
       throw new Error("not under test");
     },

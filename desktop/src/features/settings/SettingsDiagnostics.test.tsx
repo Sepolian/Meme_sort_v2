@@ -94,7 +94,6 @@ function diagnosticsAppState(): AppState {
       active_recipe_id: "recipe-1",
       active_recipe_label: "Vulkan0 recipe",
     },
-    setup_state: { health_check_ok: false },
     library_status: {
       total_assets: 3,
       job_counts: { pending: 1 },
@@ -178,9 +177,6 @@ function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn
       retried_jobs: 2,
       failed_jobs_remaining: 0,
     })),
-    getPendingJobs: vi.fn(async () => {
-      throw new Error("must not issue an independent Pending Jobs read");
-    }),
     deletePendingJobs: vi.fn(async (jobIds: string[]) => ({
       requested_job_ids: jobIds,
       deleted_job_ids: jobIds,
@@ -379,7 +375,6 @@ describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
     expect(client.deletePendingJobs).toHaveBeenCalledWith(["123e4567-e89b-12d3-a456-426614174003"]);
     expect(await screen.findByText("Deleted 1 Pending Job record(s); skipped 0.")).toBeInTheDocument();
     expect(client.deleteAsset).not.toHaveBeenCalled();
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
     await waitFor(() => expect(document.querySelector("main.page")).toHaveFocus());
   });
 
@@ -419,7 +414,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
 
     expect(await screen.findByLabelText("Select Pending Job embed_asset")).toBeInTheDocument();
     expect(screen.getByText("originals/indexed.png · recipe-1 · attempt 0")).toBeInTheDocument();
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("keeps the snapshot order and the full queue count when it exceeds the visible list", async () => {
@@ -442,7 +436,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
     expect(rows[1]).toHaveAccessibleName("Select Pending Job embed_asset");
     // The count stays the full queue total, not the visible-list length.
     expect((await screen.findAllByText(/Indexing paused · 9 pending jobs/)).length).toBeGreaterThan(0);
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("refreshes the queue snapshot after a Worker action and updates the visible list", async () => {
@@ -465,7 +458,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
       refresh.resolve(appStateSnapshot({ pendingJobs: [], pendingCount: 0, paused: false }));
     });
     expect(await screen.findByText("No Pending Jobs are waiting to be claimed.")).toBeInTheDocument();
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("refreshes the queue snapshot after a failed-Job retry so the retried Job re-enters the list", async () => {
@@ -487,7 +479,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
       }));
     });
     expect(await screen.findByLabelText("Select Pending Job dedupe_asset")).toBeInTheDocument();
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("refreshes the queue snapshot after deleting Pending Jobs while the confirmation stays closed", async () => {
@@ -514,7 +505,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
     // The refreshed count updates with the list: no stale pending-jobs label remains.
     expect(screen.queryByText(/pending jobs/)).not.toBeInTheDocument();
     expect(client.deletePendingJobs).toHaveBeenCalledTimes(1);
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("shows the global disconnect page when the refreshed snapshot fails", async () => {
@@ -530,7 +520,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
     // shell; the stale diagnostics page is not kept on screen.
     await screen.findByText("MemeSort cannot reach its sidecar");
     expect(client.resumeWorkerLoop).toHaveBeenCalledTimes(1);
-    expect(client.getPendingJobs).not.toHaveBeenCalled();
   });
 
   it("reports partially skipped deletions as deleted plus skipped without failing", async () => {

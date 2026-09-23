@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AcceptDuplicatePairResult, AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, ClearAcceptedPairsResult, DeletePendingJobsResult, DuplicateScanResult, SearchImageSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, PendingJobsResult, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
+import type { AcceptDuplicatePairResult, AppState, AssetDetailResult, AssetListResult, AssetMutationResult, BatchAssetActionResult, ClearAcceptedPairsResult, DeletePendingJobsResult, DuplicateScanResult, SearchImageSelection, ImageSearchResult, ImportTask, LibrarySelectionSummary, RetryJobsResult, RuntimeHealthResult, SearchResult, SimilarityResult, WorkerLoopState } from "./types";
 
 export type TauriInvoker = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -28,7 +28,6 @@ export interface MemeSortClient {
   triggerWorkerLoop(): Promise<WorkerLoopState>;
   runRuntimeHealthCheck(): Promise<RuntimeHealthResult>;
   retryFailedJobs(): Promise<RetryJobsResult>;
-  getPendingJobs(): Promise<PendingJobsResult>;
   deletePendingJobs(jobIds: string[]): Promise<DeletePendingJobsResult>;
   cancelSearch(requestId: string): Promise<{ request_id: string; cancelled: boolean; was_active: boolean }>;
   copyAssetToClipboard(assetId: string): Promise<void>;
@@ -64,7 +63,6 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     triggerWorkerLoop: () => invokeCommand<WorkerLoopState>("trigger_worker_loop"),
     runRuntimeHealthCheck: () => invokeCommand<RuntimeHealthResult>("run_runtime_health_check"),
     retryFailedJobs: () => invokeCommand<RetryJobsResult>("retry_failed_jobs"),
-    getPendingJobs: () => invokeCommand<PendingJobsResult>("get_pending_jobs"),
     deletePendingJobs: (jobIds) => invokeCommand<DeletePendingJobsResult>("delete_pending_jobs", { jobIds }),
     cancelSearch: (requestId) => invokeCommand("cancel_search", { requestId }),
     copyAssetToClipboard: (assetId) => invokeCommand<void>("copy_asset_to_clipboard", { assetId }),

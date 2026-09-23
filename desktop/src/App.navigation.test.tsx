@@ -10,7 +10,6 @@ const client: MemeSortClient = {
   getAppState: async () => ({
     library_root: "C:/Library",
     runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-    setup_state: { health_check_ok: true },
     library_status: { total_assets: 1, job_counts: { pending: 0 } },
     worker_loop: { paused: false, running: true },
     import_task: importSnapshot(),
@@ -39,7 +38,6 @@ const client: MemeSortClient = {
   triggerWorkerLoop: unsupported,
   runRuntimeHealthCheck: unsupported,
   retryFailedJobs: unsupported,
-  getPendingJobs: unsupported,
   deletePendingJobs: unsupported,
   cancelSearch: unsupported,
   copyAssetToClipboard: unsupported,

@@ -57,7 +57,6 @@ const assetDetail: AssetDetail = {
 const appState: AppState = {
   library_root: "C:/Library",
   runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-  setup_state: { health_check_ok: true },
   library_status: { total_assets: 1, job_counts: { pending: 0 } },
   worker_loop: { paused: false, running: true },
   import_task: importSnapshot(),
@@ -115,7 +114,6 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
     triggerWorkerLoop: unsupported,
     runRuntimeHealthCheck: vi.fn(async () => healthyRuntimeCheck()),
     retryFailedJobs: unsupported,
-    getPendingJobs: unsupported,
     deletePendingJobs: unsupported,
     cancelSearch: unsupported,
     copyAssetToClipboard: unsupported,

@@ -39,7 +39,7 @@ class LocalAppHostTests(unittest.TestCase):
             finally:
                 host.stop()
 
-    def test_bootstrap_url_serves_the_app_shell_over_the_socket(self) -> None:
+    def test_bootstrap_url_authenticates_the_api_over_the_socket(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = LocalAppHost(_config(temp_dir))
             info = host.start()
@@ -48,11 +48,10 @@ class LocalAppHostTests(unittest.TestCase):
                     urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
                 )
                 with opener.open(info.bootstrap_url, timeout=5) as response:
-                    body = response.read()
-                    final_url = response.geturl()
-                # The bootstrap redirect lands on the shell, which carries the nav group.
-                self.assertIn(b'id="searchNavGroup"', body)
-                self.assertNotIn("bootstrap=", final_url)
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.geturl(), f"{info.origin}/api/state")
+                with opener.open(f"{info.origin}/api/state", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
             finally:
                 host.stop()
 

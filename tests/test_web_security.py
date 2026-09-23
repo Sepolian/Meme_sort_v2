@@ -60,7 +60,7 @@ class WebSecurityTests(unittest.TestCase):
                     app, "GET", "/", query=f"bootstrap={BOOTSTRAP_SECRET}"
                 )
                 self.assertTrue(status.startswith("303 "))
-                self.assertEqual(headers.get("Location"), "/")
+                self.assertEqual(headers.get("Location"), "/api/state")
                 set_cookie = headers.get("Set-Cookie", "")
                 self.assertIn(f"{SESSION_COOKIE_NAME}={SESSION_TOKEN}", set_cookie)
                 self.assertIn("HttpOnly", set_cookie)
@@ -117,7 +117,7 @@ class WebSecurityTests(unittest.TestCase):
                 status, _headers, _body = _call(
                     app,
                     "POST",
-                    "/api/import-folder",
+                    "/api/import/start",
                     body=b"{}",
                     headers={
                         "HTTP_ORIGIN": "http://evil.example",
@@ -132,16 +132,40 @@ class WebSecurityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             app, _ = self._make_app(temp_dir)
             try:
-                # Missing "path" makes the handler fail with 400, which still proves
+                # Missing sources makes the handler fail with 400, which still proves
                 # the request cleared the gate rather than being rejected at 403/401.
                 status, _headers, _body = _call(
                     app,
                     "POST",
-                    "/api/import-folder",
+                    "/api/import/start",
                     body=b"{}",
                     headers={"HTTP_ORIGIN": ORIGIN, **self._session_headers()},
                 )
                 self.assertTrue(status.startswith("400 "))
+            finally:
+                app.shutdown()
+
+    def test_browser_only_routes_and_shell_are_not_served(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app, _ = self._make_app(temp_dir)
+            try:
+                for method, path in (
+                    ("GET", "/"),
+                    ("GET", "/api/library-status"),
+                    ("GET", "/api/pending-jobs"),
+                    ("GET", "/api/worker-loop"),
+                    ("POST", "/api/import-folder"),
+                    ("POST", "/api/pick-folder"),
+                    ("POST", "/api/pick-file"),
+                    ("POST", "/api/run-jobs"),
+                    ("POST", "/api/import-and-start-index"),
+                    ("POST", "/api/reveal-asset-file"),
+                ):
+                    with self.subTest(path=path):
+                        status, _headers, _body = _call(
+                            app, method, path, headers=self._session_headers()
+                        )
+                        self.assertTrue(status.startswith("404 "), (path, status))
             finally:
                 app.shutdown()
 
@@ -153,7 +177,7 @@ class WebSecurityTests(unittest.TestCase):
                 status, _headers, _body = _call(
                     app,
                     "POST",
-                    "/api/import-folder",
+                    "/api/import/start",
                     body=b"{}",
                     headers={"HTTP_ORIGIN": ORIGIN, **self._session_headers()},
                 )

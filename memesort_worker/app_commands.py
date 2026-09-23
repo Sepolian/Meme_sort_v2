@@ -8,7 +8,6 @@ from .asset_catalog import (
     MAX_IMPORT_PATH_UTF8_BYTES,
     MAX_IMPORT_SOURCES,
     BatchAssetActionResult,
-    import_folder,
     rebuild_active_indexes,
 )
 from .import_contracts import ImportBatchStatus, IndexingPolicy
@@ -110,24 +109,6 @@ def parse_import_start_request(
     return [source], (
         IndexingPolicy.REQUIRED if start_indexing else IndexingPolicy.NEVER
     )
-
-
-def import_and_start_indexing(
-    library_root: Path | str,
-    import_path: Path | str,
-    worker_loop: WorkerLoop,
-    runtime: RuntimeGate,
-) -> dict[str, object]:
-    """Authorize the runtime, import synchronously, then resume the worker."""
-    runtime_ready, runtime_message = runtime.is_ready_for_indexing()
-    if not runtime_ready:
-        raise ValueError(runtime_message)
-    import_result = import_folder(library_root, import_path)
-    worker_loop.resume()
-    return {
-        "import_result": import_result.to_dict(),
-        "worker_loop": worker_loop.snapshot().to_dict(),
-    }
 
 
 def start_import_batch(

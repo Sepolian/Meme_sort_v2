@@ -6,14 +6,12 @@ from pathlib import Path
 from .app_runtime import WorkerLoopSnapshot
 from .library_store import LibraryStore
 from .runtime_descriptor import get_runtime_descriptor
-from .runtime_service import get_setup_state
 
 
 @dataclass
 class AppStateResult:
     library_root: str
     runtime: dict[str, object]
-    setup_state: dict[str, object]
     asset_summary: dict[str, object]
     library_status: dict[str, object]
     worker_loop: dict[str, object]
@@ -26,23 +24,16 @@ class AppStateResult:
 
 def build_app_state(
     library_root: Path | str,
-    runtime,
     worker_loop_snapshot: WorkerLoopSnapshot | None = None,
     import_task_snapshot: dict[str, object] | None = None,
 ) -> AppStateResult:
     library_root_path = Path(library_root).expanduser().resolve()
     with LibraryStore(library_root_path) as store:
         library_snapshot = store.read_library_snapshot()
-    setup_state = get_setup_state(
-        library_root_path,
-        runtime,
-        assets_result=library_snapshot.asset_summary,
-    )
 
     return AppStateResult(
         library_root=str(library_root_path),
         runtime=get_runtime_descriptor().to_dict(),
-        setup_state=setup_state.to_dict(),
         asset_summary=library_snapshot.asset_summary.to_dict(),
         library_status=library_snapshot.library_status.to_dict(),
         worker_loop=(

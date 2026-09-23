@@ -59,7 +59,6 @@ pub fn run() {
             sidecar::trigger_worker_loop,
             sidecar::run_runtime_health_check,
             sidecar::retry_failed_jobs,
-            sidecar::get_pending_jobs,
             sidecar::delete_pending_jobs,
             sidecar::accept_duplicate_pair,
             sidecar::clear_accepted_pairs,

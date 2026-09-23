@@ -8,7 +8,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from memesort_worker.library import RuntimeHealthResult, initialize_library
+from memesort_worker.asset_catalog import initialize_library
+from memesort_worker.library import RuntimeHealthResult
 from memesort_worker.local_app_host import (
     LocalAppHost,
     LocalAppHostConfig,
@@ -187,9 +188,6 @@ class LocalAppHostRuntimeLifecycleTests(unittest.TestCase):
         return LocalAppHostConfig(
             library_root=library_root,
             authorize_runtime=authorize,
-            static_root=Path(__file__).resolve().parents[1]
-            / "memesort_worker"
-            / "web_static",
         )
 
     def test_stop_closes_the_runtime_instance_in_documented_order(self) -> None:

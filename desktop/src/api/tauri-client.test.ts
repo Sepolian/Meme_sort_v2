@@ -144,16 +144,14 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(5, "retry_failed_jobs");
   });
 
-  it("lists and removes only selected Pending Job records", async () => {
+  it("removes only selected Pending Job records", async () => {
     const invokeCommand = vi.fn().mockResolvedValue({ jobs: [] });
     const client = createMemeSortClient(invokeCommand);
     const jobId = "123e4567-e89b-12d3-a456-426614174000";
 
-    await client.getPendingJobs();
     await client.deletePendingJobs([jobId]);
 
-    expect(invokeCommand).toHaveBeenNthCalledWith(1, "get_pending_jobs");
-    expect(invokeCommand).toHaveBeenNthCalledWith(2, "delete_pending_jobs", { jobIds: [jobId] });
+    expect(invokeCommand).toHaveBeenCalledWith("delete_pending_jobs", { jobIds: [jobId] });
   });
 
   it("uses the fixed Asset reveal command for managed and recorded source files", async () => {

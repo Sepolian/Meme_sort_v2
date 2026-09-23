@@ -11,14 +11,6 @@ export interface AppState {
     active_recipe_id: string;
     active_recipe_label: string;
   };
-  setup_state: {
-    health_check_ok: boolean;
-    runtime_readiness?: {
-      ready: boolean;
-      ready_detail?: string;
-    };
-    checklist?: Array<{ id: string; label: string; done: boolean; detail: string }>;
-  };
   library_status: {
     total_assets: number;
     job_counts: Record<string, number>;
@@ -88,10 +80,6 @@ export interface PendingJob {
   attempt_count: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface PendingJobsResult {
-  jobs: PendingJob[];
 }
 
 export interface DeletePendingJobsResult {

@@ -10,7 +10,6 @@ from pathlib import Path
 
 repo_root = Path(SPECPATH)
 datas = [
-    (str(repo_root / "memesort_worker" / "web_static"), "memesort_worker/web_static"),
     (str(repo_root / "runtime-manifest.json"), "."),
 ]
 

@@ -4,14 +4,12 @@ import argparse
 import json
 from typing import Sequence
 
-from .launcher import launch_local_mvp_app
 from .asset_catalog import import_folder, initialize_library
 from .indexing_pipeline import run_pending_jobs as run_jobs
 from .library_store import LibraryStore
 from .pinned_runtime import PinnedRuntime
 from .runtime_service import RuntimeAuthorizationError
 from .retrieval_service import find_similar_assets, search_image_path, search_text
-from .webapp import run_web_app
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,33 +44,6 @@ def build_parser() -> argparse.ArgumentParser:
     similar_parser.add_argument("--library-root", required=True, help="Library root directory")
     similar_parser.add_argument("--asset-id", required=True, help="Query asset id")
     similar_parser.add_argument("--top-k", type=int, default=10, help="Result count")
-
-    web_parser = subparsers.add_parser("serve-web", help="Serve the local MVP web app")
-    web_parser.add_argument("--library-root", required=True, help="Library root directory")
-    web_parser.add_argument("--host", default="127.0.0.1", help="Bind host")
-    web_parser.add_argument("--port", type=int, default=8765, help="Bind port")
-
-    launch_parser = subparsers.add_parser(
-        "launch-app",
-        help="Launch the local MVP app with a default Windows library root",
-    )
-    launch_parser.add_argument(
-        "--library-root",
-        default=None,
-        help="Optional library root directory. Defaults to AppData\\Roaming\\MemeSort.",
-    )
-    launch_parser.add_argument("--host", default="127.0.0.1", help="Bind host")
-    launch_parser.add_argument(
-        "--port",
-        type=int,
-        default=8765,
-        help="Preferred bind port. Falls back to a random free port when busy.",
-    )
-    launch_parser.add_argument(
-        "--no-browser",
-        action="store_true",
-        help="Do not open the local app in the default browser.",
-    )
 
     return parser
 
@@ -149,23 +120,6 @@ def run(argv: Sequence[str] | None = None) -> int:
             top_k=args.top_k,
         )
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-        return 0
-
-    if args.command == "serve-web":
-        run_web_app(
-            args.library_root,
-            host=args.host,
-            port=args.port,
-        )
-        return 0
-
-    if args.command == "launch-app":
-        launch_local_mvp_app(
-            library_root=args.library_root,
-            host=args.host,
-            preferred_port=args.port,
-            open_browser=not args.no_browser,
-        )
         return 0
 
     parser.error(f"Unsupported command: {args.command}")
