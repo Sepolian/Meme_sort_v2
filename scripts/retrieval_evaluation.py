@@ -9,12 +9,9 @@ from pathlib import Path
 from typing import Iterable
 
 from memesort_worker.indexing_pipeline import run_pending_jobs
-from memesort_worker.library import (
-    import_folder,
-    initialize_library,
-    list_assets,
-    search_text,
-)
+from memesort_worker.asset_catalog import import_folder, initialize_library
+from memesort_worker.library_store import LibraryStore
+from memesort_worker.retrieval_service import search_text
 from memesort_worker.pinned_runtime import PinnedRuntime
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
@@ -128,7 +125,8 @@ def run_evaluation(
         run_pending_jobs(library_root, runtime)
         indexing_seconds = time.perf_counter() - indexing_started_at
 
-        asset_listing = list_assets(library_root)
+        with LibraryStore(library_root) as store:
+            asset_listing = store.list_assets_detailed()
         filename_to_asset: dict[str, str] = {}
         for asset in asset_listing.assets:
             asset_id = str(asset["asset_id"])

@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 from . import asset_preprocessing
-from . import library
+from . import asset_catalog, library
 from .library_store import LibraryStore
 from .recipe_provider import RuntimeRecipeProvider, default_provider
 from .retrieval_composition import compose_text_search_results
@@ -69,7 +69,7 @@ def search_image_path(
     if not query_path.exists() or not query_path.is_file():
         raise ValueError(f"Image file does not exist: {query_path}")
     suffix = query_path.suffix.lower()
-    if suffix not in library.SUPPORTED_EXTENSIONS:
+    if suffix not in asset_catalog.SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported image file extension: {suffix or '(none)'}")
 
     with LibraryStore(library_root, provider=provider) as store:
@@ -117,7 +117,7 @@ def search_image_path(
             active_recipe_id=store.active_recipe.recipe_id,
             active_recipe_label=store.active_recipe.label,
             query_path=str(query_path),
-            query_media_type=library.SUPPORTED_EXTENSIONS[suffix],
+            query_media_type=asset_catalog.SUPPORTED_EXTENSIONS[suffix],
             top_k=top_k,
             results=results,
         )

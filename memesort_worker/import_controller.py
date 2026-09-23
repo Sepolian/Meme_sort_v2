@@ -14,7 +14,7 @@ from .import_contracts import (
     ImportPhase,
     ImportProgress,
 )
-from .library import import_sources
+from .asset_catalog import import_sources
 
 
 class ImportCancelledError(RuntimeError):

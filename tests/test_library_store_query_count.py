@@ -13,7 +13,7 @@ from typing import Callable
 
 from PIL import Image
 
-from memesort_worker.library import import_folder
+from memesort_worker.asset_catalog import import_folder
 from memesort_worker.library_store import LibraryStore
 
 

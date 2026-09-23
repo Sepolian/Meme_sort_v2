@@ -8,7 +8,8 @@ from typing import Any
 from unittest.mock import patch
 
 from memesort_worker import asset_catalog
-from memesort_worker.library import (
+from memesort_worker.asset_catalog import ImportFolderResult, import_folder
+from memesort_worker.import_contracts import (
     ImportBatchError,
     ImportBatchErrorCode,
     ImportBatchPreflightError,
@@ -16,8 +17,6 @@ from memesort_worker.library import (
     ImportFailure,
     ImportFailureCode,
     ImportFailureStage,
-    ImportFolderResult,
-    import_folder,
 )
 
 

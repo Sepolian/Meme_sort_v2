@@ -12,16 +12,16 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from memesort_worker.library import (
+from memesort_worker import asset_catalog
+from memesort_worker.asset_catalog import import_sources
+from memesort_worker.import_contracts import (
     ImportBatchError,
     ImportBatchErrorCode,
     ImportBatchPreflightError,
     ImportFailureCode,
     ImportFailureStage,
-    import_sources,
-    list_assets,
 )
-from memesort_worker import asset_catalog
+from memesort_worker.library_store import LibraryStore
 
 
 class _ReparseMetadata:
@@ -61,6 +61,10 @@ class _CommitOutcomeUncertainConnection:
 
 
 class MultiSourceImportTests(unittest.TestCase):
+    def _list_assets(self, library_root: Path):
+        with LibraryStore(library_root) as store:
+            return store.list_assets_detailed()
+
     def _write_image(
         self,
         path: Path,
@@ -80,7 +84,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [first_source, second_source],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(2, result.selected_sources)
         self.assertEqual(2, result.effective_sources)
@@ -115,7 +119,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [source_directory, explicit_source],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(2, result.selected_sources)
         self.assertEqual(2, result.effective_sources)
@@ -167,7 +171,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 library_root,
                 [valid_source, corrupt_source],
             )
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
             originals = list((library_root / "originals").iterdir())
 
         self.assertEqual(2, result.processed_files)
@@ -347,7 +351,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 [valid_source, disappeared_source],
                 wait_for_permission=remove_the_second_candidate,
             )
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(2, result.processed_files)
         self.assertEqual(1, result.new_assets)
@@ -489,7 +493,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 side_effect=sqlite3.OperationalError("database unavailable"),
             ):
                 result = import_sources(library_root, [source])
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
             originals = list((library_root / "originals").iterdir())
 
         self.assertEqual(1, result.failed_files)
@@ -529,7 +533,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 side_effect=connect_with_uncertain_import_commit,
             ):
                 result = import_sources(library_root, [source])
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
             originals = list((library_root / "originals").iterdir())
             retained_copy_is_file = len(originals) == 1 and originals[0].is_file()
 
@@ -579,7 +583,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 )
                 results = [first_future.result(), second_future.result()]
 
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
             originals = list((library_root / "originals").iterdir())
 
         self.assertEqual(1, sum(result.new_assets for result in results))
@@ -624,7 +628,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 ]
                 results = [future.result() for future in futures]
 
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(1, sum(result.new_assets for result in results))
         self.assertEqual(1, sum(result.duplicate_assets for result in results))
@@ -705,7 +709,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 )
                 results = [first_future.result(), second_future.result()]
 
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(1, sum(result.new_assets for result in results))
         self.assertEqual(1, sum(result.duplicate_assets for result in results))
@@ -741,7 +745,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 side_effect=connect_with_uncertain_duplicate_commit,
             ):
                 result = import_sources(library_root, [second_source])
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(1, result.duplicate_assets)
         self.assertEqual(0, result.failed_files)
@@ -842,7 +846,7 @@ class MultiSourceImportTests(unittest.TestCase):
                     source_directory,
                 ],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(4, result.selected_sources)
         self.assertEqual(1, result.effective_sources)
@@ -889,7 +893,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 self.skipTest(f"Directory symlinks are unavailable: {error}")
 
             result = import_sources(root / "library", [source_directory])
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(1, result.discovered_files)
         self.assertEqual(1, result.supported_files)
@@ -918,7 +922,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 side_effect=lstat_with_reparse,
             ):
                 result = import_sources(root / "library", [source_directory])
-                assets = list_assets(root / "library")
+                assets = self._list_assets(root / "library")
 
         self.assertEqual(0, result.discovered_files)
         self.assertEqual(1, result.reparse_points_skipped)
@@ -955,7 +959,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 side_effect=lstat_with_late_reparse,
             ):
                 result = import_sources(root / "library", [source_directory])
-                assets = list_assets(root / "library")
+                assets = self._list_assets(root / "library")
 
         self.assertEqual(2, queued_directory_checks)
         self.assertEqual(0, result.discovered_files)
@@ -1006,7 +1010,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 ),
             ):
                 result = import_sources(root / "library", [source_directory])
-                assets = list_assets(root / "library")
+                assets = self._list_assets(root / "library")
 
         self.assertTrue(queued_directory_opened)
         self.assertEqual(0, result.discovered_files)
@@ -1117,7 +1121,7 @@ class MultiSourceImportTests(unittest.TestCase):
                     root / "library",
                     [unreadable_directory, usable_source],
                 )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(1, result.scan_failures)
         self.assertEqual(1, len(result.failure_details))
@@ -1222,7 +1226,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [empty_directory, mixed_directory],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(2, result.selected_sources)
         self.assertEqual(2, result.effective_sources)
@@ -1262,7 +1266,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [source, root / "alternate" / ".." / source.name],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(2, result.selected_sources)
         self.assertEqual(1, result.effective_sources)
@@ -1389,7 +1393,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [first_source, second_source],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(2, result.effective_sources)
         self.assertEqual(1, result.new_assets)
@@ -1417,7 +1421,7 @@ class MultiSourceImportTests(unittest.TestCase):
                 root / "library",
                 [first_source, second_source],
             )
-            assets = list_assets(root / "library")
+            assets = self._list_assets(root / "library")
 
         self.assertEqual(1, result.new_assets)
         self.assertEqual(1, result.duplicate_assets)
@@ -1437,7 +1441,7 @@ class MultiSourceImportTests(unittest.TestCase):
 
             self._write_image(source, (0, 0, 255))
             second_result = import_sources(library_root, [source])
-            assets = list_assets(library_root)
+            assets = self._list_assets(library_root)
 
         self.assertEqual(1, first_result.new_assets)
         self.assertEqual(1, second_result.new_assets)

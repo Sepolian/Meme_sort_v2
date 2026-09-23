@@ -9,12 +9,11 @@ from PIL import Image
 
 from memesort_worker import asset_catalog
 from memesort_worker.indexing_pipeline import run_pending_jobs
-from memesort_worker.library import (
+from memesort_worker.asset_catalog import (
     accept_duplicate_pair,
     clear_accepted_pairs,
     delete_asset,
     import_folder,
-    list_assets,
 )
 from memesort_worker.library_store import LibraryStore
 from memesort_worker.webapp import create_app
@@ -40,7 +39,8 @@ class AcceptedDuplicatePairTests(unittest.TestCase):
         self.assertEqual(0, result.failed_jobs)
 
     def _asset_ids(self, library_root: Path) -> list[str]:
-        return [str(asset["asset_id"]) for asset in list_assets(library_root).assets]
+        with LibraryStore(library_root) as store:
+            return [str(asset["asset_id"]) for asset in store.list_assets_detailed().assets]
 
     def _request(self, app, method: str, path: str, payload=None, query: str = ""):
         return wsgi_request.call_json(app, method, path, payload=payload, query=query)

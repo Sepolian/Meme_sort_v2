@@ -15,7 +15,7 @@ from PIL import Image
 
 from memesort_worker.embedding_backend import EmbeddingBackendError
 from memesort_worker.indexing_pipeline import run_pending_jobs
-from memesort_worker.library import DATABASE_NAME, import_folder
+from memesort_worker.asset_catalog import DATABASE_NAME, import_folder
 from memesort_worker.pinned_runtime import PinnedRuntime
 from runtime_fakes import FakeEmbeddingBackend, FakeIndexingRuntime
 
