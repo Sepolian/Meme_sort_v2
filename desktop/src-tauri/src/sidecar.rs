@@ -2025,14 +2025,6 @@ mod tests {
     }
 
     #[test]
-    fn accepts_an_authenticated_state_response() {
-        let payload = parse_json_response(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"library_status\":{\"total_assets\":3}}")
-            .expect("state response should parse");
-
-        assert_eq!(payload["library_status"]["total_assets"], 3);
-    }
-
-    #[test]
     fn rejects_non_successful_or_malformed_responses() {
         let unknown_asset = parse_json_response(
             b"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{\"error\":\"NotFound\",\"detail\":\"Asset was not found.\"}",

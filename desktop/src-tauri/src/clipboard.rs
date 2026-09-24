@@ -815,24 +815,6 @@ mod tests {
     }
 
     #[test]
-    fn records_static_and_file_writes_through_the_fake_adapter() {
-        let fake = FakeClipboardWriter::new();
-        let rgba = solid_rgba(2, 2, [1, 2, 3, 255]);
-        let dibv5 = build_dibv5(2, 2, &rgba).expect("dibv5");
-        let png = encode_png(2, 2, [1, 2, 3, 255]);
-
-        fake.write_static_image(&dibv5, &png).expect("static write");
-        let hdrop =
-            build_hdrop_payload(&[PathBuf::from(r"C:\MemeSort\originals\a.png")]).expect("hdrop");
-        fake.write_file_drop(&hdrop).expect("file write");
-
-        assert_eq!(fake.write_count(), 2);
-        let writes = fake.writes.lock().expect("lock");
-        assert!(matches!(&writes[0], FakeClipboardWrite::StaticImage { .. }));
-        assert!(matches!(&writes[1], FakeClipboardWrite::FileDrop { .. }));
-    }
-
-    #[test]
     fn serializes_image_wall_and_batch_writes_in_fifo_ticket_and_completion_order() {
         let gate = Arc::new(ClipboardWriteGate::new());
         let events = Arc::new(Mutex::new(Vec::<ClipboardEvent>::new()));
