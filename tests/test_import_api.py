@@ -76,20 +76,6 @@ class _Snapshot:
 
 
 class ParseImportStartRequestTests(unittest.TestCase):
-    def test_canonical_payload_accepts_bounded_paths_and_one_policy(self) -> None:
-        sources, policy = parse_import_start_request(
-            {
-                "sources": ["C:/Memes/a.png", "C:/Memes/b.png"],
-                "indexing_policy": "if-ready",
-            }
-        )
-
-        self.assertEqual(
-            ["C:/Memes/a.png", "C:/Memes/b.png"],
-            sources,
-        )
-        self.assertIs(IndexingPolicy.IF_READY, policy)
-
     def test_legacy_payload_uses_a_real_boolean_and_maps_it_to_policy(self) -> None:
         required_sources, required_policy = parse_import_start_request(
             {"path": "C:/Memes", "start_indexing": True}

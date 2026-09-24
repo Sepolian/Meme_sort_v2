@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import io
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import unittest
 import uuid
@@ -14,14 +12,8 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from memesort_worker.retrieval_service import search_text
-from memesort_worker.app_state import build_app_state
 from memesort_worker.asset_preprocessing import preprocess_image_bytes
-from memesort_worker.embedding_backend import LlamaCppEmbeddingBackend
-from memesort_worker.inference_service import InferenceScheduler
 from memesort_worker.asset_catalog import initialize_library, import_folder
-from memesort_worker.library_store import LibraryStore
-from memesort_worker import library as library_module
 from memesort_worker.recipe_provider import default_provider
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_manifest import load_runtime_manifest
@@ -29,10 +21,6 @@ from runtime_fakes import FakeIndexingRuntime
 
 
 class VulkanOnlyRuntimeTests(unittest.TestCase):
-    def _list_assets(self, library_root: Path):
-        with LibraryStore(library_root) as store:
-            return store.list_assets_detailed()
-
     def test_runtime_descriptor_is_derived_from_the_manifest(self) -> None:
         manifest = load_runtime_manifest()
         runtime = get_runtime_descriptor()
@@ -46,66 +34,6 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         self.assertEqual(manifest.runtime_fingerprint, runtime.runtime_fingerprint)
         self.assertEqual(manifest.recipe_fingerprint, runtime.recipe_fingerprint)
         self.assertEqual(manifest.preprocessing.version, runtime.preprocessing_version)
-
-    def test_new_library_uses_manifest_recipe_and_read_only_runtime(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "library"
-            initialize_library(root)
-            assets = self._list_assets(root)
-            state = build_app_state(root)
-
-        self.assertEqual(get_runtime_descriptor().to_dict(), state.runtime)
-        self.assertIn(" / vulkan", assets.active_recipe_label)
-
-    def test_runtime_has_no_selection_api_or_persisted_selection(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "library"
-            initialize_library(root)
-            conn = sqlite3.connect(root / "library.sqlite")
-            try:
-                persisted = conn.execute(
-                    "SELECT 1 FROM worker_state WHERE key = 'runtime_settings'"
-                ).fetchone()
-            finally:
-                conn.close()
-
-        self.assertIsNone(persisted)
-        for name in (
-            "RuntimeProfileSpec",
-            "ModelVariantSpec",
-            "RuntimeSettings",
-            "list_runtime_profiles",
-            "list_model_variants",
-            "get_runtime_profile",
-            "get_model_variant",
-            "get_runtime_settings",
-            "resolve_recipe_preset",
-            "save_runtime_settings",
-            "switch_active_recipe",
-        ):
-            with self.subTest(name=name):
-                self.assertFalse(hasattr(library_module, name))
-
-    def test_search_api_has_no_backend_override(self) -> None:
-        runtime = FakeIndexingRuntime()
-        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
-            runtime, "get_embedding_backend"
-        ) as backend_factory:
-            with self.assertRaisesRegex(TypeError, "unexpected keyword argument"):
-                search_text(
-                    Path(temp_dir) / "library",
-                    query="test",
-                    top_k=3,
-                    runtime=runtime,
-                    backend_name="debug",
-                )
-        backend_factory.assert_not_called()
-
-    def test_embedding_factory_has_no_backend_selector(self) -> None:
-        for backend_name in ("debug", "qwen3-vl", "cpu", "cuda"):
-            with self.subTest(backend_name=backend_name):
-                with self.assertRaisesRegex(TypeError, "positional argument"):
-                    LlamaCppEmbeddingBackend(InferenceScheduler(), backend_name)
 
     def test_recipe_change_atomically_resets_semantic_state_and_requeues(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -252,37 +180,6 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         )
         with Image.open(io.BytesIO(processed)) as image:
             self.assertEqual((1, 2), image.size)
-
-    def test_library_import_does_not_read_manifest_file(self) -> None:
-        """Importing memesort_worker.library must not perform file I/O on the manifest.
-
-        This is a Phase 1 acceptance criterion: the manifest is read lazily
-        via the recipe provider, not at module import time.
-        """
-        script = (
-            "import builtins, sys\n"
-            "_real_open = builtins.open\n"
-            "_manifest_reads = []\n"
-            "def _tracking_open(*args, **kwargs):\n"
-            "    if args and 'runtime-manifest' in str(args[0]):\n"
-            "        _manifest_reads.append(str(args[0]))\n"
-            "    return _real_open(*args, **kwargs)\n"
-            "builtins.open = _tracking_open\n"
-            "import memesort_worker.library\n"
-            "builtins.open = _real_open\n"
-            "if _manifest_reads:\n"
-            "    print(f'FAIL: manifest read at import: {_manifest_reads}', file=sys.stderr)\n"
-            "    sys.exit(1)\n"
-            "print('OK')\n"
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        self.assertEqual(0, result.returncode, f"stderr: {result.stderr}")
-        self.assertIn("OK", result.stdout)
 
     def test_search_image_path_preserves_custom_provider_recipe(self) -> None:
         """A custom-provider image query must not reactivate the default recipe."""

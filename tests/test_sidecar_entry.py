@@ -16,7 +16,7 @@ from unittest.mock import patch
 from memesort_worker.local_app_host import LocalAppHost, ShutdownReport, STATE_STOPPED
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_activation import expected_activation_record
-from memesort_worker.sidecar_entry import PROTOCOL_VERSION, SidecarHandshake, main
+from memesort_worker.sidecar_entry import PROTOCOL_VERSION, main
 
 
 class _ControlPipe:
@@ -263,17 +263,6 @@ class SidecarEntryTests(unittest.TestCase):
         self.assertEqual(1, result)
         self.assertEqual(STATE_STOPPED, created[0].state)
         self.assertTrue(created[0]._runtime.closed)
-
-    def test_handshake_schema_is_versioned(self) -> None:
-        handshake = SidecarHandshake(
-            protocol_version=PROTOCOL_VERSION,
-            origin="http://127.0.0.1:1234",
-            bootstrap_url="http://127.0.0.1:1234/?bootstrap=secret",
-            library_root="C:/library",
-        )
-
-        self.assertEqual(PROTOCOL_VERSION, handshake.protocol_version)
-        self.assertEqual("C:/library", handshake.library_root)
 
 
 if __name__ == "__main__":

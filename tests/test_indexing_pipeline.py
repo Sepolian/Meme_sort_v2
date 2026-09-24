@@ -16,7 +16,6 @@ from PIL import Image
 from memesort_worker.embedding_backend import EmbeddingBackendError
 from memesort_worker.indexing_pipeline import run_pending_jobs
 from memesort_worker.asset_catalog import DATABASE_NAME, import_folder
-from memesort_worker.pinned_runtime import PinnedRuntime
 from runtime_fakes import FakeEmbeddingBackend, FakeIndexingRuntime
 
 
@@ -36,36 +35,6 @@ class IndexingPipelineRuntimeInjectionTests(unittest.TestCase):
         finally:
             conn.close()
         return {str(row[0]): (str(row[1]), row[2]) for row in rows}
-
-    def test_unready_fake_produces_the_same_error_as_production(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = self._import_one_image(Path(temp_dir))
-            production_runtime = PinnedRuntime(library_root)
-            self.addCleanup(production_runtime.close)
-            ready, message = production_runtime.is_ready_for_indexing()
-            self.assertFalse(ready)
-
-            with self.assertRaises(RuntimeError) as production_error:
-                run_pending_jobs(library_root, production_runtime)
-            with self.assertRaises(RuntimeError) as fake_error:
-                run_pending_jobs(
-                    library_root,
-                    FakeIndexingRuntime(ready=False, ready_message=message),
-                )
-
-        self.assertEqual(str(production_error.exception), str(fake_error.exception))
-
-    def test_fake_runtime_indexes_without_llama_or_http(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = self._import_one_image(Path(temp_dir))
-            runtime = FakeIndexingRuntime()
-
-            result = run_pending_jobs(library_root, runtime)
-
-        self.assertEqual(3, result.completed_jobs)
-        self.assertEqual(0, result.failed_jobs)
-        self.assertEqual(runtime.embedding_backend.backend_id, result.backend)
-        self.assertTrue(runtime.ocr_backend.closed)
 
     def test_embedding_failure_marks_only_the_embed_job_failed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

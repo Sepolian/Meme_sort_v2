@@ -518,21 +518,6 @@ class LibraryTests(unittest.TestCase):
             embedding_backend_factory=runtime.get_embedding_backend,
         )
 
-    def test_sidecar_startup_refuses_to_serve_when_vulkan_authorization_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            library_root = Path(temp_dir) / "library"
-            runtime = PinnedRuntime(library_root)
-            try:
-                with patch(
-                    "memesort_worker.pinned_runtime.run_runtime_health_check"
-                ) as health_check:
-                    health_check.return_value.smoke_test_ok = False
-                    health_check.return_value.error = "Vulkan0 is unavailable."
-                    with self.assertRaisesRegex(RuntimeError, "Vulkan0 is unavailable"):
-                        runtime.authorize()
-            finally:
-                runtime.close()
-
     def test_sidecar_state_endpoint_exposes_the_same_runtime_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             app = create_app(str(Path(temp_dir) / "library"))

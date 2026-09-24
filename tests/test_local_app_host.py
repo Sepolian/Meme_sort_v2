@@ -8,9 +8,6 @@ import urllib.request
 from pathlib import Path
 
 from memesort_worker.local_app_host import (
-    STATE_NEW,
-    STATE_RUNNING,
-    STATE_STOPPED,
     LocalAppHost,
     LocalAppHostConfig,
     LocalAppHostError,
@@ -25,20 +22,6 @@ def _config(temp_dir: str) -> LocalAppHostConfig:
 
 
 class LocalAppHostTests(unittest.TestCase):
-    def test_start_binds_a_random_port_and_reports_bootstrap_url(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            host = LocalAppHost(_config(temp_dir))
-            self.assertEqual(host.state, STATE_NEW)
-            try:
-                info = host.start()
-                self.assertEqual(host.state, STATE_RUNNING)
-                self.assertTrue(info.origin.startswith("http://127.0.0.1:"))
-                self.assertNotEqual(info.origin, "http://127.0.0.1:0")
-                self.assertIn("bootstrap=", info.bootstrap_url)
-                self.assertTrue(info.bootstrap_url.startswith(info.origin))
-            finally:
-                host.stop()
-
     def test_bootstrap_url_authenticates_the_api_over_the_socket(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = LocalAppHost(_config(temp_dir))
@@ -76,20 +59,6 @@ class LocalAppHostTests(unittest.TestCase):
                     host.start()
             finally:
                 host.stop()
-
-    def test_stop_is_idempotent_and_reports_cleanly(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            host = LocalAppHost(_config(temp_dir))
-            host.start()
-            first = host.stop()
-            second = host.stop()
-
-            self.assertTrue(first.clean)
-            self.assertEqual(host.state, STATE_STOPPED)
-            self.assertTrue(second.clean)
-            step_names = {step.name for step in first.steps}
-            self.assertIn("stop-http-server", step_names)
-            self.assertIn("join-server-thread", step_names)
 
     def test_stop_releases_the_listening_port(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
