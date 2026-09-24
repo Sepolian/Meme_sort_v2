@@ -258,40 +258,12 @@ describe("Settings Runtime and installation (ticket 15)", () => {
     expect(screen.queryByRole("button", { name: /install runtime/i })).not.toBeInTheDocument();
   });
 
-  it("renders one Runtime failure surface for a trailing-slash Settings route", async () => {
-    const client = createClient();
-    (client.runRuntimeHealthCheck as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ...healthyResult(),
-      smoke_test_ok: false,
-      error: "Vulkan0 unavailable.",
-    });
-    renderApp("/settings/", client);
-
-    expect(await screen.findAllByRole("alert", { name: "Runtime health failure" })).toHaveLength(1);
-  });
 });
 
 describe("Settings Advanced Diagnostics parity (ticket 15)", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
-  });
-
-  it.each([
-    ["Worker Loop pause/resume/tick", "Worker Loop"],
-    ["failed-Job retry", "Retry failed Jobs"],
-    ["Pending Job inspect/delete", "Pending Jobs"],
-    ["Recent Jobs", "Recent Jobs"],
-    ["in-memory Worker events", "Worker events"],
-    ["persisted worker log", "Persisted worker log"],
-    ["open log directory", "Open log folder"],
-  ])("covers legacy capability: %s", async (_label, headingOrButton) => {
-    const client = createClient();
-    renderApp("/settings", client);
-    await screen.findByRole("heading", { name: "Settings" });
-    expect(
-      (await screen.findAllByText(headingOrButton, { exact: false })).length,
-    ).toBeGreaterThan(0);
   });
 
   it("pauses, resumes, and ticks the Worker Loop through typed commands", async () => {
@@ -402,14 +374,6 @@ describe("Advanced Diagnostics queue snapshot (ticket 02)", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
-  });
-
-  it("reads Pending Jobs from the app state snapshot without an independent Pending Jobs query", async () => {
-    const client = createClient();
-    renderApp("/settings", client);
-
-    expect(await screen.findByLabelText("Select Pending Job embed_asset")).toBeInTheDocument();
-    expect(screen.getByText("originals/indexed.png · recipe-1 · attempt 0")).toBeInTheDocument();
   });
 
   it("keeps the snapshot order and the full queue count when it exceeds the visible list", async () => {

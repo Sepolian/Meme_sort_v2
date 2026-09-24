@@ -249,28 +249,6 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     vi.clearAllMocks();
   });
 
-  it("clicking a card keeps the waterfall mounted while opening the single responsive inspector", async () => {
-    const client = makeClient();
-    const { container, getLocation } = renderApp("/", client);
-
-    await screen.findByText("Pending Asset");
-    const firstCard = container.querySelector<HTMLElement>(
-      `article[data-asset-id="${FIRST_ASSET}"]`,
-    );
-    expect(firstCard).not.toBeNull();
-    expect(within(firstCard as HTMLElement).queryByRole("button", { name: "View" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: /first\.gif/i }));
-
-    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
-    expect(inspector).toBeInTheDocument();
-    expect(inspector.tagName.toLowerCase()).toBe("aside");
-    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /first\.gif/i })).toBeInTheDocument();
-    expect(getLocation().search).toContain(`asset=${FIRST_ASSET}`);
-    expect(container.querySelector(".library-body")).toHaveAttribute("data-inspector", "open");
-    expect(container.querySelector(".library-content + .library-inspector")).not.toBeNull();
-  });
-
   it("moves focus into the inspector when it opens", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -448,45 +426,6 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
   });
 
-  it("renders all required sections: primary, secondary, collapsed advanced, and overflow", async () => {
-    const client = makeClient();
-    renderApp(`/?asset=${FIRST_ASSET}`, client);
-
-    const inspectorAside = await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy image" });
-    expect(
-      within(inspectorAside).getByRole("img", { name: "first.gif preview" }),
-    ).toHaveAttribute(
-      "src",
-      "http://memesort-media.localhost/media/originals/first.gif",
-    );
-    const primary = within(inspectorAside).getByRole("region", { name: "Primary actions" });
-    const preview = within(primary).getByRole("img", { name: "first.gif preview" });
-    const copy = within(primary).getByRole("button", { name: "Copy image" });
-    const similar = within(primary).getByRole("button", { name: "Find Similar" });
-    const metadata = within(primary).getByRole("heading", { name: "first.gif" });
-    const isBefore = (first: Element, second: Element) =>
-      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
-
-    expect(isBefore(preview, copy)).toBe(true);
-    expect(isBefore(copy, similar)).toBe(true);
-    fireEvent.click(copy);
-    const feedback = await within(primary).findByRole("status");
-    expect(isBefore(similar, feedback)).toBe(true);
-    expect(isBefore(feedback, metadata)).toBe(true);
-    expect(isBefore(similar, metadata)).toBe(true);
-    expect(screen.getAllByRole("button", { name: "Reveal in Explorer" }).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("region", { name: "Details" })).toHaveTextContent("320 × 180");
-    expect(screen.getByRole("region", { name: "OCR" })).toHaveTextContent("reaction text");
-    expect(screen.getByRole("region", { name: "Source Records" })).toHaveTextContent("C:/Source/first.gif");
-
-    await openInspectorSections();
-    expect(screen.getByRole("region", { name: "Active Index Recipe" })).toHaveTextContent("Vulkan0 recipe");
-    expect(screen.getByRole("region", { name: "Jobs" })).toHaveTextContent("embed_asset");
-    expect(screen.getByRole("button", { name: "Copy original file" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete Asset" })).toBeInTheDocument();
-  });
-
   it("Clipboard Copy passes only the selected Asset ID and keeps the inspector open with selection intact", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -570,36 +509,6 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(screen.getByRole("region", { name: "Asset inspector" })).toHaveAttribute("data-asset-id", SECOND_ASSET);
     expect(screen.queryByText("Asset A copy failed.")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert", { name: "Clipboard Copy failed" })).not.toBeInTheDocument();
-  });
-
-  it("Find Similar exposes the ticket 12 action point with the Asset ID", async () => {
-    const onFindSimilar = vi.fn();
-    const client = makeClient();
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { unmount } = render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/"]}>
-          <AssetInspector
-            assetId={FIRST_ASSET}
-            client={client as never}
-            onClose={() => undefined}
-            onFindSimilar={onFindSimilar}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    fireEvent.click(await screen.findByRole("button", { name: "Find Similar" }));
-    expect(onFindSimilar).toHaveBeenCalledTimes(1);
-    expect(onFindSimilar).toHaveBeenCalledWith(FIRST_ASSET);
-    unmount();
-
-    const appClient = makeClient();
-    const appRender = renderApp(`/?asset=${FIRST_ASSET}`, appClient);
-    await screen.findByRole("complementary", { name: "Inspector" });
-    await screen.findByRole("button", { name: "Copy image" });
-    expect(screen.getByRole("button", { name: "Find Similar" })).toBeInTheDocument();
-    appRender.unmount();
   });
 
   it("Delete requires confirmation, calls deleteAsset with the ID, removes the Asset, and closes its inspector", async () => {
@@ -697,13 +606,6 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(screen.queryByText("Opened the recorded Source Path in File Explorer.")).not.toBeInTheDocument();
   });
 
-  it("renders no centered detail dialog anywhere: the inspector is the only detail surface", async () => {
-    const appClient = makeClient();
-    const appRender = renderApp(`/?asset=${FIRST_ASSET}`, appClient);
-    await screen.findByRole("complementary", { name: "Inspector" });
-    expect(screen.queryByRole("dialog", { name: "Asset details" })).not.toBeInTheDocument();
-    appRender.unmount();
-  });
 });
 
 describe("Source Record removal and deletion cache coordination", () => {

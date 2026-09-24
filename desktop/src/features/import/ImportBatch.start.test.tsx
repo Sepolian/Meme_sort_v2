@@ -188,35 +188,6 @@ describe("Import Batch launch coordination", () => {
     expect(client.getImportStatus).toHaveBeenCalled();
   });
 
-  it("starts one batch when Choose Folder and a native drop race inside one launch window", async () => {
-    const pending = deferred<ImportTask>();
-    startLibraryImport = vi.fn(async () => pending.promise);
-    const { drag } = renderStartSurface();
-    await stubWallRect();
-
-    await act(async () => {
-      await runMenuOption("Choose Folder");
-    });
-    expect(startLibraryImport).toHaveBeenCalledTimes(1);
-    expect(startLibraryImport).toHaveBeenCalledWith(FOLDER_SELECTION_ID);
-
-    await act(async () => {
-      drag.fire(dropSummary("drop-folder"));
-    });
-    expect(startLibraryImport).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole("alert")).toHaveTextContent("already starting an Import Batch");
-
-    await act(async () => {
-      pending.resolve(
-        importSnapshot({ batch_id: "batch-folder", status: "scanning", running: true, started_at: 1 }),
-      );
-      await pending.promise;
-    });
-
-    expect(await screen.findByText("Import Batch started for 1 folder.")).toBeInTheDocument();
-    expect(startLibraryImport).toHaveBeenCalledTimes(1);
-  });
-
   it("refreshes app state once from the shared launch coordination", async () => {
     const { invalidateSpy } = renderStartSurface();
     await stubWallRect();

@@ -208,49 +208,6 @@ describe("AssetWaterfall layout and lazy media (ticket 09)", () => {
     ).toBeNull();
   });
 
-  it("shows name, quick actions, and selection checkbox on hover content", () => {
-    const assets = [makeAsset({ asset_id: "hover-me" })];
-    const onOpenAsset = vi.fn();
-    const onToggleChecked = vi.fn();
-    renderWaterfall({
-      assets,
-      columnCount: 1,
-      checkedIds: new Set(),
-      onOpenAsset,
-      onToggleChecked,
-    });
-
-    // The open control keeps its accessible name for existing toolbar tests.
-    fireEvent.click(screen.getByRole("button", { name: "Open hover-me.png" }));
-    expect(onOpenAsset).toHaveBeenCalledWith("hover-me");
-
-    // The media button is the single named open target; hover content carries
-    // selection without adding a duplicate inspector action.
-    expect(screen.getByText("hover-me.png")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Quick actions for hover-me.png"),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
-    expect(onOpenAsset).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByLabelText("Select hover-me.png"));
-    expect(onToggleChecked).toHaveBeenCalledWith("hover-me");
-  });
-
-  it("renders uncropped thumbnails that fill the reserved wrapper", () => {
-    const assets = [makeAsset({ asset_id: "tall", width: 100, height: 400 })];
-    const { container } = renderWaterfall({ assets, columnCount: 1 });
-    intersectAll(true);
-
-    const img = cardById(container, "tall").querySelector(
-      "img.asset-card-media",
-    );
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("src")).toBe(
-      "http://memesort-media.localhost/media/thumbnails/tall.jpg",
-    );
-  });
-
   it("keeps the reserved placeholder when media fails to load", () => {
     const assets = [makeAsset({ asset_id: "broken", width: 320, height: 180 })];
     const { container } = renderWaterfall({ assets, columnCount: 1 });

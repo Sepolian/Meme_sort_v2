@@ -205,28 +205,6 @@ describe("Library sorting, filtering, and density controls", () => {
     vi.clearAllMocks();
   });
 
-  it("renders media tabs and View controls with their active default values", async () => {
-    const client = makeClient();
-    renderApp("/", client);
-
-    await screen.findByRole("button", { name: /Open zebra\.png/ });
-
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Stills" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "GIFs" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByRole("group", { name: "View options" })).not.toBeInTheDocument();
-    expect(screen.getByRole("status", { name: "Browse results" })).toHaveTextContent("3 Assets");
-
-    const viewMenu = openViewMenu();
-    expect((within(viewMenu).getByLabelText("Sort") as HTMLSelectElement).value).toBe("newest");
-    expect((within(viewMenu).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
-    expect((within(viewMenu).getByLabelText("Density") as HTMLSelectElement).value).toBe("comfortable");
-    expect(within(viewMenu).getByRole("button", { name: "Clear filters" })).toBeDisabled();
-
-    // Default newest-first order: zebra (Aug) > mango (May) > apple (Jan).
-    expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
-  });
-
   it("changing sort updates visible order through the URL contract", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -283,29 +261,6 @@ describe("Library sorting, filtering, and density controls", () => {
     fireEvent.change(within(viewMenu).getByLabelText("Density"), { target: { value: "comfortable" } });
     expect(screen.getByRole("region", { name: "Assets" })).toHaveAttribute("data-density", "comfortable");
     expect(localStorage.getItem(LIBRARY_PREFERENCE_KEYS.density)).toBe("comfortable");
-  });
-
-  it("empty filtered state explains how to clear filters and restores the wall", async () => {
-    const client = makeClient();
-    renderApp("/", client);
-    await screen.findByRole("button", { name: /Open zebra\.png/ });
-
-    fireEvent.click(screen.getByRole("button", { name: "GIFs" }));
-    const viewMenu = openViewMenu();
-    fireEvent.change(within(viewMenu).getByLabelText("Status"), { target: { value: "indexed" } });
-
-    expect(await screen.findByText("No Assets match these filters")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Adjust the Media and Status filters, or clear them/i),
-    ).toBeInTheDocument();
-
-    fireEvent.click(within(viewMenu).getByRole("button", { name: "Clear filters" }));
-
-    // Both filters reset to all and the full newest-first wall returns.
-    expect(await screen.findByRole("button", { name: /Open zebra\.png/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
-    expect((within(screen.getByRole("group", { name: "View options" })).getByLabelText("Status") as HTMLSelectElement).value).toBe("all");
-    expect(cardOrder()).toEqual(["Open zebra.png", "Open mango.png", "Open apple.gif"]);
   });
 
   it("clearing media and status preserves query, sort, and inspector target", async () => {

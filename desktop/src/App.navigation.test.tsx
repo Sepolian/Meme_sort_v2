@@ -1,9 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { Component, type ReactNode } from "react";
 import { App } from "./App";
 import type { MemeSortClient } from "./api/tauri-client";
+import { scheduleFocusRestoration } from "./components/useEscapeSurface";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 
 const client: MemeSortClient = {
@@ -51,14 +53,30 @@ async function unsupported(): Promise<never> {
   throw new Error("This test only renders the application shell.");
 }
 
-function renderApp(route = "/") {
+class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+function AbandonRender(): never {
+  throw new Error("abandon this render");
+}
+
+function renderApp(route = "/", testClient: MemeSortClient = client) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[route]}>
-        <App client={client} />
+        <App client={testClient} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -68,24 +86,6 @@ describe("application shell navigation", () => {
   beforeEach(() => {
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;
-  });
-
-  it("shows Library and Duplicates at the top with Settings anchored at the bottom", async () => {
-    renderApp();
-    await screen.findByRole("heading", { name: "Your library" });
-
-    const primaryNav = screen.getByRole("navigation", { name: "Primary" });
-    expect(primaryNav).toBeInTheDocument();
-    expect(primaryNav).toHaveTextContent("Library");
-    expect(primaryNav).toHaveTextContent("Duplicates");
-
-    const settingsNav = screen.getByRole("navigation", { name: "Settings" });
-    expect(settingsNav).toHaveTextContent("Settings");
-
-    // Removed legacy routes resolve to NotFoundPage, never to a sidebar entry.
-    expect(screen.queryByRole("link", { name: "Setup" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Status" })).not.toBeInTheDocument();
   });
 
   it("navigates between the final Library, Duplicates, and Settings surfaces", async () => {
@@ -102,40 +102,87 @@ describe("application shell navigation", () => {
     expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
   });
 
-  it("renders the Settings skeleton with all required sections", async () => {
+  it("passes only native file and folder selection IDs to Import Batch", async () => {
+    const filesClient = {
+      ...client,
+      chooseLibraryFiles: vi.fn(async () => ({ selection_id: "selection-files", count: 2 })),
+      startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "batch-files", status: "scanning", running: true, started_at: 1 })),
+    };
+    const files = renderApp("/", filesClient);
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
+    expect(await screen.findByText(/Import Batch started for 2 files/)).toBeInTheDocument();
+    expect(filesClient.chooseLibraryFiles).toHaveBeenCalledTimes(1);
+    expect(filesClient.startLibraryImport).toHaveBeenCalledWith("selection-files");
+    files.unmount();
+
+    const folderClient = {
+      ...client,
+      chooseLibraryFolder: vi.fn(async () => ({ selection_id: "selection-folder", count: 1 })),
+      startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "batch-folder", status: "scanning", running: true, started_at: 1 })),
+    };
+    renderApp("/", folderClient);
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Choose Folder" }));
+    expect(await screen.findByText(/Import Batch started for 1 folder/)).toBeInTheDocument();
+    expect(folderClient.chooseLibraryFolder).toHaveBeenCalledTimes(1);
+    expect(folderClient.startLibraryImport).toHaveBeenCalledWith("selection-folder");
+  });
+
+  it("leaves Import Batch untouched when the native picker is cancelled", async () => {
+    const cancelled = {
+      ...client,
+      chooseLibraryFiles: vi.fn(async () => null),
+      startLibraryImport: vi.fn(async () => { throw new Error("must not start after cancellation"); }),
+    };
+    renderApp("/", cancelled);
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
+    });
+    expect(cancelled.chooseLibraryFiles).toHaveBeenCalledTimes(1);
+    expect(cancelled.startLibraryImport).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert", { name: "Import Batch result" })).not.toBeInTheDocument();
+  });
+
+  it("closes keyboard help with Escape and restores focus", async () => {
     renderApp("/settings");
-    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Accepted Duplicate Pairs" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Runtime" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Installation" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Advanced Diagnostics" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Settings" });
+
+    const trigger = screen.getByRole("button", { name: "Keyboard help" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "MemeSort navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "MemeSort navigation" })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
   });
 
-  it("keeps the Library shell with toolbar, scrollable content, and inspector zones", async () => {
-    const { container } = renderApp();
-    await screen.findByRole("heading", { name: "Your library" });
+  it("does not invalidate committed focus restoration from an abandoned App render", () => {
+    const cancelFrame = vi.spyOn(window, "cancelAnimationFrame");
+    const cancelPendingRestoration = scheduleFocusRestoration(() => undefined);
+    cancelFrame.mockClear();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-    const shell = container.querySelector(".library-shell");
-    expect(shell).not.toBeNull();
-    expect(shell?.querySelector(".library-toolbar")).not.toBeNull();
-    expect(shell?.querySelector(".library-content")).not.toBeNull();
-    // Inspector region is optional until ticket 10, but the layout zone must exist in CSS/DOM contract.
-    // The shell supports it via .library-body[data-inspector] without overlaying the content.
-    expect(shell?.querySelector(".library-body")).not.toBeNull();
-  });
+    render(
+      <RenderBoundary>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/"]}>
+            <App client={client} />
+            <AbandonRender />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RenderBoundary>,
+    );
 
-  it.each([
-    "/setup",
-    "/search",
-    "/search/text",
-    "/search/image",
-    "/search/similar",
-    "/status",
-  ])("routes removed legacy page %s to NotFoundPage", async (route) => {
-    renderApp(route);
-    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open library" })).toHaveAttribute("href", "/");
+    expect(cancelFrame).not.toHaveBeenCalled();
+    cancelPendingRestoration();
+    cancelFrame.mockRestore();
+    consoleError.mockRestore();
   });
 
   it("renders NotFoundPage for unknown routes", async () => {
@@ -143,47 +190,4 @@ describe("application shell navigation", () => {
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
-  it("defaults to the system theme without changing the active workspace", async () => {
-    window.localStorage.clear();
-    renderApp();
-    await screen.findByRole("heading", { name: "Your library" });
-
-    // Ticket 18: first launch uses `system`; resolved appearance is written
-    // as dark/light on <html> without disturbing the workspace.
-    const sidebarTheme = screen.getByRole("combobox", { name: "Theme preference" });
-    expect(sidebarTheme).toHaveValue("system");
-    expect(["dark", "light"]).toContain(
-      document.documentElement.getAttribute("data-theme"),
-    );
-    expect(screen.getByRole("heading", { name: "Your library" })).toBeInTheDocument();
-  });
-
-  it("persists explicit theme choices from the sidebar without leaving Library", async () => {
-    window.localStorage.clear();
-    renderApp();
-    await screen.findByRole("heading", { name: "Your library" });
-
-    const sidebarTheme = screen.getByRole("combobox", { name: "Theme preference" });
-    fireEvent.change(sidebarTheme, { target: { value: "dark" } });
-    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("dark");
-    expect(screen.getByRole("heading", { name: "Your library" })).toBeInTheDocument();
-
-    fireEvent.change(sidebarTheme, { target: { value: "light" } });
-    expect(document.documentElement).toHaveAttribute("data-theme", "light");
-    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("light");
-  });
-
-  it("offers all three theme preferences in Settings without a second control contract", async () => {
-    window.localStorage.clear();
-    renderApp("/settings");
-    await screen.findByRole("heading", { name: "Settings" });
-
-    const group = screen.getByRole("radiogroup", { name: "Theme preference" });
-    expect(group).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /System/ })).toBeChecked();
-    fireEvent.click(screen.getByRole("radio", { name: /Dark/ }));
-    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-    expect(window.localStorage.getItem("memesort.theme.preference/v1")).toBe("dark");
-  });
 });

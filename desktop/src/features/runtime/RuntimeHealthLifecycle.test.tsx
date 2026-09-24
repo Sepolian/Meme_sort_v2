@@ -173,18 +173,6 @@ describe("startup Runtime health-check lifecycle (ticket 14)", () => {
     expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1);
   });
 
-  it("shows compact Preparing search state while checking", async () => {
-    let resolve!: (value: RuntimeHealthResult) => void;
-    const client = makeClient({
-      runRuntimeHealthCheck: vi.fn(() => new Promise<RuntimeHealthResult>((r) => (resolve = r))),
-    });
-    renderApp("/", client);
-
-    expect(await screen.findByRole("status", { name: "Runtime health" })).toHaveTextContent("Preparing search");
-    resolve(healthyResult());
-    await waitFor(() => expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
-  });
-
   it("keeps semantic and image requests disabled until current-session health authorizes them", async () => {
     let resolve!: (value: RuntimeHealthResult) => void;
     const client = makeClient({

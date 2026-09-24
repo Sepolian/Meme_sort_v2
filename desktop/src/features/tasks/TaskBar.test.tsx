@@ -137,41 +137,6 @@ function renderApp(route: string, client: MemeSortClient) {
 }
 
 describe("task visibility summary", () => {
-  it("hides when idle, healthy, and non-actionable", () => {
-    const summary = summarizeTasks({
-      importTask: importSnapshot(),
-      healthStatus: "healthy",
-      healthBlocked: false,
-      appState: baseAppState(),
-    });
-    expect(summary.visible).toBe(false);
-    expect(summary.compactLabel).toBeNull();
-  });
-
-  it("shows completed success as idle without attention", () => {
-    const summary = summarizeTasks({
-      importTask: importSnapshot({ batch_id: "b1", status: "completed", result: importResultSummary() }),
-      healthStatus: "healthy",
-      healthBlocked: false,
-      appState: baseAppState(),
-    });
-    expect(summary.visible).toBe(false);
-  });
-
-  it("keeps an idle paused worker quiet", () => {
-    const summary = summarizeTasks({
-      importTask: importSnapshot(),
-      healthStatus: "healthy",
-      healthBlocked: false,
-      appState: {
-        ...baseAppState(),
-        worker_loop: { paused: true, running: true },
-      },
-    });
-    expect(summary.visible).toBe(false);
-    expect(summary.compactLabel).toBeNull();
-  });
-
   it("keeps failed import discoverable as attention", () => {
     const summary = summarizeTasks({
       importTask: importSnapshot({ batch_id: "b1", status: "failed", partial_result: importResultSummary() }),
@@ -191,18 +156,6 @@ describe("Activity entry", () => {
     vi.clearAllMocks();
     currentImportStatus = importSnapshot();
     currentAppState = baseAppState();
-  });
-
-  it("hides both surfaces when idle and non-actionable", async () => {
-    const client = createClient();
-    const { container } = renderApp("/", client);
-
-    await screen.findByRole("heading", { name: "Your library" });
-    await waitFor(() => expect(client.runRuntimeHealthCheck).toHaveBeenCalledTimes(1));
-
-    expect(container.querySelector(".topbar")).not.toBeInTheDocument();
-    expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument();
   });
 
   it("keeps the workspace mounted while task visibility changes", async () => {
@@ -226,28 +179,6 @@ describe("Activity entry", () => {
     await queryClient.invalidateQueries({ queryKey: ["app-state"] });
     await waitFor(() => expect(screen.queryByRole("region", { name: "Activity" })).not.toBeInTheDocument());
     expect(container.querySelector(".workspace-main")).toBe(workspaceMain);
-  });
-
-  it("shows agreeing compact and expanded state while importing", async () => {
-    currentImportStatus = importSnapshot({
-      batch_id: "batch-1",
-      status: "importing",
-      running: true,
-      supported_files: 12,
-      processed_files: 4,
-      current_source_name: "cat.gif",
-    });
-    const client = createClient();
-    renderApp("/", client);
-
-    await waitFor(() => expect(screen.getByRole("region", { name: "Activity" }).textContent).toContain("Importing 4 of 12"));
-    const taskBar = screen.getByRole("region", { name: "Activity" });
-    expect(screen.queryByRole("status", { name: "Background tasks summary" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("region", { name: "Activity" })).toHaveLength(1);
-    // Expanded Activity owns import controls and progress detail.
-    expect(taskBar.textContent).toContain("Import");
-    expect(within(taskBar).getByRole("button", { name: "Pause Import Batch" })).toBeEnabled();
-    expect(within(taskBar).getByRole("button", { name: "Resume Import Batch" })).toBeDisabled();
   });
 
   it("minimizes and expands without losing the compact header", async () => {

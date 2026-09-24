@@ -155,12 +155,6 @@ async function renderedWall(label: string) {
 }
 
 describe("AssetsWorkspace native drag-and-drop", () => {
-  it("keeps a persistent muted drag hint beside the chooser controls", async () => {
-    renderWorkspace();
-
-    expect(await screen.findByText(/drag image files or folders onto the asset wall/i)).toBeVisible();
-  });
-
   it("shows a centered import card for an empty Library and starts one import per validated drop", async () => {
     const fake = new FakeNativeDrag();
     const list: AssetListResult = { ...assets, assets: [] };

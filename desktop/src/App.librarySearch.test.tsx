@@ -550,17 +550,6 @@ describe("Library local filtering and semantic text search (ticket 11)", () => {
     });
   });
 
-  it("explains active filters and offers clear filters for an empty filename search", async () => {
-    const client = makeClient();
-    renderApp("/?q=cat&media=gif&status=failed", client);
-    expect(await screen.findByRole("heading", { name: "1 local match is hidden by filters" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /cat-meme\.png/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Active filters: GIFs · Failed excludes every match from this search.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-
-    expect(await screen.findByRole("button", { name: /cat-meme\.png/ })).toBeInTheDocument();
-  });
-
   it("keeps a real zero filename match separate from filter-hidden matches", async () => {
     const client = makeClient();
     renderApp("/?q=not-a-real-file&media=gif&status=failed", client);

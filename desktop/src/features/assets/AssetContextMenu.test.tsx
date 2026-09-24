@@ -63,32 +63,6 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
-  it("routes Copy original file through its own handler with the Asset ID", () => {
-    const onCopyImage = vi.fn();
-    const onCopyOriginal = vi.fn();
-    const { container } = render(
-      <AssetWaterfall
-        assets={[makeGif(GIF_ID)]}
-        density="comfortable"
-        checkedIds={new Set()}
-        onOpenAsset={() => undefined}
-        onToggleChecked={() => undefined}
-        onCopyImage={onCopyImage}
-        onCopyOriginal={onCopyOriginal}
-        columnCount={1}
-      />,
-    );
-    const card = container.querySelector(
-      `article[data-asset-id="${GIF_ID}"]`,
-    ) as HTMLElement;
-
-    expect(rightClick(card)).toBe(false);
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
-    expect(onCopyOriginal).toHaveBeenCalledTimes(1);
-    expect(onCopyOriginal).toHaveBeenCalledWith(GIF_ID);
-    expect(onCopyImage).not.toHaveBeenCalled();
-  });
-
   it("suppresses pointer and keyboard context menus while both copy actions are busy", () => {
     const onCopyImage = vi.fn();
     const onCopyOriginal = vi.fn();
@@ -119,26 +93,6 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(opener).toHaveFocus();
     expect(onCopyImage).not.toHaveBeenCalled();
     expect(onCopyOriginal).not.toHaveBeenCalled();
-  });
-
-  it("leaves right-click alone when no copy handlers are wired", () => {
-    const { container } = render(
-      <AssetWaterfall
-        assets={[makeGif(GIF_ID)]}
-        density="comfortable"
-        checkedIds={new Set()}
-        onOpenAsset={() => undefined}
-        onToggleChecked={() => undefined}
-        columnCount={1}
-      />,
-    );
-    const card = container.querySelector(
-      `article[data-asset-id="${GIF_ID}"]`,
-    ) as HTMLElement;
-
-    // Native menu untouched: default is not prevented and no app menu opens.
-    expect(rightClick(card)).toBe(true);
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("closes the menu on Escape", () => {

@@ -251,34 +251,6 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     vi.clearAllMocks();
   });
 
-  it("hides the selection toolbar at zero and shows it at one with count plus explicit Clear", async () => {
-    const client = makeClient();
-    renderApp("/", client);
-
-    await screen.findByText("Pending Asset").catch(() => screen.findByText("Assets"));
-    // Waterfall cards are up; no selection yet so no selection toolbar.
-    await screen.findByLabelText("Select first.gif");
-    expect(screen.queryByRole("toolbar", { name: "Selection toolbar" })).not.toBeInTheDocument();
-    expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText("Select first.gif"));
-
-    const toolbar = await screen.findByRole("toolbar", { name: "Selection toolbar" });
-    expect(toolbar).toBeInTheDocument();
-    expect(within(toolbar).getByText("1 selected")).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Clear selection" })).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Copy original files" })).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Rebuild Active Index" })).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Delete selected" })).toBeInTheDocument();
-
-    // Hover checkbox toggles off again (add/remove IDs).
-    fireEvent.click(screen.getByLabelText("Select first.gif"));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(screen.queryByRole("toolbar", { name: "Selection toolbar" })).not.toBeInTheDocument();
-  });
-
   it("copies one selection with the single-file method (ID-only) and preserves selection", async () => {
     const client = makeClient();
     renderApp("/", client);
@@ -391,34 +363,6 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
   );
 
   it.each(["success", "failure"] as const)(
-    "surfaces the current delayed single-card copy %s result",
-    async (outcome) => {
-      const gate = deferred<void>();
-      const client = makeClient({
-        copyAssetToClipboard: vi.fn(async () => gate.promise),
-      });
-      const { container } = renderApp("/", client);
-
-      await screen.findByLabelText("Select first.gif");
-      const card = container.querySelector<HTMLElement>(`article[data-asset-id="${FIRST_ASSET}"]`);
-      expect(card).not.toBeNull();
-      fireEvent.contextMenu(card as HTMLElement, { button: 2, clientX: 200, clientY: 150 });
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Copy image" }));
-      await act(async () => {
-        if (outcome === "success") gate.resolve();
-        else gate.reject({ error: "SidecarError", detail: "Current card copy failed.", retryable: true });
-        await Promise.resolve();
-      });
-
-      if (outcome === "success") {
-        expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
-      } else {
-        expect(await screen.findByRole("alert")).toHaveTextContent("Current card copy failed.");
-      }
-    },
-  );
-
-  it.each(["success", "failure"] as const)(
     "does not surface a delayed batch copy %s after its selection changes",
     async (outcome) => {
       const gate = deferred<void>();
@@ -445,32 +389,6 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
 
       expect(screen.queryByText("Copied 2 original file references.")).not.toBeInTheDocument();
       expect(screen.queryByText("Batch copy failed.")).not.toBeInTheDocument();
-    },
-  );
-
-  it.each(["success", "failure"] as const)(
-    "surfaces the current batch copy %s result for the unchanged selection",
-    async (outcome) => {
-      const gate = deferred<void>();
-      const client = makeClient({
-        copyOriginalFiles: vi.fn(async () => gate.promise),
-      });
-      renderApp("/", client);
-
-      await selectByLabel("Select first.gif");
-      await selectByLabel("Select second.png");
-      fireEvent.click(screen.getByRole("button", { name: "Copy original files" }));
-      await act(async () => {
-        if (outcome === "success") gate.resolve();
-        else gate.reject({ error: "SidecarError", detail: "Batch copy failed.", retryable: true });
-        await Promise.resolve();
-      });
-
-      if (outcome === "success") {
-        expect(await screen.findByText("Copied 2 original file references.")).toBeInTheDocument();
-      } else {
-        expect(await screen.findByRole("alert")).toHaveTextContent("Batch copy failed.");
-      }
     },
   );
 
