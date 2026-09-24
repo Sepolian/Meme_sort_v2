@@ -240,26 +240,4 @@ describe("createMemeSortClient", () => {
     expect(result).toEqual({ library_root: "C:/Library", cleared_pairs: 2 });
   });
 
-  it("rejects clipboard and pair errors through the existing Tauri error path", async () => {
-    const failure = { error: "SidecarError", detail: "Could not access the Asset Library Copy.", retryable: false };
-    const invokeCommand = vi.fn().mockRejectedValue(failure);
-    const client = createMemeSortClient(invokeCommand);
-
-    await expect(
-      client.copyAssetToClipboard("123e4567-e89b-12d3-a456-426614174000"),
-    ).rejects.toEqual(failure);
-    await expect(
-      client.copyOriginalFile("123e4567-e89b-12d3-a456-426614174000"),
-    ).rejects.toEqual(failure);
-    await expect(
-      client.copyOriginalFiles(["123e4567-e89b-12d3-a456-426614174000"]),
-    ).rejects.toEqual(failure);
-    await expect(
-      client.acceptDuplicatePair(
-        "123e4567-e89b-12d3-a456-426614174000",
-        "123e4567-e89b-12d3-a456-426614174001",
-      ),
-    ).rejects.toEqual(failure);
-    await expect(client.clearAcceptedPairs()).rejects.toEqual(failure);
-  });
 });

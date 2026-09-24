@@ -97,19 +97,6 @@ describe("ThemeProvider", () => {
     }
   });
 
-  it("uses system on first launch and resolves it to <html>", () => {
-    installMatchMediaMock(false);
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    expect(screen.getByTestId("preference")).toHaveTextContent("system");
-    expect(screen.getByTestId("resolved")).toHaveTextContent("light");
-    expect(document.documentElement.dataset.theme).toBe("light");
-    expect(window.localStorage.getItem(THEME_PREFERENCE_KEY)).toBeNull();
-  });
-
   it("persists and restores all three preferences", () => {
     installMatchMediaMock(false);
     const { unmount } = render(

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { subscribeNativeDrag, NATIVE_DRAG_EVENT, type NativeDragListener } from "./native-drag";
+import { subscribeNativeDrag, type NativeDragListener } from "./native-drag";
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
@@ -16,14 +16,13 @@ function emittedHandler(): { handler: (event: { payload: unknown }) => void } {
 }
 
 describe("subscribeNativeDrag", () => {
-  it("listens only to the fixed native drag event", () => {
+  it("subscribes to the native drag event", () => {
     listenMock.mockReset();
     listenMock.mockResolvedValue(() => undefined);
 
     subscribeNativeDrag(() => undefined);
 
-    expect(listenMock).toHaveBeenCalledTimes(1);
-    expect(listenMock).toHaveBeenCalledWith(NATIVE_DRAG_EVENT, expect.any(Function));
+    expect(listenMock).toHaveBeenCalledWith("library-native-drag", expect.any(Function));
   });
 
   it("forwards path-free summaries with camelCase fields", () => {

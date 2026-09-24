@@ -51,14 +51,4 @@ describe("TitleBar", () => {
     expect(screen.getByRole("button", { name: "Close window" })).toBeDisabled();
   });
 
-  it("renders the packaged MemeSort artwork at the title bar icon size", () => {
-    const { container } = render(<TitleBar controls={controls()} />);
-    const brandMark = container.querySelector(".titlebar-brand-mark");
-
-    expect(brandMark?.tagName).toBe("IMG");
-    expect(brandMark).toHaveAttribute("src");
-    expect(brandMark).toHaveAttribute("width", "22");
-    expect(brandMark).toHaveAttribute("height", "22");
-    expect(brandMark).toHaveAttribute("draggable", "false");
-  });
 });

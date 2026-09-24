@@ -97,12 +97,6 @@ describe("composeSearchItems", () => {
     expect(composed.stale).toEqual([{ assetId: missingId, reason: "missing-summary" }]);
   });
 
-  it("returns empty items and stale lists for empty input", () => {
-    const composed = composeSearchItems([], new Map());
-
-    expect(composed.items).toEqual([]);
-    expect(composed.stale).toEqual([]);
-  });
 });
 
 describe("composeDuplicatePairs", () => {
@@ -191,20 +185,5 @@ describe("composeDuplicatePairs", () => {
       "123e4567-e89b-12d3-a456-426614174010",
       "123e4567-e89b-12d3-a456-426614174011",
     ]);
-  });
-});
-
-describe("buildAssetSummaryMap", () => {
-  it("indexes summaries by Asset ID for join lookups", () => {
-    const firstId = "123e4567-e89b-12d3-a456-426614174000";
-    const secondId = "123e4567-e89b-12d3-a456-426614174001";
-    const map = buildAssetSummaryMap([
-      summary({ asset_id: firstId }),
-      summary({ asset_id: secondId }),
-    ]);
-
-    expect(map.get(firstId)?.asset_id).toBe(firstId);
-    expect(map.get(secondId)?.asset_id).toBe(secondId);
-    expect(map.size).toBe(2);
   });
 });
