@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { RuntimeHealthResult } from "../../api/types";
@@ -42,6 +42,24 @@ function renderHealth(
 }
 
 describe("runtime health query", () => {
+  it("runs the local health check and Retry while offline", async () => {
+    const queryClient = new QueryClient();
+    const runRuntimeHealthCheck = vi.fn()
+      .mockResolvedValueOnce(result(false))
+      .mockResolvedValueOnce(result(true));
+    let retry!: () => Promise<RuntimeHealthSnapshot>;
+    const wasOnline = onlineManager.isOnline();
+    onlineManager.setOnline(false);
+    try {
+      renderHealth(queryClient, runRuntimeHealthCheck, (next) => { retry = next; });
+      await waitFor(() => expect(screen.getByRole("status", { name: "Runtime health" })).toHaveTextContent("failed: Vulkan0 unavailable."));
+      await act(async () => { expect((await retry()).status).toBe("healthy"); });
+      expect(runRuntimeHealthCheck).toHaveBeenCalledTimes(2);
+    } finally {
+      onlineManager.setOnline(wasOnline);
+    }
+  });
+
   it("does not rerun a failed automatic check on app remount", async () => {
     const queryClient = new QueryClient();
     const runRuntimeHealthCheck = vi.fn(async () => { throw { error: "SidecarError", detail: "boom" }; });

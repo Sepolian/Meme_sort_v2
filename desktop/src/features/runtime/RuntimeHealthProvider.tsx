@@ -32,6 +32,7 @@ export function RuntimeHealthProvider({ client, children }: RuntimeHealthProvide
   const query = useQuery({
     queryKey: ["runtime-health"],
     queryFn: () => client.runRuntimeHealthCheck(),
+    networkMode: "always",
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
