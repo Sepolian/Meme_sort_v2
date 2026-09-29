@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
+import { createUnconfiguredClient } from "../../api/test-client";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AssetListResult, RuntimeHealthResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
@@ -52,7 +53,8 @@ const assets: AssetListResult = {
 };
 
 function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & { runRuntimeHealthCheck: ReturnType<typeof vi.fn> } {
-  const client = {
+  return {
+    ...createUnconfiguredClient(),
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
@@ -63,63 +65,9 @@ function makeClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient & {
     }),
     getImportStatus: async () => importSnapshot(),
     getAssets: async () => assets,
-    getAssetDetail: async () => {
-      throw new Error("not under test");
-    },
-    revealAsset: async () => undefined,
-    openLogDirectory: async () => undefined,
-    deleteAsset: async () => {
-      throw new Error("not under test");
-    },
-    removeSourceRecord: async () => {
-      throw new Error("not under test");
-    },
-    batchAssetAction: async () => {
-      throw new Error("not under test");
-    },
-      chooseSearchImage: async (requestId: string) => ({ request_id: requestId, selected_path: null }),
-    chooseLibraryFiles: async () => null,
-    chooseLibraryFolder: async () => null,
-    startLibraryImport: async () => {
-      throw new Error("not under test");
-    },
-    pauseImport: async () => importSnapshot(),
-    resumeImport: async () => importSnapshot(),
-    searchText: async () => {
-      throw new Error("not under test");
-    },
-    searchImage: async () => {
-      throw new Error("not under test");
-    },
-    findSimilar: async () => {
-      throw new Error("not under test");
-    },
-    getDuplicates: async () => {
-      throw new Error("not under test");
-    },
-    pauseWorkerLoop: async () => ({ running: true, paused: true }),
-    resumeWorkerLoop: async () => ({ running: true, paused: false }),
-    triggerWorkerLoop: async () => ({ running: true, paused: false }),
     runRuntimeHealthCheck: vi.fn(async () => healthyResult()),
-    retryFailedJobs: async () => {
-      throw new Error("not under test");
-    },
-    deletePendingJobs: async () => {
-      throw new Error("not under test");
-    },
-    cancelSearch: async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true }),
-    copyAssetToClipboard: async () => undefined,
-    copyOriginalFile: async () => undefined,
-    copyOriginalFiles: async () => undefined,
-    acceptDuplicatePair: async () => {
-      throw new Error("not under test");
-    },
-    clearAcceptedPairs: async () => {
-      throw new Error("not under test");
-    },
     ...overrides,
-  } as unknown as MemeSortClient & { runRuntimeHealthCheck: ReturnType<typeof vi.fn> };
-  return client;
+  } as MemeSortClient & { runRuntimeHealthCheck: ReturnType<typeof vi.fn> };
 }
 
 function renderApp(route: string, client: MemeSortClient, strict = false) {

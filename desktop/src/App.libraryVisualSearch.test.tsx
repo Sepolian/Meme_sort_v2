@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { App } from "./App";
+import { createUnconfiguredClient } from "./api/test-client";
 import type { AssetDetail, AssetListResult, SearchAsset } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 
@@ -126,7 +127,9 @@ function selectedImage(requestId: string, selectedPath: string | null) {
 }
 
 function makeClient(overrides: Record<string, unknown> = {}) {
+  const unconfigured = createUnconfiguredClient();
   return {
+    ...unconfigured,
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
@@ -137,55 +140,17 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     }),
     getImportStatus: async () => importSnapshot(),
     getAssets: async () => assets,
-    getAssetDetail: vi.fn(async (assetId: string) => ({
+    getAssetDetail: async (assetId: string) => ({
       library_root: "C:/Library",
       active_recipe_id: "recipe-1",
       active_recipe_label: "Vulkan0 recipe",
       asset: detailFor(assetId),
-    })),
-    revealAsset: async () => undefined,
-    openLogDirectory: async () => undefined,
-    deleteAsset: async () => {
-      throw new Error("not under test");
-    },
-    removeSourceRecord: async () => {
-      throw new Error("not under test");
-    },
-    batchAssetAction: async () => {
-      throw new Error("not under test");
-    },
+    }),
     chooseSearchImage: vi.fn(async (requestId: string) => selectedImage(requestId, "C:/Source/query.png")),
-    chooseLibraryFiles: async () => {
-      throw new Error("not under test");
-    },
-    chooseLibraryFolder: async () => {
-      throw new Error("not under test");
-    },
-    startLibraryImport: async () => {
-      throw new Error("not under test");
-    },
-    pauseImport: async () => {
-      throw new Error("not under test");
-    },
-    resumeImport: async () => {
-      throw new Error("not under test");
-    },
-    searchText: vi.fn(async () => {
-      throw new Error("searchText mock not configured");
-    }),
-    searchImage: vi.fn(async () => {
-      throw new Error("searchImage mock not configured");
-    }),
-    findSimilar: vi.fn(async () => {
-      throw new Error("findSimilar mock not configured");
-    }),
-    getDuplicates: async () => {
-      throw new Error("not under test");
-    },
-    pauseWorkerLoop: async () => ({ running: true, paused: true }),
-    resumeWorkerLoop: async () => ({ running: true, paused: false }),
-    triggerWorkerLoop: async () => ({ running: true, paused: false }),
-    runRuntimeHealthCheck: vi.fn(async () => ({
+    searchText: vi.fn(unconfigured.searchText),
+    searchImage: vi.fn(unconfigured.searchImage),
+    findSimilar: vi.fn(unconfigured.findSimilar),
+    runRuntimeHealthCheck: async () => ({
       runtime_fingerprint: "runtime-1",
       backend_name: "llama.cpp",
       device: "Vulkan0",
@@ -197,27 +162,12 @@ function makeClient(overrides: Record<string, unknown> = {}) {
       diagnostic_steps: [{ step: "image-embedding-smoke", status: "ok", detail: "ok" }],
       smoke_test_ok: true,
       error: null,
-    })),
-    retryFailedJobs: async () => {
-      throw new Error("not under test");
-    },
-    deletePendingJobs: async () => {
-      throw new Error("not under test");
-    },
+    }),
     cancelSearch: vi.fn(async (requestId: string) => ({
       request_id: requestId,
       cancelled: true,
       was_active: true,
     })),
-    copyAssetToClipboard: async () => undefined,
-    copyOriginalFile: async () => undefined,
-    copyOriginalFiles: async () => undefined,
-    acceptDuplicatePair: async () => {
-      throw new Error("not under test");
-    },
-    clearAcceptedPairs: async () => {
-      throw new Error("not under test");
-    },
     ...overrides,
   };
 }

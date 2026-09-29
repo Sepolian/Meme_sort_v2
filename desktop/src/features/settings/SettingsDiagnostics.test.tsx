@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
+import { createUnconfiguredClient } from "../../api/test-client";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState, PendingJob, RuntimeHealthResult } from "../../api/types";
 import { importSnapshot } from "../import/import-test-fixtures";
@@ -123,49 +124,20 @@ function diagnosticsAppState(): AppState {
   };
 }
 
-function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn>> {
-  const client = {
+function createClient() {
+  return {
+    ...createUnconfiguredClient(),
     getAppState: vi.fn(async (): Promise<AppState> => diagnosticsAppState()),
-    getImportStatus: vi.fn(async () => importSnapshot()),
-    getAssets: vi.fn(async () => ({
+    getImportStatus: async () => importSnapshot(),
+    getAssets: async () => ({
       library_root: "C:/Library",
       active_recipe_id: "recipe-1",
       active_recipe_label: "Vulkan0 recipe",
       assets: [],
-    })),
-    getAssetDetail: vi.fn(async () => {
-      throw new Error("not under test");
     }),
-    revealAsset: vi.fn(async () => undefined),
     openLogDirectory: vi.fn(async () => undefined),
     deleteAsset: vi.fn(async () => {
       throw new Error("must not delete Assets from diagnostics");
-    }),
-    removeSourceRecord: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    batchAssetAction: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    chooseSearchImage: vi.fn(async (requestId: string) => ({ request_id: requestId, selected_path: null })),
-    chooseLibraryFiles: vi.fn(async () => null),
-    chooseLibraryFolder: vi.fn(async () => null),
-    startLibraryImport: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    pauseImport: vi.fn(async () => importSnapshot()),
-    resumeImport: vi.fn(async () => importSnapshot()),
-    searchText: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    searchImage: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    findSimilar: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    getDuplicates: vi.fn(async () => {
-      throw new Error("not under test");
     }),
     pauseWorkerLoop: vi.fn(async () => ({ running: true, paused: true })),
     resumeWorkerLoop: vi.fn(async () => ({ running: true, paused: false })),
@@ -181,18 +153,7 @@ function createClient(): MemeSortClient & Record<string, ReturnType<typeof vi.fn
       deleted_job_ids: jobIds,
       skipped_job_ids: [],
     })),
-    cancelSearch: vi.fn(async (requestId: string) => ({ request_id: requestId, cancelled: true, was_active: true })),
-    copyAssetToClipboard: vi.fn(async () => undefined),
-    copyOriginalFile: vi.fn(async () => undefined),
-    copyOriginalFiles: vi.fn(async () => undefined),
-    acceptDuplicatePair: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    clearAcceptedPairs: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-  } as unknown as MemeSortClient & Record<string, ReturnType<typeof vi.fn>>;
-  return client;
+  };
 }
 
 function snapshotQueue(...states: AppState[]): () => Promise<AppState> {

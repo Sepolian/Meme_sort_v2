@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { App } from "./App";
+import { createUnconfiguredClient } from "./api/test-client";
 import type { AssetDetail, AssetListResult } from "./api/types";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 
@@ -101,6 +102,7 @@ function healthyCheck() {
 
 function makeClient(overrides: Record<string, unknown> = {}) {
   return {
+    ...createUnconfiguredClient(),
     getAppState: async () => ({
       library_root: "C:/Library",
       runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
@@ -111,14 +113,12 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     }),
     getImportStatus: async () => importSnapshot(),
     getAssets: async () => assets,
-    getAssetDetail: vi.fn(async (assetId: string) => ({
+    getAssetDetail: async (assetId: string) => ({
       library_root: "C:/Library",
       active_recipe_id: "recipe-1",
       active_recipe_label: "Vulkan0 recipe",
       asset: detailFor(assetId),
-    })),
-    revealAsset: vi.fn(async () => undefined),
-    openLogDirectory: async () => undefined,
+    }),
     deleteAsset: vi.fn(async (assetId: string) => ({
       library_root: "C:/Library",
       asset_id: assetId,
@@ -129,9 +129,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
       removed_renditions: 0,
       removed_embeddings: 0,
     })),
-    removeSourceRecord: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
     batchAssetAction: vi.fn(
       async (action: "delete" | "rebuild-active-index", assetIds: string[]) => ({
         library_root: "C:/Library",
@@ -146,60 +143,10 @@ function makeClient(overrides: Record<string, unknown> = {}) {
         reindex_jobs_created: action === "rebuild-active-index" ? assetIds.length : 0,
       }),
     ),
-    chooseSearchImage: async () => {
-      throw new Error("not under test");
-    },
-    chooseLibraryFiles: async () => {
-      throw new Error("not under test");
-    },
-    chooseLibraryFolder: async () => {
-      throw new Error("not under test");
-    },
-    startLibraryImport: async () => {
-      throw new Error("not under test");
-    },
-    pauseImport: async () => {
-      throw new Error("not under test");
-    },
-    resumeImport: async () => {
-      throw new Error("not under test");
-    },
-    searchText: async () => {
-      throw new Error("not under test");
-    },
-    searchImage: async () => {
-      throw new Error("not under test");
-    },
-    findSimilar: vi.fn(async () => {
-      throw new Error("not under test");
-    }),
-    getDuplicates: async () => {
-      throw new Error("not under test");
-    },
-    pauseWorkerLoop: async () => ({ running: true, paused: true }),
-    resumeWorkerLoop: async () => ({ running: true, paused: false }),
-    triggerWorkerLoop: async () => ({ running: true, paused: false }),
-    runRuntimeHealthCheck: vi.fn(async () => healthyCheck()),
-    retryFailedJobs: async () => {
-      throw new Error("not under test");
-    },
-    deletePendingJobs: async () => {
-      throw new Error("not under test");
-    },
-    cancelSearch: async (requestId: string) => ({
-      request_id: requestId,
-      cancelled: true,
-      was_active: true,
-    }),
+    runRuntimeHealthCheck: async () => healthyCheck(),
     copyAssetToClipboard: vi.fn(async () => undefined),
     copyOriginalFile: vi.fn(async () => undefined),
     copyOriginalFiles: vi.fn(async () => undefined),
-    acceptDuplicatePair: async () => {
-      throw new Error("not under test");
-    },
-    clearAcceptedPairs: async () => {
-      throw new Error("not under test");
-    },
     ...overrides,
   };
 }
