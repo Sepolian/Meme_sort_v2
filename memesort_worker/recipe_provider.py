@@ -7,6 +7,7 @@ manifest; importing this module does **not**.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Mapping
 
@@ -103,18 +104,13 @@ def from_manifest(manifest: RuntimeManifest) -> RuntimeRecipeProvider:
     )
 
 
-_default_provider: RuntimeRecipeProvider | None = None
-
-
+@cache
 def default_provider() -> RuntimeRecipeProvider:
     """Return the singleton provider built from the project manifest.
 
     The manifest is read on first call, not at import time.
     """
-    global _default_provider
-    if _default_provider is None:
-        _default_provider = from_manifest(load_runtime_manifest())
-    return _default_provider
+    return from_manifest(load_runtime_manifest())
 
 
 def resolve_gif_frame_count(
