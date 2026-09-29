@@ -217,7 +217,7 @@ def resolve_asset_reveal_path(
     if target == "managed":
         candidate = (library_root / str(asset["library_path"])).resolve()
         resolved_root = library_root.resolve()
-        if resolved_root not in candidate.parents and candidate != resolved_root:
+        if not candidate.is_relative_to(resolved_root):
             raise ValueError("Asset path is outside the library root")
         return candidate
 

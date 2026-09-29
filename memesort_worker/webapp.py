@@ -67,7 +67,7 @@ class QuietWSGIRequestHandler(WSGIRequestHandler):
 
 def _serve_library_file(library_root: Path, media_path: str) -> tuple[str, list[tuple[str, str]], bytes]:
     candidate = (library_root / media_path).resolve()
-    if library_root.resolve() not in candidate.parents and candidate != library_root.resolve():
+    if not candidate.is_relative_to(library_root.resolve()):
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "Not found"})
     if not candidate.exists() or not candidate.is_file():
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "Not found"})

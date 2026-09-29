@@ -590,6 +590,81 @@ class LibraryTests(unittest.TestCase):
                 payload["resolved_path"],
             )
 
+    def test_sidecar_library_paths_keep_the_root_and_prefix_neighbor_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            asset = self._list_assets(library_root).assets[0]
+            asset_id = str(asset["asset_id"])
+            managed_path = library_root / str(asset["library_path"])
+            neighbor = Path(temp_dir) / "library-other"
+            neighbor.mkdir()
+            (neighbor / "secret.png").write_bytes(b"outside")
+            app = create_app(str(library_root))
+            try:
+                status, _headers, body = wsgi_request.call(
+                    app, "GET", f"/media/{asset['library_path']}"
+                )
+                self.assertEqual("200 OK", status)
+                self.assertEqual(managed_path.read_bytes(), body)
+
+                with sqlite3.connect(library_root / DATABASE_NAME) as conn:
+                    conn.execute("UPDATE asset SET library_path = '.' WHERE id = ?", (asset_id,))
+                status, payload = self._request(
+                    app, "POST", "/api/resolve-asset-reveal-target",
+                    {"asset_id": asset_id, "target": "managed"},
+                )
+                self.assertEqual("200 OK", status)
+                self.assertEqual(str(library_root.resolve()), payload["resolved_path"])
+                status, _headers, _body = wsgi_request.call(app, "GET", "/media/.")
+                self.assertEqual("404 Not Found", status)
+
+                with sqlite3.connect(library_root / DATABASE_NAME) as conn:
+                    conn.execute(
+                        "UPDATE asset SET library_path = '../library-other/secret.png' WHERE id = ?",
+                        (asset_id,),
+                    )
+                status, payload = self._request(
+                    app, "POST", "/api/resolve-asset-reveal-target",
+                    {"asset_id": asset_id, "target": "managed"},
+                )
+                self.assertEqual("400 Bad Request", status)
+                self.assertEqual("ValueError", payload["error"])
+                status, _headers, _body = wsgi_request.call(
+                    app, "GET", "/media/../library-other/secret.png"
+                )
+                self.assertEqual("404 Not Found", status)
+            finally:
+                app.shutdown()
+
+    def test_sidecar_library_paths_reject_symlinks_outside_the_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            asset_id = str(self._list_assets(library_root).assets[0]["asset_id"])
+            outside = Path(temp_dir) / "outside.png"
+            outside.write_bytes(b"outside")
+            link = library_root / "outside-link.png"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"File symlinks are unavailable: {error}")
+
+            with sqlite3.connect(library_root / DATABASE_NAME) as conn:
+                conn.execute("UPDATE asset SET library_path = 'outside-link.png' WHERE id = ?", (asset_id,))
+            app = create_app(str(library_root))
+            try:
+                status, payload = self._request(
+                    app, "POST", "/api/resolve-asset-reveal-target",
+                    {"asset_id": asset_id, "target": "managed"},
+                )
+                self.assertEqual("400 Bad Request", status)
+                self.assertEqual("ValueError", payload["error"])
+                status, _headers, _body = wsgi_request.call(
+                    app, "GET", "/media/outside-link.png"
+                )
+                self.assertEqual("404 Not Found", status)
+            finally:
+                app.shutdown()
+
     def test_sidecar_resolve_log_directory_returns_only_the_library_logs_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             library_root = Path(temp_dir) / "library"
