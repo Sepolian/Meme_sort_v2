@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import tempfile
@@ -23,6 +24,27 @@ DEFAULT_QUERY_FIELDS = (
     "scene_context",
     "themes",
 )
+
+
+def build_evaluation_parser(
+    *,
+    media_type: str,
+    dataset_dir: str,
+    labels_path: str,
+) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=f"Evaluate {media_type} retrieval against labeled examples")
+    parser.add_argument("--dataset-dir", default=dataset_dir, help=f"Directory containing {media_type} assets")
+    parser.add_argument("--labels-path", default=labels_path, help="JSON labels keyed by filename")
+    parser.add_argument(
+        "--query-fields",
+        nargs="+",
+        default=list(DEFAULT_QUERY_FIELDS),
+        help="Label fields to concatenate into each text query",
+    )
+    parser.add_argument("--top-k", type=int, default=10, help="Number of results to retain per query")
+    parser.add_argument("--keep-library", action="store_true", help="Keep the temporary library directory for inspection")
+    parser.add_argument("--output", default=None, help="Optional path to write the JSON report")
+    return parser
 
 
 @dataclass
