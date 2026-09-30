@@ -580,10 +580,7 @@ export function AssetsWorkspace({
     copyOperationRef.current = null;
     setCopyPending(false);
   };
-  // Copy once with stable visual-order IDs (ID-only, never paths).
-  // Selection is preserved on success and failure.
-  const runCopyOriginalFiles = async () => {
-    const assetIds = getOrderedSelectedIds();
+  const runOriginalFileCopy = async (assetIds: string[], failureMessage: string) => {
     if (!assetIds.length || copyPending || mutation.isPending) return;
     const operation = beginCopyOperation(assetIds);
     try {
@@ -598,13 +595,23 @@ export function AssetsWorkspace({
       if (isCurrentCopyOperation(operation)) {
         setCopyNotice({
           kind: "error",
-          text: tauriErrorDetail(error, "Copy original files failed. The Library was not modified."),
+          text: tauriErrorDetail(error, failureMessage),
         });
       }
     } finally {
       finishCopyOperation(operation);
     }
   };
+  // Copy once with stable visual-order IDs (ID-only, never paths).
+  // Selection is preserved on success and failure.
+  const runCopyOriginalFiles = () => runOriginalFileCopy(
+    getOrderedSelectedIds(),
+    "Copy original files failed. The Library was not modified.",
+  );
+  const runCardCopyOriginal = (assetId: string) => runOriginalFileCopy(
+    [assetId],
+    "Copy original file failed. The Library was not modified.",
+  );
   // Ticket 01 follow-up: card right-click menu actions. "Copy image" is the
   // primary Clipboard Copy (GIFs paste animated via CF_HDROP, stills as
   // image previews via CF_DIBV5/PNG); "Copy original file" is the raw
@@ -620,22 +627,6 @@ export function AssetsWorkspace({
     } catch (error) {
       if (isCurrentCopyOperation(operation)) {
         setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.") });
-      }
-    } finally {
-      finishCopyOperation(operation);
-    }
-  };
-  const runCardCopyOriginal = async (assetId: string) => {
-    if (copyPending || mutation.isPending) return;
-    const operation = beginCopyOperation([assetId]);
-    try {
-      await client.copyOriginalFiles([assetId]);
-      if (isCurrentCopyOperation(operation)) {
-        setCopyNotice({ kind: "success", text: "Original file reference copied." });
-      }
-    } catch (error) {
-      if (isCurrentCopyOperation(operation)) {
-        setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Copy original file failed. The Library was not modified.") });
       }
     } finally {
       finishCopyOperation(operation);

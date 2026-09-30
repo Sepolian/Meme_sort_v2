@@ -271,6 +271,32 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["selection", SECOND_ASSET, "Copy original files failed. The Library was not modified."],
+    ["card", FIRST_ASSET, "Copy original file failed. The Library was not modified."],
+  ])("preserves selection and the entry-specific fallback when %s copy fails", async (entry, copiedAssetId, fallback) => {
+    const client = makeClient({
+      copyOriginalFiles: vi.fn(async () => { throw {}; }),
+    });
+    const { container } = renderApp("/", client);
+
+    await selectByLabel("Select second.png");
+    if (entry === "selection") {
+      fireEvent.click(screen.getByRole("button", { name: "Copy original files" }));
+    } else {
+      const card = container.querySelector(`article[data-asset-id="${FIRST_ASSET}"]`) as HTMLElement;
+      fireEvent.contextMenu(card, { button: 2, clientX: 120, clientY: 90 });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
+    }
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fallback);
+    expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
+    expect(client.copyOriginalFiles).toHaveBeenCalledWith([copiedAssetId]);
+    expect(screen.getByLabelText("Select second.png")).toBeChecked();
+    expect(screen.getByLabelText("Select first.gif")).not.toBeChecked();
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
   it.each(["success", "failure"] as const)(
     "does not surface a delayed single-card copy %s after its target context changes",
     async (outcome) => {
