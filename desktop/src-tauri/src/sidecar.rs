@@ -319,7 +319,6 @@ impl SidecarSession {
         origin: &str,
         session_cookie: &str,
         sources: Vec<String>,
-        indexing_policy: IndexingPolicy,
     ) -> Result<serde_json::Value, SidecarError> {
         authenticated_post_json(
             origin,
@@ -327,7 +326,7 @@ impl SidecarSession {
             MutationRoute::StartImport,
             &StartImportPayload {
                 sources: validate_import_sources(&sources)?,
-                indexing_policy: indexing_policy.as_api_value(),
+                indexing_policy: "if-ready",
             },
         )
     }
@@ -762,24 +761,6 @@ impl BatchAssetAction {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Clone, Copy)]
-enum IndexingPolicy {
-    Never,
-    Required,
-    IfReady,
-}
-
-impl IndexingPolicy {
-    fn as_api_value(self) -> &'static str {
-        match self {
-            Self::Never => "never",
-            Self::Required => "required",
-            Self::IfReady => "if-ready",
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 enum MutationRoute {
     RemoveSourceRecord,
@@ -1155,12 +1136,7 @@ pub fn start_library_import(
     let entry = selection.take(&selection_id)?;
     let sources = validate_library_paths(entry.origin, &entry.paths)?;
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::start_import_batch_for_connection(
-            origin,
-            session_cookie,
-            sources,
-            IndexingPolicy::IfReady,
-        )
+        SidecarSession::start_import_batch_for_connection(origin, session_cookie, sources)
     })
 }
 
@@ -1944,7 +1920,7 @@ mod tests {
         search_selected_image, validate_asset_id, validate_asset_ids, validate_duplicate_threshold,
         validate_import_sources, validate_library_paths, validate_search_query,
         validate_search_request_id, validate_source_path, ApiRoute, AssetIdPayload,
-        AssetRevealTarget, BatchAssetAction, BatchAssetActionPayload, EmptyPayload, IndexingPolicy,
+        AssetRevealTarget, BatchAssetAction, BatchAssetActionPayload, EmptyPayload,
         LibraryImportSelection, LibrarySelectionEntry, LibrarySelectionOrigin, MutationRoute,
         NativeDragContext, NativeDragInput, NativeDragPhase, RemoveSourceRecordPayload,
         SearchImageSelection, SidecarError, SidecarSession, StartImportPayload,
@@ -2969,7 +2945,7 @@ mod tests {
             MutationRoute::StartImport,
             &StartImportPayload {
                 sources: vec!["C:/Source/Memes".to_owned()],
-                indexing_policy: IndexingPolicy::Required.as_api_value(),
+                indexing_policy: "required",
             },
         )
         .expect("start import should succeed");
@@ -3060,8 +3036,10 @@ mod tests {
             let request = std::str::from_utf8(&request).expect("request must be UTF-8");
             assert!(request.starts_with("POST /api/import/start HTTP/1.1"));
             assert!(request.contains("Cookie: memesort_session=test-token"));
-            assert!(request.contains("\"sources\":[\"C:/Source/Memes\"]"));
-            assert!(request.contains("\"indexing_policy\":\"if-ready\""));
+            assert_eq!(
+                request.split_once("\r\n\r\n").expect("request body").1,
+                r#"{"sources":["C:/Source/Memes"],"indexing_policy":"if-ready"}"#,
+            );
             stream
                 .write_all(
                     b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}",
@@ -3070,14 +3048,10 @@ mod tests {
         });
         let origin = format!("http://127.0.0.1:{port}");
 
-        authenticated_post_json(
+        SidecarSession::start_import_batch_for_connection(
             &origin,
             "memesort_session=test-token",
-            MutationRoute::StartImport,
-            &StartImportPayload {
-                sources: vec!["C:/Source/Memes".to_owned()],
-                indexing_policy: IndexingPolicy::IfReady.as_api_value(),
-            },
+            vec!["C:/Source/Memes".to_owned()],
         )
         .expect("library import should start");
         server.join().expect("test server should finish");
