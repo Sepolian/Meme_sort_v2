@@ -43,7 +43,6 @@ const client: MemeSortClient = {
   deletePendingJobs: unsupported,
   cancelSearch: unsupported,
   copyAssetToClipboard: unsupported,
-  copyOriginalFile: unsupported,
   copyOriginalFiles: unsupported,
   acceptDuplicatePair: unsupported,
   clearAcceptedPairs: unsupported,

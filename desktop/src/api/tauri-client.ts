@@ -31,7 +31,6 @@ export interface MemeSortClient {
   deletePendingJobs(jobIds: string[]): Promise<DeletePendingJobsResult>;
   cancelSearch(requestId: string): Promise<{ request_id: string; cancelled: boolean; was_active: boolean }>;
   copyAssetToClipboard(assetId: string): Promise<void>;
-  copyOriginalFile(assetId: string): Promise<void>;
   copyOriginalFiles(assetIds: string[]): Promise<void>;
   acceptDuplicatePair(assetAId: string, assetBId: string): Promise<AcceptDuplicatePairResult>;
   clearAcceptedPairs(): Promise<ClearAcceptedPairsResult>;
@@ -66,7 +65,6 @@ export function createMemeSortClient(invokeCommand: TauriInvoker): MemeSortClien
     deletePendingJobs: (jobIds) => invokeCommand<DeletePendingJobsResult>("delete_pending_jobs", { jobIds }),
     cancelSearch: (requestId) => invokeCommand("cancel_search", { requestId }),
     copyAssetToClipboard: (assetId) => invokeCommand<void>("copy_asset_to_clipboard", { assetId }),
-    copyOriginalFile: (assetId) => invokeCommand<void>("copy_original_file", { assetId }),
     copyOriginalFiles: (assetIds) => invokeCommand<void>("copy_original_files", { assetIds }),
     acceptDuplicatePair: (assetAId, assetBId) =>
       invokeCommand<AcceptDuplicatePairResult>("accept_duplicate_pair", { assetAId, assetBId }),

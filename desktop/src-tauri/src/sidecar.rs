@@ -658,17 +658,6 @@ impl SidecarSession {
         }
     }
 
-    /// Build a single-file `CF_HDROP` payload for one Asset's Library Copy.
-    fn prepare_copy_original_file_for_connection(
-        origin: &str,
-        session_cookie: &str,
-        asset_id: &str,
-    ) -> Result<ClipboardPayload, SidecarError> {
-        let path = Self::resolve_checked_managed_file(origin, session_cookie, asset_id)?;
-        build_hdrop_payload(std::slice::from_ref(&path))
-            .map(|hdrop| ClipboardPayload::FileDrop { hdrop })
-    }
-
     /// Build one multi-file `CF_HDROP` payload. IDs are validated and
     /// de-duplicated up front and the existing batch limit applies.
     fn prepare_copy_original_files_for_connection(
@@ -694,17 +683,6 @@ impl SidecarSession {
         writer: &impl ClipboardWriter,
     ) -> Result<(), SidecarError> {
         let payload = Self::prepare_copy_asset_for_connection(origin, session_cookie, asset_id)?;
-        write_payload_via(writer, &payload)
-    }
-
-    fn copy_original_file_with_writer(
-        origin: &str,
-        session_cookie: &str,
-        asset_id: &str,
-        writer: &impl ClipboardWriter,
-    ) -> Result<(), SidecarError> {
-        let payload =
-            Self::prepare_copy_original_file_for_connection(origin, session_cookie, asset_id)?;
         write_payload_via(writer, &payload)
     }
 
@@ -1400,21 +1378,6 @@ pub fn copy_asset_to_clipboard(app: AppHandle, asset_id: String) -> Result<(), S
     with_clipboard_write(|| {
         with_sidecar_connection(&app, |origin, session_cookie| {
             SidecarSession::copy_asset_with_writer(
-                origin,
-                session_cookie,
-                &asset_id,
-                &WindowsClipboardWriter,
-            )
-        })
-    })
-}
-
-/// Copy one raw Library Copy file reference as a `CF_HDROP` payload.
-#[tauri::command]
-pub fn copy_original_file(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
-    with_clipboard_write(|| {
-        with_sidecar_connection(&app, |origin, session_cookie| {
-            SidecarSession::copy_original_file_with_writer(
                 origin,
                 session_cookie,
                 &asset_id,
@@ -3470,18 +3433,20 @@ mod tests {
         String::from_utf8(request).expect("request must be UTF-8")
     }
 
-    /// Fake the fixed managed reveal-target route, serving one resolved path
-    /// per connection in order. Every request must target the managed route.
-    fn spawn_managed_copy_server(paths: Vec<PathBuf>) -> (String, thread::JoinHandle<()>) {
+    /// Fake the fixed managed reveal-target route, checking Asset IDs in order.
+    fn spawn_managed_copy_server(
+        copies: Vec<(&'static str, PathBuf)>,
+    ) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener.local_addr().expect("listener address").port();
         let server = thread::spawn(move || {
-            for path in paths {
+            for (asset_id, path) in copies {
                 let (mut stream, _) = listener.accept().expect("resolve request should connect");
                 let request = read_clipboard_request(&mut stream);
                 assert!(request.starts_with("POST /api/resolve-asset-reveal-target HTTP/1.1"));
                 assert!(request.contains("Cookie: memesort_session=test-token"));
                 assert!(request.contains("\"target\":\"managed\""));
+                assert!(request.contains(&format!("\"asset_id\":\"{asset_id}\"")));
                 assert!(!request.contains("source_path"));
                 let body = serde_json::json!({
                     "resolved_path": path.to_str().expect("fixture path must be Unicode"),
@@ -3512,15 +3477,26 @@ mod tests {
                 error.to_string().contains("Invalid MemeSort Asset"),
                 "unexpected error: {error}"
             );
-            let error = SidecarSession::copy_original_file_with_writer(
+            let error = SidecarSession::copy_original_files_with_writer(
                 closed,
                 CLIPBOARD_COOKIE,
-                invalid,
+                &[invalid.to_owned()],
                 &fake,
             )
             .expect_err("invalid Asset ID must be rejected");
             assert!(error.to_string().contains("Invalid MemeSort Asset"));
         }
+
+        let error = SidecarSession::copy_original_files_with_writer(
+            closed,
+            CLIPBOARD_COOKIE,
+            &[CLIPBOARD_ASSET_A.to_owned(), "not-a-uuid".to_owned()],
+            &fake,
+        )
+        .expect_err("all IDs must be validated before resolving any file");
+        assert!(error
+            .to_string()
+            .contains("Invalid MemeSort Asset identifier"));
 
         let error =
             SidecarSession::copy_original_files_with_writer(closed, CLIPBOARD_COOKIE, &[], &fake)
@@ -3553,7 +3529,7 @@ mod tests {
         let root = clipboard_fixture_root("memesort-clipboard-managed-png");
         let still = root.join("still.png");
         write_clipboard_png(&still, 4, 3);
-        let (origin, server) = spawn_managed_copy_server(vec![still.clone()]);
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, still.clone())]);
 
         let payload = SidecarSession::prepare_copy_asset_for_connection(
             &origin,
@@ -3580,7 +3556,7 @@ mod tests {
         let root = clipboard_fixture_root("memesort-clipboard-managed-bmp");
         let still = root.join("still.bmp");
         write_clipboard_bmp(&still, 5, 2);
-        let (origin, server) = spawn_managed_copy_server(vec![still.clone()]);
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, still.clone())]);
         let fake = FakeClipboardWriter::new();
 
         SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
@@ -3610,7 +3586,10 @@ mod tests {
         let sticker = root.join("sticker.webp");
         write_clipboard_photo(&photo, 6, 4);
         write_clipboard_photo(&sticker, 7, 5);
-        let (origin, server) = spawn_managed_copy_server(vec![photo.clone(), sticker.clone()]);
+        let (origin, server) = spawn_managed_copy_server(vec![
+            (CLIPBOARD_ASSET_A, photo.clone()),
+            (CLIPBOARD_ASSET_B, sticker.clone()),
+        ]);
         let fake = FakeClipboardWriter::new();
 
         SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
@@ -3653,7 +3632,8 @@ mod tests {
         let root = clipboard_fixture_root("memesort-clipboard-managed-gif");
         let animated = root.join("animated.gif");
         write_clipboard_gif(&animated);
-        let (origin, server) = spawn_managed_copy_server(vec![animated.clone()]);
+        let (origin, server) =
+            spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, animated.clone())]);
         let fake = FakeClipboardWriter::new();
 
         SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
@@ -3685,12 +3665,13 @@ mod tests {
         write_clipboard_png(&first, 2, 2);
         write_clipboard_png(&second, 2, 2);
 
-        let (single_origin, single_server) = spawn_managed_copy_server(vec![first.clone()]);
+        let (single_origin, single_server) =
+            spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, first.clone())]);
         let fake = FakeClipboardWriter::new();
-        SidecarSession::copy_original_file_with_writer(
+        SidecarSession::copy_original_files_with_writer(
             &single_origin,
             CLIPBOARD_COOKIE,
-            CLIPBOARD_ASSET_A,
+            &[CLIPBOARD_ASSET_A.to_owned()],
             &fake,
         )
         .expect("single file copy should succeed");
@@ -3711,17 +3692,19 @@ mod tests {
             }
         }
 
-        // Duplicated IDs resolve once: three inputs, two connections, two paths.
-        let (multi_origin, multi_server) =
-            spawn_managed_copy_server(vec![first.clone(), second.clone()]);
+        // IDs retain first-seen order and case-insensitive duplicates resolve once.
+        let (multi_origin, multi_server) = spawn_managed_copy_server(vec![
+            (CLIPBOARD_ASSET_B, second.clone()),
+            (CLIPBOARD_ASSET_A, first.clone()),
+        ]);
         let fake = FakeClipboardWriter::new();
         SidecarSession::copy_original_files_with_writer(
             &multi_origin,
             CLIPBOARD_COOKIE,
             &[
-                CLIPBOARD_ASSET_A.to_owned(),
-                CLIPBOARD_ASSET_A.to_owned(),
                 CLIPBOARD_ASSET_B.to_owned(),
+                CLIPBOARD_ASSET_A.to_owned(),
+                CLIPBOARD_ASSET_B.to_uppercase(),
             ],
             &fake,
         )
@@ -3733,7 +3716,7 @@ mod tests {
             FakeClipboardWrite::FileDrop { hdrop } => {
                 assert_eq!(
                     parse_hdrop_payload(hdrop).expect("round-trip"),
-                    vec![first, second]
+                    vec![second, first]
                 );
             }
             FakeClipboardWrite::StaticImage { .. } => {
@@ -3751,7 +3734,8 @@ mod tests {
         // Missing Library Copy.
         let root = clipboard_fixture_root("memesort-clipboard-preflight");
         let missing = root.join("missing.png");
-        let (origin, server) = spawn_managed_copy_server(vec![missing]);
+        let (origin, server) =
+            spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, missing.clone())]);
         assert!(SidecarSession::copy_asset_with_writer(
             &origin,
             CLIPBOARD_COOKIE,
@@ -3761,14 +3745,24 @@ mod tests {
         .is_err());
         server.join().expect("test server should finish");
 
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, missing)]);
+        assert!(SidecarSession::copy_original_files_with_writer(
+            &origin,
+            CLIPBOARD_COOKIE,
+            &[CLIPBOARD_ASSET_A.to_owned()],
+            &fake,
+        )
+        .is_err());
+        server.join().expect("test server should finish");
+
         // Directory instead of a file.
         let folder = root.join("folder");
         fs::create_dir_all(&folder).expect("folder fixture should be created");
-        let (origin, server) = spawn_managed_copy_server(vec![folder]);
-        assert!(SidecarSession::copy_original_file_with_writer(
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, folder)]);
+        assert!(SidecarSession::copy_original_files_with_writer(
             &origin,
             CLIPBOARD_COOKIE,
-            CLIPBOARD_ASSET_A,
+            &[CLIPBOARD_ASSET_A.to_owned()],
             &fake,
         )
         .is_err());
@@ -3777,7 +3771,7 @@ mod tests {
         // Corrupt still bytes.
         let corrupt = root.join("corrupt.png");
         fs::write(&corrupt, b"not an image").expect("corrupt fixture should be written");
-        let (origin, server) = spawn_managed_copy_server(vec![corrupt]);
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, corrupt)]);
         assert!(SidecarSession::copy_asset_with_writer(
             &origin,
             CLIPBOARD_COOKIE,
@@ -3790,7 +3784,7 @@ mod tests {
         // Unsupported media type.
         let notes = root.join("notes.tiff");
         fs::write(&notes, b"unsupported").expect("unsupported fixture should be written");
-        let (origin, server) = spawn_managed_copy_server(vec![notes]);
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, notes)]);
         assert!(SidecarSession::copy_asset_with_writer(
             &origin,
             CLIPBOARD_COOKIE,
@@ -3812,20 +3806,20 @@ mod tests {
                 )
                 .expect("error response should write");
         });
-        assert!(SidecarSession::copy_original_file_with_writer(
+        assert!(SidecarSession::copy_original_files_with_writer(
             &format!("http://127.0.0.1:{port}"),
             CLIPBOARD_COOKIE,
-            CLIPBOARD_ASSET_A,
+            &[CLIPBOARD_ASSET_A.to_owned()],
             &fake,
         )
         .is_err());
         unknown.join().expect("test server should finish");
 
         // The WebView never learns a resolved path, even on failure.
-        let error = SidecarSession::copy_original_file_with_writer(
+        let error = SidecarSession::copy_original_files_with_writer(
             &format!("http://127.0.0.1:{port}"),
             CLIPBOARD_COOKIE,
-            CLIPBOARD_ASSET_A,
+            &[CLIPBOARD_ASSET_A.to_owned()],
             &fake,
         )
         .expect_err("unknown Asset must fail");
@@ -3836,6 +3830,36 @@ mod tests {
             0,
             "every preflight failure must precede clipboard mutation"
         );
+        fs::remove_dir_all(&root).expect("fixture should be removed");
+    }
+
+    #[test]
+    fn original_file_batches_preflight_every_file_before_writing() {
+        let root = clipboard_fixture_root("memesort-clipboard-batch-preflight");
+        let first = root.join("first.png");
+        write_clipboard_png(&first, 2, 2);
+        let fake = FakeClipboardWriter::new();
+
+        for invalid_file in [root.join("missing.png"), root.clone()] {
+            let (origin, server) = spawn_managed_copy_server(vec![
+                (CLIPBOARD_ASSET_A, first.clone()),
+                (CLIPBOARD_ASSET_B, invalid_file),
+            ]);
+            assert!(SidecarSession::copy_original_files_with_writer(
+                &origin,
+                CLIPBOARD_COOKIE,
+                &[CLIPBOARD_ASSET_A.to_owned(), CLIPBOARD_ASSET_B.to_owned()],
+                &fake,
+            )
+            .is_err());
+            server.join().expect("test server should finish");
+            assert_eq!(
+                fake.write_count(),
+                0,
+                "a later failure must not publish earlier files"
+            );
+        }
+
         fs::remove_dir_all(&root).expect("fixture should be removed");
     }
 }

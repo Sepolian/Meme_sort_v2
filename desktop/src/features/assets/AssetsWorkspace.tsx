@@ -580,19 +580,14 @@ export function AssetsWorkspace({
     copyOperationRef.current = null;
     setCopyPending(false);
   };
-  // Ticket 17: one selection uses the single-file client method; multiple
-  // selections call the multi-file method once with stable visual-order IDs
-  // (ID-only, never paths). Selection is preserved on success and failure.
+  // Copy once with stable visual-order IDs (ID-only, never paths).
+  // Selection is preserved on success and failure.
   const runCopyOriginalFiles = async () => {
     const assetIds = getOrderedSelectedIds();
     if (!assetIds.length || copyPending || mutation.isPending) return;
     const operation = beginCopyOperation(assetIds);
     try {
-      if (assetIds.length === 1) {
-        await client.copyOriginalFile(assetIds[0]);
-      } else {
-        await client.copyOriginalFiles(assetIds);
-      }
+      await client.copyOriginalFiles(assetIds);
       if (isCurrentCopyOperation(operation)) {
         setCopyNotice({
           kind: "success",
@@ -634,7 +629,7 @@ export function AssetsWorkspace({
     if (copyPending || mutation.isPending) return;
     const operation = beginCopyOperation([assetId]);
     try {
-      await client.copyOriginalFile(assetId);
+      await client.copyOriginalFiles([assetId]);
       if (isCurrentCopyOperation(operation)) {
         setCopyNotice({ kind: "success", text: "Original file reference copied." });
       }

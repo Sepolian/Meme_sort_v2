@@ -57,7 +57,7 @@ pub(crate) trait ClipboardWriter {
     fn write_file_drop(&self, hdrop: &[u8]) -> Result<(), SidecarError>;
 }
 
-// All three native copy commands share this gate. It covers preflight and
+// Both native copy commands share this gate. It covers preflight and
 // the OS write together, so requests publish in the order they enter this
 // native boundary. The gate lives here, beside the writer abstraction, rather
 // than in a UI owner: inspector, wall, and batch callers all share one queue.

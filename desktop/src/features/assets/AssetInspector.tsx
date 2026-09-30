@@ -157,7 +157,7 @@ export function AssetInspector({
     setCopyOriginalState({ kind: "pending" });
     try {
       // Raw Library Copy reference command, ID-only.
-      await client.copyOriginalFile(assetId);
+      await client.copyOriginalFiles([assetId]);
       setCopyOriginalState({
         kind: "success",
         message: "Original file reference copied.",

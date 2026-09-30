@@ -65,7 +65,6 @@ pub fn run() {
             sidecar::reveal_asset,
             sidecar::open_log_directory,
             sidecar::copy_asset_to_clipboard,
-            sidecar::copy_original_file,
             sidecar::copy_original_files,
             sidecar::cancel_search
         ])

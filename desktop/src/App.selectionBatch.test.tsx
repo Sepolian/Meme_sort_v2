@@ -145,7 +145,6 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     ),
     runRuntimeHealthCheck: async () => healthyCheck(),
     copyAssetToClipboard: vi.fn(async () => undefined),
-    copyOriginalFile: vi.fn(async () => undefined),
     copyOriginalFiles: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -198,7 +197,7 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     vi.clearAllMocks();
   });
 
-  it("copies one selection with the single-file method (ID-only) and preserves selection", async () => {
+  it("copies one selection with the batch method (ID-only) and preserves selection", async () => {
     const client = makeClient();
     renderApp("/", client);
 
@@ -206,13 +205,10 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy original files" }));
 
     expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
-    expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
-    expect(client.copyOriginalFile).toHaveBeenCalledWith(FIRST_ASSET);
-    expect(client.copyOriginalFiles).not.toHaveBeenCalled();
-    const [passed] = (client.copyOriginalFile as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(typeof passed).toBe("string");
-    expect(passed).not.toContain("/");
-    expect(passed).not.toContain("C:");
+    expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
+    expect(client.copyOriginalFiles).toHaveBeenCalledWith([FIRST_ASSET]);
+    const [passedIds] = (client.copyOriginalFiles as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(passedIds).toEqual([FIRST_ASSET]);
 
     // Selection preserved after successful Copy.
     expect((screen.getByLabelText("Select first.gif") as HTMLInputElement).checked).toBe(true);
@@ -236,7 +232,6 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(await screen.findByText("Copied 2 original file references.")).toBeInTheDocument();
     expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
     expect(client.copyOriginalFiles).toHaveBeenCalledWith([SECOND_ASSET, THIRD_ASSET]);
-    expect(client.copyOriginalFile).not.toHaveBeenCalled();
     const [passedIds] = (client.copyOriginalFiles as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(Array.isArray(passedIds)).toBe(true);
     for (const id of passedIds as string[]) {
@@ -355,7 +350,6 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(screen.queryByRole("toolbar", { name: "Selection toolbar" })).not.toBeInTheDocument();
     expect((screen.getByLabelText("Select first.gif") as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText("Select second.png") as HTMLInputElement).checked).toBe(false);
-    expect(client.copyOriginalFile).not.toHaveBeenCalled();
     expect(client.copyOriginalFiles).not.toHaveBeenCalled();
     expect(client.batchAssetAction).not.toHaveBeenCalled();
   });

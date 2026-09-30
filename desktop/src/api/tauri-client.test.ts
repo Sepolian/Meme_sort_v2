@@ -185,14 +185,14 @@ describe("createMemeSortClient", () => {
     expect(invokeCommand).toHaveBeenCalledWith("copy_asset_to_clipboard", { assetId });
   });
 
-  it("copies one original Library Copy file reference through the fixed native command", async () => {
+  it("copies one original Library Copy file reference through the batch command", async () => {
     const invokeCommand = vi.fn().mockResolvedValue(undefined);
     const client = createMemeSortClient(invokeCommand);
     const assetId = "123e4567-e89b-12d3-a456-426614174000";
 
-    await client.copyOriginalFile(assetId);
+    await client.copyOriginalFiles([assetId]);
 
-    expect(invokeCommand).toHaveBeenCalledWith("copy_original_file", { assetId });
+    expect(invokeCommand).toHaveBeenCalledWith("copy_original_files", { assetIds: [assetId] });
   });
 
   it("copies many original Library Copy file references as one multi-file payload", async () => {

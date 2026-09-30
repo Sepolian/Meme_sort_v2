@@ -137,7 +137,7 @@ function makeClient(overrides: Record<string, unknown> = {}) {
       error: null,
     }),
     copyAssetToClipboard: vi.fn(async () => undefined),
-    copyOriginalFile: vi.fn(async () => undefined),
+    copyOriginalFiles: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -406,11 +406,10 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy original file" }));
 
     expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
-    expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
-    expect(client.copyOriginalFile).toHaveBeenCalledWith(FIRST_ASSET);
-    const [passed] = (client.copyOriginalFile as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(passed).not.toContain("/");
-    expect(passed).not.toContain("C:");
+    expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
+    expect(client.copyOriginalFiles).toHaveBeenCalledWith([FIRST_ASSET]);
+    const [passedIds] = (client.copyOriginalFiles as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(passedIds).toEqual([FIRST_ASSET]);
     expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
   });
 
@@ -973,7 +972,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     expect(await screen.findByText("Copied to clipboard. Paste into QQ or WeChat.")).toBeInTheDocument();
   });
 
-  it("wall card right-click routes Copy original file through copyOriginalFile with the Asset ID", async () => {
+  it("wall card right-click copies one original file through the batch command with only the Asset ID", async () => {
     const client = makeClient();
     const { container } = renderApp("/", client);
     await screen.findByRole("button", { name: /first\.gif/i });
@@ -984,8 +983,8 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     fireEvent.contextMenu(card, { button: 2, clientX: 120, clientY: 90 });
 
     fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
-    expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
-    expect(client.copyOriginalFile).toHaveBeenCalledWith(FIRST_ASSET);
+    expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
+    expect(client.copyOriginalFiles).toHaveBeenCalledWith([FIRST_ASSET]);
     expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
   });
 
@@ -1011,7 +1010,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
       const imageGate = deferred<void>();
       const client = makeClient({
         copyAssetToClipboard: vi.fn(async () => imageGate.promise),
-        copyOriginalFile: vi.fn(async () => undefined),
+        copyOriginalFiles: vi.fn(async () => undefined),
       });
       renderApp(`/?asset=${FIRST_ASSET}`, client);
       const inspector = await screen.findByRole("complementary", { name: "Inspector" });
@@ -1022,7 +1021,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
       const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
       fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
       expect(screen.queryByRole("menu", { name: "Actions for first.gif" })).not.toBeInTheDocument();
-      expect(client.copyOriginalFile).not.toHaveBeenCalled();
+      expect(client.copyOriginalFiles).not.toHaveBeenCalled();
 
       await act(async () => {
         if (outcome === "success") imageGate.resolve();
@@ -1036,7 +1035,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
         expect(await screen.findByRole("alert", { name: "Clipboard Copy failed" })).toHaveTextContent("Primary copy failed.");
       }
       expect(client.copyAssetToClipboard).toHaveBeenCalledTimes(1);
-      expect(client.copyOriginalFile).not.toHaveBeenCalled();
+      expect(client.copyOriginalFiles).not.toHaveBeenCalled();
     },
   );
 
@@ -1046,14 +1045,15 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
       const originalGate = deferred<void>();
       const client = makeClient({
         copyAssetToClipboard: vi.fn(async () => undefined),
-        copyOriginalFile: vi.fn(async () => originalGate.promise),
+        copyOriginalFiles: vi.fn(async () => originalGate.promise),
       });
       renderApp(`/?asset=${FIRST_ASSET}`, client);
       const inspector = await screen.findByRole("complementary", { name: "Inspector" });
       const preview = within(inspector).getByRole("img", { name: "first.gif preview" });
       fireEvent.contextMenu(preview, { button: 2, clientX: 200, clientY: 150 });
       fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
-      expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
+      expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
+      expect(client.copyOriginalFiles).toHaveBeenCalledWith([FIRST_ASSET]);
 
       await openInspectorSections();
       const primaryCopy = within(inspector).getByRole("button", { name: "Copy image" });
@@ -1081,7 +1081,7 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
       } else {
         expect(await screen.findByText("Original copy failed.")).toBeInTheDocument();
       }
-      expect(client.copyOriginalFile).toHaveBeenCalledTimes(1);
+      expect(client.copyOriginalFiles).toHaveBeenCalledTimes(1);
       expect(client.copyAssetToClipboard).not.toHaveBeenCalled();
     },
   );
