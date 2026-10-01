@@ -156,63 +156,53 @@ export function filterLibraryAssets(
 }
 
 function compareNewest(a: AssetSummary, b: AssetSummary): number {
-  const timeDiff = parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at);
-  if (timeDiff !== 0) return timeDiff;
-  const nameDiff = compareName(getAssetDisplayName(a), getAssetDisplayName(b));
-  if (nameDiff !== 0) return nameDiff;
-  const typeDiff = compareLocale(a.media_type ?? "", b.media_type ?? "");
-  if (typeDiff !== 0) return typeDiff;
-  const statusDiff = compareLocale(a.status ?? "", b.status ?? "");
-  if (statusDiff !== 0) return statusDiff;
-  return compareAssetId(a.asset_id, b.asset_id);
+  return (
+    parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at) ||
+    compareName(getAssetDisplayName(a), getAssetDisplayName(b)) ||
+    compareLocale(a.media_type ?? "", b.media_type ?? "") ||
+    compareLocale(a.status ?? "", b.status ?? "") ||
+    compareAssetId(a.asset_id, b.asset_id)
+  );
 }
 
 function compareOldest(a: AssetSummary, b: AssetSummary): number {
-  const timeDiff = parseImportedAt(a.imported_at) - parseImportedAt(b.imported_at);
-  if (timeDiff !== 0) return timeDiff;
-  const nameDiff = compareName(getAssetDisplayName(a), getAssetDisplayName(b));
-  if (nameDiff !== 0) return nameDiff;
-  const typeDiff = compareLocale(a.media_type ?? "", b.media_type ?? "");
-  if (typeDiff !== 0) return typeDiff;
-  const statusDiff = compareLocale(a.status ?? "", b.status ?? "");
-  if (statusDiff !== 0) return statusDiff;
-  return compareAssetId(a.asset_id, b.asset_id);
+  return (
+    parseImportedAt(a.imported_at) - parseImportedAt(b.imported_at) ||
+    compareName(getAssetDisplayName(a), getAssetDisplayName(b)) ||
+    compareLocale(a.media_type ?? "", b.media_type ?? "") ||
+    compareLocale(a.status ?? "", b.status ?? "") ||
+    compareAssetId(a.asset_id, b.asset_id)
+  );
 }
 
 function compareByName(a: AssetSummary, b: AssetSummary): number {
-  const nameDiff = compareName(getAssetDisplayName(a), getAssetDisplayName(b));
-  if (nameDiff !== 0) return nameDiff;
-  const timeDiff = parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at);
-  if (timeDiff !== 0) return timeDiff;
-  const typeDiff = compareLocale(a.media_type ?? "", b.media_type ?? "");
-  if (typeDiff !== 0) return typeDiff;
-  const statusDiff = compareLocale(a.status ?? "", b.status ?? "");
-  if (statusDiff !== 0) return statusDiff;
-  return compareAssetId(a.asset_id, b.asset_id);
+  return (
+    compareName(getAssetDisplayName(a), getAssetDisplayName(b)) ||
+    parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at) ||
+    compareLocale(a.media_type ?? "", b.media_type ?? "") ||
+    compareLocale(a.status ?? "", b.status ?? "") ||
+    compareAssetId(a.asset_id, b.asset_id)
+  );
 }
 
 function compareByType(a: AssetSummary, b: AssetSummary): number {
-  const typeDiff = compareLocale(a.media_type ?? "", b.media_type ?? "");
-  if (typeDiff !== 0) return typeDiff;
-  const nameDiff = compareName(getAssetDisplayName(a), getAssetDisplayName(b));
-  if (nameDiff !== 0) return nameDiff;
-  const timeDiff = parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at);
-  if (timeDiff !== 0) return timeDiff;
-  const statusDiff = compareLocale(a.status ?? "", b.status ?? "");
-  if (statusDiff !== 0) return statusDiff;
-  return compareAssetId(a.asset_id, b.asset_id);
+  return (
+    compareLocale(a.media_type ?? "", b.media_type ?? "") ||
+    compareName(getAssetDisplayName(a), getAssetDisplayName(b)) ||
+    parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at) ||
+    compareLocale(a.status ?? "", b.status ?? "") ||
+    compareAssetId(a.asset_id, b.asset_id)
+  );
 }
 
 function compareByStatus(a: AssetSummary, b: AssetSummary): number {
-  const statusDiff = compareLocale(a.status ?? "", b.status ?? "");
-  if (statusDiff !== 0) return statusDiff;
-  const nameDiff = compareName(getAssetDisplayName(a), getAssetDisplayName(b));
-  if (nameDiff !== 0) return nameDiff;
-  const timeDiff = parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at);
-  if (timeDiff !== 0) return timeDiff;
-  const typeDiff = compareLocale(a.media_type ?? "", b.media_type ?? "");
-  if (typeDiff !== 0) return typeDiff;
-  return compareAssetId(a.asset_id, b.asset_id);
+  return (
+    compareLocale(a.status ?? "", b.status ?? "") ||
+    compareName(getAssetDisplayName(a), getAssetDisplayName(b)) ||
+    parseImportedAt(b.imported_at) - parseImportedAt(a.imported_at) ||
+    compareLocale(a.media_type ?? "", b.media_type ?? "") ||
+    compareAssetId(a.asset_id, b.asset_id)
+  );
 }
 
 function comparatorForSort(sort: LibrarySort): (a: AssetSummary, b: AssetSummary) => number {

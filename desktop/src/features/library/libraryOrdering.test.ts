@@ -40,11 +40,12 @@ it("recognizes GIF media types regardless of case", () => {
   expect(isGifAsset(asset("still", { media_type: "image/png" }))).toBe(false);
 });
 
-it("places invalid dates last for newest and first for oldest", () => {
+it("places invalid and missing dates last for newest and first for oldest", () => {
   const valid = asset("valid", { imported_at: "2026-08-01T00:00:00Z" });
   const broken = asset("broken", { imported_at: "not-a-date" });
-  expect(ids(sortLibraryAssets([broken, valid], "newest"))).toEqual(["valid", "broken"]);
-  expect(ids(sortLibraryAssets([valid, broken], "oldest"))).toEqual(["broken", "valid"]);
+  const missing = asset("missing", { imported_at: "" });
+  expect(ids(sortLibraryAssets([missing, broken, valid], "newest"))).toEqual(["valid", "broken", "missing"]);
+  expect(ids(sortLibraryAssets([valid, missing, broken], "oldest"))).toEqual(["broken", "missing", "valid"]);
 });
 
 it("sorts names with numeric awareness", () => {
@@ -76,4 +77,37 @@ it("breaks actual full ties by Asset ID without mutating input", () => {
     expect(ids(sortLibraryAssets(input, sort))).toEqual(["asset-001", "asset-002"]);
   }
   expect(ids(input)).toEqual(["asset-002", "asset-001"]);
+});
+
+it("keeps name, type, and status tie breakers ascending for newest and oldest", () => {
+  const sameName = { source_records: [{ source_path: "C:/Source/same.png" }] };
+  const input = [
+    asset("a-indexed", sameName),
+    asset("z-gif", { ...sameName, media_type: "image/gif", status: "pending" }),
+    asset("z-name", { source_records: [{ source_path: "C:/Source/a.png" }] }),
+    asset("z-failed", { ...sameName, status: "failed" }),
+  ];
+  for (const sort of ["newest", "oldest"] as const) {
+    expect(ids(sortLibraryAssets(input, sort))).toEqual(["z-name", "z-gif", "z-failed", "a-indexed"]);
+  }
+});
+
+it("breaks name, type, and status ties by name then newest timestamp", () => {
+  const sameName = { source_records: [{ source_path: "C:/Source/same.png" }] };
+  const input = [
+    asset("a-older", { ...sameName, imported_at: "2026-01-01T00:00:00Z" }),
+    asset("z-newer", sameName),
+    asset("name-first", { imported_at: "2025-01-01T00:00:00Z", source_records: [{ source_path: "C:/Source/a.png" }] }),
+  ];
+  for (const sort of ["name", "type", "status"] as const) {
+    expect(ids(sortLibraryAssets(input, sort))).toEqual(["name-first", "z-newer", "a-older"]);
+  }
+});
+
+it("uses deterministic name comparison when the locale collator ties on case", () => {
+  const lower = asset("a", { source_records: [{ source_path: "C:/Source/file2.png" }] });
+  const upper = asset("z", { source_records: [{ source_path: "C:/Source/File2.png" }] });
+  for (const sort of ["newest", "oldest", "name", "type", "status"] as const) {
+    expect(ids(sortLibraryAssets([lower, upper], sort))).toEqual(["z", "a"]);
+  }
 });
