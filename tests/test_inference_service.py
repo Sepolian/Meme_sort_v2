@@ -7,12 +7,26 @@ import uuid
 
 from memesort_worker.inference_service import (
     InferenceCancelledError,
+    InferenceRequestContext,
     InferenceScheduler,
+    _WorkItem,
     search_inference_request,
 )
 
 
 class InferenceServiceTests(unittest.TestCase):
+    def test_removing_pending_work_preserves_equal_field_neighbour(self) -> None:
+        scheduler = InferenceScheduler()
+        context = InferenceRequestContext()
+        first = _WorkItem(context=context)
+        second = _WorkItem(context=context)
+        scheduler._background_queue.extend((first, second))
+
+        scheduler._remove_pending(second)
+
+        self.assertEqual(1, len(scheduler._background_queue))
+        self.assertIs(first, scheduler._background_queue[0])
+
     def test_search_runs_before_queued_background_without_preemption(self) -> None:
         scheduler = InferenceScheduler()
         running = threading.Event()
@@ -121,6 +135,46 @@ class InferenceServiceTests(unittest.TestCase):
         thread.join(2)
 
         self.assertEqual(["finished", "cancelled"], outcome)
+
+    def test_queued_work_runs_after_operation_raises(self) -> None:
+        scheduler = InferenceScheduler()
+        running = threading.Event()
+        release = threading.Event()
+        failure = ValueError("inference failed")
+        errors: list[BaseException] = []
+        expected = object()
+        results: list[object] = []
+
+        def operation() -> None:
+            running.set()
+            self.assertTrue(release.wait(2))
+            raise failure
+
+        def submit_failure() -> None:
+            try:
+                scheduler.submit(operation)
+            except BaseException as exc:
+                errors.append(exc)
+
+        first = threading.Thread(target=submit_failure, daemon=True)
+        second = threading.Thread(
+            target=lambda: results.append(scheduler.submit(lambda: expected)),
+            daemon=True,
+        )
+        first.start()
+        self.assertTrue(running.wait(2))
+        second.start()
+        try:
+            self._wait_for_queue(scheduler, "_background_queue", 1)
+        finally:
+            release.set()
+            first.join(2)
+            second.join(2)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual([failure], errors)
+        self.assertEqual([expected], results)
 
     def _wait_for_queue(
         self,

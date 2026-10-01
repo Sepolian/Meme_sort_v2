@@ -5,8 +5,8 @@ import contextvars
 import threading
 import uuid
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Callable, Generic, Iterator, Literal, TypeVar
+from dataclasses import dataclass
+from typing import Callable, Iterator, Literal, TypeVar
 
 
 T = TypeVar("T")
@@ -23,13 +23,10 @@ class InferenceRequestContext:
     request_id: str | None = None
 
 
-@dataclass
-class _WorkItem(Generic[T]):
-    operation: Callable[[], T]
+@dataclass(eq=False)
+class _WorkItem:
     context: InferenceRequestContext
     cancelled: bool = False
-    started: bool = False
-    finished: threading.Event = field(default_factory=threading.Event)
 
 
 _CURRENT_CONTEXT: contextvars.ContextVar[InferenceRequestContext] = (
@@ -45,14 +42,14 @@ class InferenceScheduler:
 
     def __init__(self) -> None:
         self._condition = threading.Condition()
-        self._search_queue: deque[_WorkItem[object]] = deque()
-        self._background_queue: deque[_WorkItem[object]] = deque()
-        self._running: _WorkItem[object] | None = None
+        self._search_queue: deque[_WorkItem] = deque()
+        self._background_queue: deque[_WorkItem] = deque()
+        self._running: _WorkItem | None = None
         self._cancelled_request_ids: set[str] = set()
 
     def submit(self, operation: Callable[[], T]) -> T:
         context = _CURRENT_CONTEXT.get()
-        item: _WorkItem[T] = _WorkItem(operation=operation, context=context)
+        item = _WorkItem(context=context)
         with self._condition:
             if context.request_id in self._cancelled_request_ids:
                 raise InferenceCancelledError(
@@ -63,7 +60,7 @@ class InferenceScheduler:
                 if context.priority == "search"
                 else self._background_queue
             )
-            queue.append(item)  # type: ignore[arg-type]
+            queue.append(item)
             self._condition.notify_all()
             while True:
                 if item.cancelled:
@@ -77,8 +74,7 @@ class InferenceScheduler:
                     )
                 if self._running is None and self._next_item() is item:
                     self._remove_pending(item)
-                    item.started = True
-                    self._running = item  # type: ignore[assignment]
+                    self._running = item
                     break
                 self._condition.wait()
 
@@ -87,7 +83,6 @@ class InferenceScheduler:
         finally:
             with self._condition:
                 self._running = None
-                item.finished.set()
                 self._condition.notify_all()
 
         with self._condition:
@@ -116,14 +111,14 @@ class InferenceScheduler:
         with self._condition:
             self._cancelled_request_ids.discard(request_id)
 
-    def _next_item(self) -> _WorkItem[object] | None:
+    def _next_item(self) -> _WorkItem | None:
         if self._search_queue:
             return self._search_queue[0]
         if self._background_queue:
             return self._background_queue[0]
         return None
 
-    def _remove_pending(self, item: _WorkItem[object]) -> None:
+    def _remove_pending(self, item: _WorkItem) -> None:
         for queue in (self._search_queue, self._background_queue):
             try:
                 queue.remove(item)
