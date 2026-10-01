@@ -5,51 +5,23 @@ import { MemoryRouter } from "react-router-dom";
 import { Component, type ReactNode } from "react";
 import { App } from "./App";
 import type { MemeSortClient } from "./api/tauri-client";
+import { createUnconfiguredClient } from "./api/test-client";
 import { scheduleFocusRestoration } from "./components/useEscapeSurface";
 import { importSnapshot } from "./features/import/import-test-fixtures";
 
-const client: MemeSortClient = {
-  getAppState: async () => ({
-    library_root: "C:/Library",
-    runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
-    library_status: { total_assets: 1, job_counts: { pending: 0 } },
-    worker_loop: { paused: false, running: true },
-    import_task: importSnapshot(),
-    pending_jobs: [],
-  }),
-  getImportStatus: async () => importSnapshot(),
-  getAssets: unsupported,
-  getAssetDetail: unsupported,
-  revealAsset: unsupported,
-  openLogDirectory: unsupported,
-  deleteAsset: unsupported,
-  removeSourceRecord: unsupported,
-  batchAssetAction: unsupported,
-  chooseSearchImage: unsupported,
-  chooseLibraryFiles: unsupported,
-  chooseLibraryFolder: unsupported,
-  startLibraryImport: unsupported,
-  pauseImport: unsupported,
-  resumeImport: unsupported,
-  searchText: unsupported,
-  searchImage: unsupported,
-  findSimilar: unsupported,
-  getDuplicates: unsupported,
-  pauseWorkerLoop: unsupported,
-  resumeWorkerLoop: unsupported,
-  triggerWorkerLoop: unsupported,
-  runRuntimeHealthCheck: unsupported,
-  retryFailedJobs: unsupported,
-  deletePendingJobs: unsupported,
-  cancelSearch: unsupported,
-  copyAssetToClipboard: unsupported,
-  copyOriginalFiles: unsupported,
-  acceptDuplicatePair: unsupported,
-  clearAcceptedPairs: unsupported,
-};
-
-async function unsupported(): Promise<never> {
-  throw new Error("This test only renders the application shell.");
+function createClient(): MemeSortClient {
+  return {
+    ...createUnconfiguredClient(),
+    getAppState: async () => ({
+      library_root: "C:/Library",
+      runtime: { backend_name: "llama.cpp", device: "Vulkan0" },
+      library_status: { total_assets: 1, job_counts: { pending: 0 } },
+      worker_loop: { paused: false, running: true },
+      import_task: importSnapshot(),
+      pending_jobs: [],
+    }),
+    getImportStatus: async () => importSnapshot(),
+  };
 }
 
 class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -68,7 +40,7 @@ function AbandonRender(): never {
   throw new Error("abandon this render");
 }
 
-function renderApp(route = "/", testClient: MemeSortClient = client) {
+function renderApp(route = "/", testClient: MemeSortClient = createClient()) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -103,7 +75,7 @@ describe("application shell navigation", () => {
 
   it("passes only native file and folder selection IDs to Import Batch", async () => {
     const filesClient = {
-      ...client,
+      ...createClient(),
       chooseLibraryFiles: vi.fn(async () => ({ selection_id: "selection-files", count: 2 })),
       startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "batch-files", status: "scanning", running: true, started_at: 1 })),
     };
@@ -116,7 +88,7 @@ describe("application shell navigation", () => {
     files.unmount();
 
     const folderClient = {
-      ...client,
+      ...createClient(),
       chooseLibraryFolder: vi.fn(async () => ({ selection_id: "selection-folder", count: 1 })),
       startLibraryImport: vi.fn(async () => importSnapshot({ batch_id: "batch-folder", status: "scanning", running: true, started_at: 1 })),
     };
@@ -130,7 +102,7 @@ describe("application shell navigation", () => {
 
   it("leaves Import Batch untouched when the native picker is cancelled", async () => {
     const cancelled = {
-      ...client,
+      ...createClient(),
       chooseLibraryFiles: vi.fn(async () => null),
       startLibraryImport: vi.fn(async () => { throw new Error("must not start after cancellation"); }),
     };
@@ -171,7 +143,7 @@ describe("application shell navigation", () => {
       <RenderBoundary>
         <QueryClientProvider client={queryClient}>
           <MemoryRouter initialEntries={["/"]}>
-            <App client={client} />
+            <App client={createClient()} />
             <AbandonRender />
           </MemoryRouter>
         </QueryClientProvider>

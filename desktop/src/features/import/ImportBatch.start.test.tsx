@@ -5,6 +5,7 @@ import { ImportBatchProvider } from "./ImportBatchProvider";
 import { LibraryImportMenu } from "../library/LibraryImportMenu";
 import { AssetsWorkspace } from "../assets/AssetsWorkspace";
 import type { MemeSortClient } from "../../api/tauri-client";
+import { createUnconfiguredClient } from "../../api/test-client";
 import type {
   NativeDragListener,
   NativeDragSubscribe,
@@ -94,6 +95,7 @@ let startLibraryImport: ReturnType<typeof vi.fn>;
 
 function createClient(): MemeSortClient {
   return {
+    ...createUnconfiguredClient(),
     getImportStatus: vi.fn(async () => currentStatus),
     getAssets: vi.fn(async () => assets),
     chooseLibraryFiles: vi.fn(async () => ({ selection_id: SELECTION_ID, count: 2 })),
@@ -101,7 +103,7 @@ function createClient(): MemeSortClient {
     startLibraryImport,
     pauseImport: vi.fn(async () => currentStatus),
     resumeImport: vi.fn(async () => currentStatus),
-  } as unknown as MemeSortClient;
+  };
 }
 
 function renderStartSurface(client: MemeSortClient = createClient()) {

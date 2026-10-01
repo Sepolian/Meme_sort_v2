@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import type { MemeSortClient } from "../../api/tauri-client";
+import { createUnconfiguredClient } from "../../api/test-client";
 import type {
   AppState,
   AssetDetail,
@@ -15,7 +16,6 @@ import type {
 import { importResultSummary, importSnapshot } from "./import-test-fixtures";
 
 let currentImportStatus: ImportTask;
-const getImportStatus = vi.fn(async (): Promise<ImportTask> => currentImportStatus);
 
 const assets: AssetListResult = {
   library_root: "C:/Library",
@@ -79,12 +79,14 @@ function healthyRuntimeCheck() {
 }
 
 beforeEach(() => {
+  currentImportStatus = importSnapshot();
 });
 
 function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
   return {
+    ...createUnconfiguredClient(),
     getAppState: vi.fn(async (): Promise<AppState> => ({ ...appState, import_task: currentImportStatus })),
-    getImportStatus,
+    getImportStatus: vi.fn(async (): Promise<ImportTask> => currentImportStatus),
     getAssets: vi.fn(async () => assets),
     getAssetDetail: vi.fn(async (): Promise<AssetDetailResult> => ({
       library_root: "C:/Library",
@@ -92,38 +94,13 @@ function createClient(overrides: Partial<MemeSortClient> = {}): MemeSortClient {
       active_recipe_label: "Vulkan0 recipe",
       asset: assetDetail,
     })),
-    revealAsset: unsupported,
-    openLogDirectory: unsupported,
-    deleteAsset: unsupported,
-    removeSourceRecord: unsupported,
-    batchAssetAction: unsupported,
-    chooseSearchImage: unsupported,
     chooseLibraryFiles: vi.fn(async () => null),
     chooseLibraryFolder: vi.fn(async () => null),
-    startLibraryImport: unsupported,
     pauseImport: vi.fn(async () => currentImportStatus),
     resumeImport: vi.fn(async () => currentImportStatus),
-    searchText: unsupported,
-    searchImage: unsupported,
-    findSimilar: unsupported,
-    getDuplicates: unsupported,
-    pauseWorkerLoop: unsupported,
-    resumeWorkerLoop: unsupported,
-    triggerWorkerLoop: unsupported,
     runRuntimeHealthCheck: vi.fn(async () => healthyRuntimeCheck()),
-    retryFailedJobs: unsupported,
-    deletePendingJobs: unsupported,
-    cancelSearch: unsupported,
-    copyAssetToClipboard: unsupported,
-    copyOriginalFiles: unsupported,
-    acceptDuplicatePair: unsupported,
-    clearAcceptedPairs: unsupported,
     ...overrides,
-  } as MemeSortClient;
-}
-
-async function unsupported(): Promise<never> {
-  throw new Error("Not used by this test.");
+  };
 }
 
 function renderApp(client: MemeSortClient) {
@@ -165,17 +142,17 @@ describe("application-level Import Batch observer", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(1);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(1);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5_000);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(2);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(2);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4_000);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(2);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(2);
 
       currentImportStatus = importSnapshot({
         batch_id: "batch-1",
@@ -185,17 +162,17 @@ describe("application-level Import Batch observer", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_000);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(3);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(3);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(800);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(3);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(3);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(200);
       });
-      expect(getImportStatus).toHaveBeenCalledTimes(4);
+      expect(client.getImportStatus).toHaveBeenCalledTimes(4);
     } finally {
       vi.useRealTimers();
     }
@@ -220,9 +197,9 @@ describe("application-level Import Batch observer", () => {
     fireEvent.click(screen.getByRole("link", { name: "Duplicates" }));
     expect(await screen.findByRole("heading", { name: "Duplicate assets" })).toBeInTheDocument();
 
-    const statusCallsBeforeFinish = getImportStatus.mock.calls.length;
+    const statusCallsBeforeFinish = vi.mocked(client.getImportStatus).mock.calls.length;
     await waitFor(
-      () => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(statusCallsBeforeFinish + 2),
+      () => expect(vi.mocked(client.getImportStatus).mock.calls.length).toBeGreaterThanOrEqual(statusCallsBeforeFinish + 2),
       { timeout: 4_000 },
     );
 
@@ -233,7 +210,7 @@ describe("application-level Import Batch observer", () => {
     });
     await waitFor(() => expect(screen.getByText("Import Batch completed")).toBeInTheDocument(), { timeout: 6_000 });
     await waitFor(
-      () => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(statusCallsBeforeFinish + 4),
+      () => expect(vi.mocked(client.getImportStatus).mock.calls.length).toBeGreaterThanOrEqual(statusCallsBeforeFinish + 4),
       { timeout: 8_000 },
     );
 
@@ -385,12 +362,13 @@ describe("Import Batch progress announcements", () => {
       processed_files: 4,
       current_source_name: "cat.gif",
     });
-    renderApp(createClient());
+    const client = createClient();
+    renderApp(client);
     const region = await screen.findByRole("status", { name: "Import Batch progress" });
     const initialTextNode = region.firstChild;
     expect(initialTextNode).not.toBeNull();
 
-    await waitFor(() => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(4), {
+    await waitFor(() => expect(vi.mocked(client.getImportStatus).mock.calls.length).toBeGreaterThanOrEqual(4), {
       timeout: 8_000,
     });
     expect(progressRegion()).toBe(region);
@@ -757,13 +735,14 @@ describe("global Import Batch result notice", () => {
         ],
       }),
     });
-    renderApp(createClient());
+    const client = createClient();
+    renderApp(client);
 
     const alertRegion = await screen.findByRole("alert", { name: "Import Batch result" });
     const initialTextNode = alertRegion.firstChild;
     expect(initialTextNode).not.toBeNull();
 
-    await waitFor(() => expect(getImportStatus.mock.calls.length).toBeGreaterThanOrEqual(3), {
+    await waitFor(() => expect(vi.mocked(client.getImportStatus).mock.calls.length).toBeGreaterThanOrEqual(3), {
       timeout: 12_000,
     });
     expect(screen.getByRole("alert", { name: "Import Batch result" })).toBe(alertRegion);
