@@ -1,5 +1,5 @@
 /* Shared desktop palette. Native controls, restrained surfaces, and immediate
- * feedback keep the library content in focus. Legacy aliases share these tokens.
+ * feedback keep the library content in focus.
  */
 
 :root,
@@ -19,17 +19,6 @@
   --color-scrollbar-thumb: #46505f;
   --color-scrollbar-thumb-hover: #647083;
   --shadow-raised: 0 12px 32px rgb(0 0 0 / 0.24);
-  /* Legacy aliases (same palette, not a second palette). */
-  --canvas: var(--color-bg);
-  --surface: var(--color-surface);
-  --surface-raised: var(--color-surface-raised);
-  --text: var(--color-text);
-  --muted: var(--color-text-muted);
-  --border: var(--color-border);
-  --accent: var(--color-accent);
-  --accent-strong: var(--color-accent);
-  --warning: var(--color-pending);
-  --danger: var(--color-failed);
   color: var(--color-text);
   background: var(--color-bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -54,16 +43,6 @@
   --color-scrollbar-thumb: #a8b1bf;
   --color-scrollbar-thumb-hover: #7f8a9a;
   --shadow-raised: 0 12px 32px rgb(30 42 60 / 0.14);
-  --canvas: var(--color-bg);
-  --surface: var(--color-surface);
-  --surface-raised: var(--color-surface-raised);
-  --text: var(--color-text);
-  --muted: var(--color-text-muted);
-  --border: var(--color-border);
-  --accent: var(--color-accent);
-  --accent-strong: var(--color-accent);
-  --warning: var(--color-pending);
-  --danger: var(--color-failed);
 }
 
 * { box-sizing: border-box; }
