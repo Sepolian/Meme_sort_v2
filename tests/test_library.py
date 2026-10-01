@@ -8,7 +8,8 @@ import threading
 import time
 import unittest
 import uuid
-from contextlib import redirect_stdout
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -19,6 +20,7 @@ from wsgiref.simple_server import WSGIRequestHandler, make_server
 import numpy as np
 from PIL import Image
 
+from memesort_worker import job_queue
 from memesort_worker.app_state import build_app_state
 from memesort_worker.cli import run
 from memesort_worker.indexing_pipeline import run_pending_jobs
@@ -381,6 +383,134 @@ class LibraryTests(unittest.TestCase):
 
         self.assertEqual([thumbnail_job_id], result.deleted_job_ids)
         self.assertEqual(2, status.total_jobs)
+
+    def test_pending_job_deletion_skips_a_worker_claim_during_the_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            with closing(sqlite3.connect(library_root / DATABASE_NAME)) as conn:
+                conn.row_factory = sqlite3.Row
+                job = job_queue.fetch_pending_jobs(conn, max_jobs=1)[0]
+
+            delete_started = threading.Event()
+            sqlite_connect = sqlite3.connect
+
+            def claim_after_delete_starts() -> None:
+                self.assertTrue(delete_started.wait(timeout=5))
+                with closing(sqlite_connect(library_root / DATABASE_NAME)) as worker_conn:
+                    self.assertTrue(job_queue.JobQueue(worker_conn).claim(job))
+
+            class ClaimBeforeDeleteConnection(sqlite3.Connection):
+                def execute(self, sql: str, parameters=()) -> sqlite3.Cursor:
+                    # Pause before the write on both the old and atomic deletion paths.
+                    if sql.startswith("DELETE FROM job WHERE status = 'pending'"):
+                        delete_started.set()
+                        worker_claim.result(timeout=5)
+                    return super().execute(sql, parameters)
+
+            def connect_with_interleaving(*args, **kwargs) -> sqlite3.Connection:
+                return sqlite_connect(*args, **kwargs, factory=ClaimBeforeDeleteConnection)
+
+            with ThreadPoolExecutor(max_workers=1) as worker:
+                worker_claim = worker.submit(claim_after_delete_starts)
+                with patch(
+                    "memesort_worker.asset_catalog.sqlite3.connect",
+                    side_effect=connect_with_interleaving,
+                ):
+                    result = delete_pending_jobs(library_root, [job.job_id])
+
+            self.assertTrue(delete_started.is_set())
+            self.assertEqual([job.job_id], result.requested_job_ids)
+            self.assertEqual([], result.deleted_job_ids)
+            self.assertEqual([job.job_id], result.skipped_job_ids)
+            status = self._library_status(library_root)
+            self.assertEqual(3, status.total_jobs)
+            self.assertEqual(1, status.job_counts["running"])
+            claimed_job = next(row for row in status.recent_jobs if row["job_id"] == job.job_id)
+            self.assertEqual(
+                ("running", 1), (claimed_job["status"], claimed_job["attempt_count"])
+            )
+
+    def test_pending_job_deletion_api_preserves_assets_and_skips_other_statuses(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root, _ = self._import_one_image(Path(temp_dir))
+            self._run_all_jobs_with_stubs(library_root)
+            asset_id = str(self._list_assets(library_root).assets[0]["asset_id"])
+            with closing(sqlite3.connect(library_root / DATABASE_NAME)) as conn:
+                with conn:
+                    for _ in range(2):
+                        job_queue.enqueue_thumbnail(
+                            conn, asset_id=asset_id, now="2026-10-01T00:00:00Z"
+                        )
+                    job_ids = [row[0] for row in conn.execute("SELECT id FROM job ORDER BY id")]
+                    conn.executemany(
+                        "UPDATE job SET status = ? WHERE id = ?",
+                        zip(("pending", "running", "completed", "failed", "pending"), job_ids),
+                    )
+            pending_a, running, completed, failed, pending_b = job_ids
+            requested = [
+                "missing-a", pending_b, running, pending_b, completed, pending_a, failed, "missing-b"
+            ]
+            with LibraryStore(library_root) as store:
+                before = store.get_asset_detail(asset_id).asset
+            managed_files = {
+                path: path.read_bytes()
+                for directory in ("originals", "thumbnails", "frames", "contact_sheets")
+                for path in (library_root / directory).rglob("*")
+                if path.is_file()
+            }
+
+            app = create_app(str(library_root))
+            try:
+                status_line, payload = self._request(
+                    app, "POST", "/api/pending-jobs/delete", {"job_ids": requested}
+                )
+            finally:
+                app.shutdown()
+
+            self.assertEqual("200 OK", status_line)
+            self.assertEqual(
+                {"requested_job_ids", "deleted_job_ids", "skipped_job_ids"}, set(payload)
+            )
+            self.assertEqual(
+                ["missing-a", pending_b, running, completed, pending_a, failed, "missing-b"],
+                payload["requested_job_ids"],
+            )
+            self.assertCountEqual([pending_a, pending_b], payload["deleted_job_ids"])
+            self.assertEqual(
+                ["missing-a", running, completed, failed, "missing-b"], payload["skipped_job_ids"]
+            )
+            status = self._library_status(library_root)
+            self.assertEqual((1, 3), (status.total_assets, status.total_jobs))
+            self.assertEqual({"running": 1, "completed": 1, "failed": 1}, status.job_counts)
+            with LibraryStore(library_root) as store:
+                after = store.get_asset_detail(asset_id).asset
+            for field in (
+                "library_path", "source_records", "renditions", "ocr_results", "indexed_recipe_labels"
+            ):
+                self.assertEqual(before[field], after[field], field)
+            for path, contents in managed_files.items():
+                self.assertEqual(contents, path.read_bytes(), str(path))
+
+    def test_pending_job_deletion_rejects_empty_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            library_root = Path(temp_dir) / "library"
+            for job_ids in ([], ["", ""]):
+                with self.subTest(job_ids=job_ids):
+                    with self.assertRaisesRegex(
+                        ValueError, "At least one pending job id is required"
+                    ):
+                        delete_pending_jobs(library_root, job_ids)
+            self.assertFalse(library_root.exists())
+
+            app = create_app(str(library_root))
+            try:
+                status, payload = self._request(
+                    app, "POST", "/api/pending-jobs/delete", {"job_ids": []}
+                )
+            finally:
+                app.shutdown()
+            self.assertEqual("400 Bad Request", status)
+            self.assertEqual("At least one pending job id is required", payload["detail"])
 
     def test_retry_failed_jobs_requeues_only_failed_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2442,17 +2442,11 @@ def delete_pending_jobs(
     try:
         placeholders = ", ".join("?" for _ in unique_job_ids)
         with conn:
-            pending_rows = conn.execute(
-                f"SELECT id FROM job WHERE status = 'pending' AND id IN ({placeholders})",
+            deleted_rows = conn.execute(
+                f"DELETE FROM job WHERE status = 'pending' AND id IN ({placeholders}) RETURNING id",
                 unique_job_ids,
             ).fetchall()
-            deleted_job_ids = [str(row["id"]) for row in pending_rows]
-            if deleted_job_ids:
-                deleted_placeholders = ", ".join("?" for _ in deleted_job_ids)
-                conn.execute(
-                    f"DELETE FROM job WHERE status = 'pending' AND id IN ({deleted_placeholders})",
-                    deleted_job_ids,
-                )
+            deleted_job_ids = [str(row["id"]) for row in deleted_rows]
         deleted_set = set(deleted_job_ids)
         return DeletePendingJobsResult(
             requested_job_ids=unique_job_ids,
