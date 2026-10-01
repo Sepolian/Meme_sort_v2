@@ -737,8 +737,9 @@ class LibraryTests(unittest.TestCase):
                 self.assertEqual("200 OK", status)
                 self.assertEqual(managed_path.read_bytes(), body)
 
-                with sqlite3.connect(library_root / DATABASE_NAME) as conn:
-                    conn.execute("UPDATE asset SET library_path = '.' WHERE id = ?", (asset_id,))
+                with closing(sqlite3.connect(library_root / DATABASE_NAME)) as conn:
+                    with conn:
+                        conn.execute("UPDATE asset SET library_path = '.' WHERE id = ?", (asset_id,))
                 status, payload = self._request(
                     app, "POST", "/api/resolve-asset-reveal-target",
                     {"asset_id": asset_id, "target": "managed"},
@@ -748,11 +749,12 @@ class LibraryTests(unittest.TestCase):
                 status, _headers, _body = wsgi_request.call(app, "GET", "/media/.")
                 self.assertEqual("404 Not Found", status)
 
-                with sqlite3.connect(library_root / DATABASE_NAME) as conn:
-                    conn.execute(
-                        "UPDATE asset SET library_path = '../library-other/secret.png' WHERE id = ?",
-                        (asset_id,),
-                    )
+                with closing(sqlite3.connect(library_root / DATABASE_NAME)) as conn:
+                    with conn:
+                        conn.execute(
+                            "UPDATE asset SET library_path = '../library-other/secret.png' WHERE id = ?",
+                            (asset_id,),
+                        )
                 status, payload = self._request(
                     app, "POST", "/api/resolve-asset-reveal-target",
                     {"asset_id": asset_id, "target": "managed"},
@@ -778,8 +780,9 @@ class LibraryTests(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"File symlinks are unavailable: {error}")
 
-            with sqlite3.connect(library_root / DATABASE_NAME) as conn:
-                conn.execute("UPDATE asset SET library_path = 'outside-link.png' WHERE id = ?", (asset_id,))
+            with closing(sqlite3.connect(library_root / DATABASE_NAME)) as conn:
+                with conn:
+                    conn.execute("UPDATE asset SET library_path = 'outside-link.png' WHERE id = ?", (asset_id,))
             app = create_app(str(library_root))
             try:
                 status, payload = self._request(
