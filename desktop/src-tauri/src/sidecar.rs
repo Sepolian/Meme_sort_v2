@@ -231,29 +231,6 @@ impl SidecarSession {
         ))
     }
 
-    fn app_state_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(origin, session_cookie, ApiRoute::State)
-    }
-
-    /// One Import Batch snapshot. Progress travels to the WebView without
-    /// filesystem paths, so polling stays safe from any page.
-    fn import_status_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(origin, session_cookie, ApiRoute::ImportStatus)
-    }
-
-    fn assets_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_get_json(origin, session_cookie, ApiRoute::Assets)
-    }
-
     fn asset_detail_for_connection(
         origin: &str,
         session_cookie: &str,
@@ -328,30 +305,6 @@ impl SidecarSession {
                 sources: validate_import_sources(&sources)?,
                 indexing_policy: "if-ready",
             },
-        )
-    }
-
-    fn pause_import_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::PauseImport,
-            &EmptyPayload {},
-        )
-    }
-
-    fn resume_import_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::ResumeImport,
-            &EmptyPayload {},
         )
     }
 
@@ -432,66 +385,6 @@ impl SidecarSession {
         )
     }
 
-    fn pause_worker_loop_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::PauseWorkerLoop,
-            &EmptyPayload {},
-        )
-    }
-
-    fn resume_worker_loop_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::ResumeWorkerLoop,
-            &EmptyPayload {},
-        )
-    }
-
-    fn trigger_worker_loop_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::TriggerWorkerLoop,
-            &EmptyPayload {},
-        )
-    }
-
-    fn run_runtime_health_check_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::RunRuntimeHealthCheck,
-            &EmptyPayload {},
-        )
-    }
-
-    fn retry_failed_jobs_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::RetryFailedJobs,
-            &EmptyPayload {},
-        )
-    }
-
     fn delete_pending_jobs_for_connection(
         origin: &str,
         session_cookie: &str,
@@ -521,18 +414,6 @@ impl SidecarSession {
                 asset_a_id: validate_asset_id(asset_a_id)?,
                 asset_b_id: validate_asset_id(asset_b_id)?,
             },
-        )
-    }
-
-    fn clear_accepted_pairs_for_connection(
-        origin: &str,
-        session_cookie: &str,
-    ) -> Result<serde_json::Value, SidecarError> {
-        authenticated_post_json(
-            origin,
-            session_cookie,
-            MutationRoute::ClearAcceptedPairs,
-            &EmptyPayload {},
         )
     }
 
@@ -1056,21 +937,23 @@ pub fn shutdown_managed_sidecar(app: &AppHandle) {
 #[tauri::command]
 pub fn get_app_state(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::app_state_for_connection(origin, session_cookie)
+        authenticated_get_json(origin, session_cookie, ApiRoute::State)
     })
 }
 
+/// One Import Batch snapshot. Progress travels to the WebView without
+/// filesystem paths, so polling stays safe from any page.
 #[tauri::command]
 pub fn get_import_status(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::import_status_for_connection(origin, session_cookie)
+        authenticated_get_json(origin, session_cookie, ApiRoute::ImportStatus)
     })
 }
 
 #[tauri::command]
 pub fn get_assets(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::assets_for_connection(origin, session_cookie)
+        authenticated_get_json(origin, session_cookie, ApiRoute::Assets)
     })
 }
 
@@ -1143,14 +1026,24 @@ pub fn start_library_import(
 #[tauri::command]
 pub fn pause_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::pause_import_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::PauseImport,
+            &EmptyPayload {},
+        )
     })
 }
 
 #[tauri::command]
 pub fn resume_import(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_session(&app, |origin, session_cookie| {
-        SidecarSession::resume_import_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ResumeImport,
+            &EmptyPayload {},
+        )
     })
 }
 
@@ -1247,35 +1140,60 @@ pub fn get_duplicates(app: AppHandle, threshold: f64) -> Result<serde_json::Valu
 #[tauri::command]
 pub fn pause_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::pause_worker_loop_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::PauseWorkerLoop,
+            &EmptyPayload {},
+        )
     })
 }
 
 #[tauri::command]
 pub fn resume_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::resume_worker_loop_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ResumeWorkerLoop,
+            &EmptyPayload {},
+        )
     })
 }
 
 #[tauri::command]
 pub fn trigger_worker_loop(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::trigger_worker_loop_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::TriggerWorkerLoop,
+            &EmptyPayload {},
+        )
     })
 }
 
 #[tauri::command]
 pub fn run_runtime_health_check(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::run_runtime_health_check_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::RunRuntimeHealthCheck,
+            &EmptyPayload {},
+        )
     })
 }
 
 #[tauri::command]
 pub fn retry_failed_jobs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::retry_failed_jobs_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::RetryFailedJobs,
+            &EmptyPayload {},
+        )
     })
 }
 
@@ -1313,7 +1231,12 @@ pub fn accept_duplicate_pair(
 #[tauri::command]
 pub fn clear_accepted_pairs(app: AppHandle) -> Result<serde_json::Value, SidecarError> {
     with_sidecar_connection(&app, |origin, session_cookie| {
-        SidecarSession::clear_accepted_pairs_for_connection(origin, session_cookie)
+        authenticated_post_json(
+            origin,
+            session_cookie,
+            MutationRoute::ClearAcceptedPairs,
+            &EmptyPayload {},
+        )
     })
 }
 
@@ -2545,6 +2468,10 @@ mod tests {
                 let request = std::str::from_utf8(&request).expect("request must be UTF-8");
                 assert!(request.starts_with(&format!("POST {path} HTTP/1.1")));
                 assert!(request.contains("Cookie: memesort_session=test-token"));
+                assert_eq!(
+                    request.split_once("\r\n\r\n").expect("request body").1,
+                    "{}"
+                );
                 stream
                     .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"running\":true}")
                     .expect("worker control response should write");
@@ -2552,19 +2479,22 @@ mod tests {
         });
         let origin = format!("http://127.0.0.1:{port}");
 
-        SidecarSession::pause_worker_loop_for_connection(&origin, "memesort_session=test-token")
-            .expect("pause should succeed");
-        SidecarSession::resume_worker_loop_for_connection(&origin, "memesort_session=test-token")
-            .expect("resume should succeed");
-        SidecarSession::trigger_worker_loop_for_connection(&origin, "memesort_session=test-token")
-            .expect("trigger should succeed");
-        SidecarSession::run_runtime_health_check_for_connection(
-            &origin,
-            "memesort_session=test-token",
-        )
-        .expect("health check should succeed");
-        SidecarSession::retry_failed_jobs_for_connection(&origin, "memesort_session=test-token")
-            .expect("retry failed Jobs should succeed");
+        for route in [
+            MutationRoute::PauseWorkerLoop,
+            MutationRoute::ResumeWorkerLoop,
+            MutationRoute::TriggerWorkerLoop,
+            MutationRoute::RunRuntimeHealthCheck,
+            MutationRoute::RetryFailedJobs,
+        ] {
+            let payload = authenticated_post_json(
+                &origin,
+                "memesort_session=test-token",
+                route,
+                &EmptyPayload {},
+            )
+            .expect("worker control should succeed");
+            assert_eq!(payload["running"], true);
+        }
         server.join().expect("test server should finish");
     }
 
@@ -2695,7 +2625,13 @@ mod tests {
             let clear_request = std::str::from_utf8(&clear_request).expect("request must be UTF-8");
             assert!(clear_request.starts_with("POST /api/clear-accepted-pairs HTTP/1.1"));
             assert!(clear_request.contains("Cookie: memesort_session=test-token"));
-            assert!(clear_request.contains("{}"));
+            assert_eq!(
+                clear_request
+                    .split_once("\r\n\r\n")
+                    .expect("request body")
+                    .1,
+                "{}"
+            );
             assert!(!clear_request.contains("asset"));
             clear_stream
                 .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"cleared_pairs\":1}")
@@ -2711,9 +2647,11 @@ mod tests {
         )
         .expect("accept should succeed");
         assert_eq!(accepted["already_accepted"], false);
-        let cleared = SidecarSession::clear_accepted_pairs_for_connection(
+        let cleared = authenticated_post_json(
             &origin,
             "memesort_session=test-token",
+            MutationRoute::ClearAcceptedPairs,
+            &EmptyPayload {},
         )
         .expect("clear should succeed");
         assert_eq!(cleared["cleared_pairs"], 1);
@@ -2925,7 +2863,10 @@ mod tests {
                     assert!(request.contains("\"sources\":[\"C:/Source/Memes\"]"));
                     assert!(request.contains("\"indexing_policy\":\"required\""));
                 } else {
-                    assert!(request.contains("{}"));
+                    assert_eq!(
+                        request.split_once("\r\n\r\n").expect("request body").1,
+                        "{}"
+                    );
                 }
                 let response: &[u8] = if path == "/api/import/start" {
                     b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"status\":\"running\"}"
