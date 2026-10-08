@@ -126,7 +126,7 @@ class SidecarEntryTests(unittest.TestCase):
 
         self.assertEqual(0, result)
         self.assertEqual(
-            [portable_root.resolve() / "MemeSortData" / "models" / "gguf" / "qwen3-2b-q4_k_m"],
+            [portable_root.resolve() / "MemeSortData" / "models" / "gguf" / "embeddinggemma-2-q8_0"],
             observed,
         )
 

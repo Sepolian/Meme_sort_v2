@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 from PIL import Image
 
 from memesort_worker.asset_preprocessing import preprocess_image_bytes
@@ -35,29 +36,39 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         self.assertEqual(manifest.recipe_fingerprint, runtime.recipe_fingerprint)
         self.assertEqual(manifest.preprocessing.version, runtime.preprocessing_version)
 
-    def test_recipe_change_atomically_resets_semantic_state_and_requeues(self) -> None:
+    def test_qwen_to_gemma_activation_preserves_library_and_rolls_back_queue_failure(self) -> None:
+        from memesort_worker.asset_catalog import accept_duplicate_pair
+        from memesort_worker.indexing_pipeline import run_pending_jobs
+        from memesort_worker.library_store import LibraryStore
+
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "library"
             source = Path(temp_dir) / "source"
             source.mkdir()
-            Image.new("RGB", (40, 30), (255, 0, 0)).save(
-                source / "image.png",
-                format="PNG",
-            )
-            initialize_library(root)
+            Image.new("RGB", (40, 30), "red").save(source / "red.png")
+            Image.new("RGB", (40, 30), "blue").save(source / "blue.png")
+            (source / "red-copy.png").write_bytes((source / "red.png").read_bytes())
             imported = import_folder(root, source)
-            self.assertEqual(1, imported.new_assets)
+            self.assertEqual(2, imported.new_assets)
+            self.assertEqual(1, imported.duplicate_assets)
+            self.assertEqual(0, run_pending_jobs(root, FakeIndexingRuntime()).failed_jobs)
+            with LibraryStore(root) as store:
+                before_assets = store.list_assets_detailed().assets
+                self.assertEqual(1, len(store.scan_duplicate_assets().pairs))
+            asset_ids = [str(asset["asset_id"]) for asset in before_assets]
+            accept_duplicate_pair(root, *asset_ids)
+            copies = {
+                str(asset["asset_id"]): (root / str(asset["library_path"])).read_bytes()
+                for asset in before_assets
+            }
+
+            # Fixture: an existing Qwen Library with its incompatible 2048d vectors.
+            old_recipe = str(uuid.uuid4())
+            old_vector = np.zeros(2048, dtype=np.float32)
+            old_vector[0] = 1.0
             database = root / "library.sqlite"
             conn = sqlite3.connect(database)
             try:
-                asset_id = str(conn.execute("SELECT id FROM asset").fetchone()[0])
-                current_recipe = str(
-                    conn.execute(
-                        "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
-                        "WHERE key = 'active_recipe_id'"
-                    ).fetchone()[0]
-                )
-                old_recipe = str(uuid.uuid4())
                 with conn:
                     conn.execute(
                         """
@@ -66,25 +77,23 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                             runtime_profile, preprocess_version, instruction_key,
                             pooling_key, normalized, gif_frame_count, created_at
                         )
-                        SELECT ?, family_key, model_id, 'old-fingerprint', output_dimension,
-                               'legacy', preprocess_version, instruction_key,
-                               pooling_key, normalized, gif_frame_count, created_at
+                        SELECT ?, family_key, 'DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M',
+                               'old-qwen-fingerprint', 2048, runtime_profile, preprocess_version,
+                               'qwen3vl-text-to-image-default-v1', 'last-l2-float32',
+                               normalized, gif_frame_count, created_at
                         FROM embedding_recipe WHERE id = ?
                         """,
-                        (old_recipe, current_recipe),
+                        (old_recipe, imported.active_recipe_id),
                     )
                     conn.execute(
-                        "UPDATE job SET recipe_id = ? WHERE type = 'embed_asset'",
-                        (old_recipe,),
+                        "UPDATE embedding_item SET recipe_id = ?, vector_dim = 2048, vector_blob = ?",
+                        (old_recipe, old_vector.tobytes()),
                     )
                     conn.execute(
-                        """
-                        INSERT INTO embedding_item (
-                            id, asset_id, recipe_id, kind, source_ref,
-                            vector_dim, vector_blob, created_at
-                        ) VALUES (?, ?, ?, 'image', 'old', 1, ?, 'old')
-                        """,
-                        (str(uuid.uuid4()), asset_id, old_recipe, b"\x00\x00\x80?"),
+                        "UPDATE job SET recipe_id = ?, status = 'failed', "
+                        "payload_json = json_set(payload_json, '$.recipe_id', ?) "
+                        "WHERE type = 'embed_asset'",
+                        (old_recipe, old_recipe),
                     )
                     conn.execute(
                         "UPDATE worker_state SET value_json = ? WHERE key = 'active_recipe_id'",
@@ -93,15 +102,14 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                     conn.execute(
                         "UPDATE worker_state SET value_json = ? "
                         "WHERE key = 'semantic_recipe_activation'",
-                        (
-                            json.dumps(
-                                {
-                                    "recipe_fingerprint": "old-fingerprint",
-                                    "recipe_id": old_recipe,
-                                }
-                            ),
-                        ),
+                        (json.dumps({"recipe_fingerprint": "old-qwen-fingerprint", "recipe_id": old_recipe}),),
                     )
+                before_vectors = conn.execute(
+                    "SELECT id, asset_id, recipe_id, vector_dim, vector_blob FROM embedding_item ORDER BY id"
+                ).fetchall()
+                before_jobs = conn.execute(
+                    "SELECT id, recipe_id, status, payload_json FROM job ORDER BY id"
+                ).fetchall()
             finally:
                 conn.close()
 
@@ -113,45 +121,64 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
                     initialize_library(root)
             conn = sqlite3.connect(database)
             try:
-                self.assertEqual(
-                    1, conn.execute("SELECT COUNT(*) FROM embedding_item").fetchone()[0]
-                )
-                active_after_rollback = conn.execute(
+                self.assertEqual(before_vectors, conn.execute(
+                    "SELECT id, asset_id, recipe_id, vector_dim, vector_blob FROM embedding_item ORDER BY id"
+                ).fetchall())
+                self.assertEqual(before_jobs, conn.execute(
+                    "SELECT id, recipe_id, status, payload_json FROM job ORDER BY id"
+                ).fetchall())
+                self.assertEqual(old_recipe, conn.execute(
                     "SELECT json_extract(value_json, '$.recipe_id') FROM worker_state "
                     "WHERE key = 'active_recipe_id'"
-                ).fetchone()[0]
-                self.assertEqual(old_recipe, active_after_rollback)
+                ).fetchone()[0])
             finally:
                 conn.close()
 
+            initialized = initialize_library(root)
+            with LibraryStore(root) as store:
+                recipe_id = store.active_recipe.recipe_id
+                self.assertEqual(initialized.created_recipe_id, recipe_id)
+                self.assertNotEqual(old_recipe, recipe_id)
+                self.assertEqual(768, store.active_recipe.output_dimension)
+                self.assertEqual("task: search result | query: ", store.active_recipe.instruction_text)
+                self.assertEqual([], store.list_active_embeddings())
+                pending = store.list_pending_jobs()
+                self.assertEqual(2, len(pending))
+                self.assertEqual({"embed_asset"}, {job["type"] for job in pending})
+                self.assertEqual(set(asset_ids), {job["asset_id"] for job in pending})
+                after_assets = store.list_assets_detailed().assets
+            before_by_id = {str(asset["asset_id"]): asset for asset in before_assets}
+            for asset in after_assets:
+                before = before_by_id[str(asset["asset_id"])]
+                for key in ("library_path", "content_hash", "source_records", "ocr_status", "ocr_results", "renditions"):
+                    self.assertEqual(before[key], asset[key], key)
+                self.assertEqual("pending_initial_index", asset["status"])
+                self.assertEqual(copies[str(asset["asset_id"])], (root / str(asset["library_path"])).read_bytes())
+
             initialize_library(root)
-            initialize_library(root)
+            with LibraryStore(root) as store:
+                self.assertEqual(recipe_id, store.active_recipe.recipe_id)
+                self.assertEqual(pending, store.list_pending_jobs())
             conn = sqlite3.connect(database)
             try:
-                self.assertEqual(1, conn.execute("SELECT COUNT(*) FROM asset").fetchone()[0])
-                self.assertEqual(
-                    1, conn.execute("SELECT COUNT(*) FROM source_record").fetchone()[0]
-                )
-                self.assertEqual(
-                    0, conn.execute("SELECT COUNT(*) FROM embedding_item").fetchone()[0]
-                )
-                embed_jobs = conn.execute(
-                    "SELECT status, recipe_id FROM job WHERE type = 'embed_asset'"
-                ).fetchall()
-                self.assertEqual(1, len(embed_jobs))
-                self.assertEqual("pending", embed_jobs[0][0])
-                self.assertNotEqual(old_recipe, embed_jobs[0][1])
-                self.assertEqual(
-                    1, conn.execute("SELECT COUNT(*) FROM embedding_recipe").fetchone()[0]
-                )
-                self.assertGreater(
-                    conn.execute(
-                        "SELECT COUNT(*) FROM job WHERE type != 'embed_asset'"
-                    ).fetchone()[0],
-                    0,
-                )
+                self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM embedding_item").fetchone()[0])
+                self.assertEqual(1, conn.execute("SELECT COUNT(*) FROM embedding_recipe").fetchone()[0])
             finally:
                 conn.close()
+
+            reindexed = run_pending_jobs(root, FakeIndexingRuntime())
+            self.assertEqual(2, reindexed.completed_jobs)
+            self.assertEqual(0, reindexed.failed_jobs)
+            with LibraryStore(root) as store:
+                self.assertEqual({"indexed"}, {asset["status"] for asset in store.list_assets_detailed().assets})
+                self.assertEqual(0.92, store.scan_duplicate_assets().threshold)
+                self.assertEqual([], store.scan_duplicate_assets().pairs)
+                for embedding in store.list_active_embeddings():
+                    self.assertEqual((768,), embedding.vector.shape)
+                    self.assertEqual(np.dtype("float32"), embedding.vector.dtype)
+                    self.assertTrue(np.isfinite(embedding.vector).all())
+                    self.assertAlmostEqual(1.0, float(np.linalg.norm(embedding.vector)), places=6)
+            self.assertTrue(accept_duplicate_pair(root, *asset_ids).already_accepted)
 
     def test_manifest_preprocessing_applies_exif_and_white_alpha(self) -> None:
         provider = default_provider()
@@ -180,6 +207,60 @@ class VulkanOnlyRuntimeTests(unittest.TestCase):
         )
         with Image.open(io.BytesIO(processed)) as image:
             self.assertEqual((1, 2), image.size)
+
+    def _index_custom_recipe(self, root: Path):
+        from memesort_worker.indexing_pipeline import run_pending_jobs
+
+        default = default_provider()
+        fingerprint = "retrieval-provider-regression"
+        provider = replace(
+            default,
+            recipe_fingerprint=fingerprint,
+            manifest_recipe={**default.manifest_recipe, "model_revision": fingerprint},
+        )
+        library_root = root / "library"
+        source_root = root / "source"
+        source_root.mkdir()
+        Image.new("RGB", (10, 10), "red").save(source_root / "red.png")
+        Image.new("RGB", (10, 10), "blue").save(source_root / "blue.png")
+        imported = import_folder(library_root, source_root, provider=provider)
+        result = run_pending_jobs(library_root, FakeIndexingRuntime(), provider=provider)
+        self.assertEqual(0, result.failed_jobs)
+        return library_root, provider, imported.active_recipe_id
+
+    def test_text_search_preserves_custom_provider_recipe(self) -> None:
+        from memesort_worker.library_store import LibraryStore
+        from memesort_worker.retrieval_service import search_text
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, provider, recipe_id = self._index_custom_recipe(Path(temp_dir))
+            result = search_text(
+                root,
+                "reaction",
+                provider=provider,
+                runtime=FakeIndexingRuntime(),
+            )
+            self.assertEqual(recipe_id, result.active_recipe_id)
+            self.assertEqual(2, len(result.results))
+            with LibraryStore(root, provider=provider) as store:
+                self.assertEqual(2, len(store.list_active_embeddings()))
+                self.assertEqual(0, len(store.list_pending_jobs()))
+
+    def test_similar_assets_preserve_custom_provider_recipe(self) -> None:
+        from memesort_worker.library_store import LibraryStore
+        from memesort_worker.retrieval_service import find_similar_assets
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, provider, recipe_id = self._index_custom_recipe(Path(temp_dir))
+            with LibraryStore(root, provider=provider) as store:
+                asset_id = str(store.list_assets_detailed().assets[0]["asset_id"])
+            result = find_similar_assets(root, asset_id, provider=provider)
+            self.assertEqual(recipe_id, result.active_recipe_id)
+            self.assertEqual(1, len(result.results))
+            self.assertNotEqual(asset_id, result.results[0]["asset_id"])
+            with LibraryStore(root, provider=provider) as store:
+                self.assertEqual(2, len(store.list_active_embeddings()))
+                self.assertEqual(0, len(store.list_pending_jobs()))
 
     def test_search_image_path_preserves_custom_provider_recipe(self) -> None:
         """A custom-provider image query must not reactivate the default recipe."""

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 import tempfile
 import time
 import unittest
@@ -25,8 +28,9 @@ from memesort_worker.llama_cpp_backend import (
     LlamaCppServer,
     _close_runtime_loggers,
     load_server_config,
-    verify_qwen3_vl_embedding_2b_bundle,
+    verify_model_bundle,
 )
+from memesort_worker.runtime_activation import RuntimeActivationError, validate_runtime_activation, write_runtime_activation
 from memesort_worker.runtime_manifest import load_runtime_manifest
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.runtime_admission import VulkanDeviceInfo
@@ -40,8 +44,8 @@ from memesort_worker.runtime_service import (
 
 class LlamaCppBackendTests(unittest.TestCase):
     def _write_bundle(self, root: Path) -> tuple[Path, Path]:
-        main_model = root / "Qwen3-VL-Embedding-2B.Q4_K_M.gguf"
-        mmproj = root / "mmproj-Qwen3-VL-Embedding-2B.f16.gguf"
+        main_model = root / "embeddinggemma-2-Q8_0.gguf"
+        mmproj = root / "mmproj-Q8_0.gguf"
         main_model.write_bytes(b"gguf-main")
         mmproj.write_bytes(b"gguf-mmproj")
         return main_model, mmproj
@@ -51,20 +55,54 @@ class LlamaCppBackendTests(unittest.TestCase):
             main_model, mmproj = self._write_bundle(Path(temp_dir))
 
             with self.assertRaisesRegex(LlamaCppBackendError, "Unexpected SHA256"):
-                verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj)
+                verify_model_bundle(main_model, mmproj)
 
-    def test_adapter_sends_multimodal_embedding_payload(self) -> None:
+    def test_adapter_prefixes_every_text_query_at_the_http_boundary(self) -> None:
+        adapter = LlamaCppEmbeddingAdapter(load_server_config())
+        self.addCleanup(adapter.close)
+        adapter.server._base_url = "http://127.0.0.1:8080"
+        for instruction in (None, "task: search result | query: "):
+            with self.subTest(instruction=instruction), patch.object(
+                adapter.server, "_ensure_ready"
+            ), patch("memesort_worker.llama_cpp_backend.urlopen") as urlopen:
+                urlopen.return_value.__enter__.return_value.read.return_value = (
+                    b'{"data": [{"embedding": [1.0, 0.0]}]}'
+                )
+                adapter.embed_text("开心", instruction=instruction)
+                payload = json.loads(urlopen.call_args.args[0].data)
+            self.assertEqual("task: search result | query: 开心", payload["input"])
+
+    def test_adapter_rejects_text_instructions_outside_the_pinned_recipe(self) -> None:
+        adapter = LlamaCppEmbeddingAdapter(load_server_config())
+        self.addCleanup(adapter.close)
+        adapter.server._base_url = "http://127.0.0.1:8080"
+        with patch.object(adapter.server, "_ensure_ready"), patch(
+            "memesort_worker.llama_cpp_backend.urlopen"
+        ) as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = (
+                b'{"data": [{"embedding": [1.0, 0.0]}]}'
+            )
+            with self.assertRaisesRegex(LlamaCppBackendError, "instruction diverged"):
+                adapter.embed_text("开心", instruction="Retrieve images")
+            urlopen.assert_not_called()
+
+    def test_adapter_sends_image_only_media_at_the_http_boundary(self) -> None:
         config = load_server_config()
         adapter = LlamaCppEmbeddingAdapter(config)
-        expected = np.array([1.0, 0.0], dtype=np.float32)
-        with patch.object(adapter.server, "request_embedding", return_value=expected) as request:
-            result = adapter.embed_image_bytes(b"image", instruction="Retrieve images")
-
-        self.assertIs(result, expected)
-        request_input = request.call_args.args[0]
-        self.assertEqual(1, len(request_input))
-        self.assertIn(config.media_marker, request_input[0]["prompt_string"])
-        self.assertEqual(["aW1hZ2U="], request_input[0]["multimodal_data"])
+        self.addCleanup(adapter.close)
+        adapter.server._base_url = "http://127.0.0.1:8080"
+        with patch.object(adapter.server, "_ensure_ready"), patch(
+            "memesort_worker.llama_cpp_backend.urlopen"
+        ) as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = (
+                b'{"data": [{"embedding": [1.0, 0.0]}]}'
+            )
+            adapter.embed_image_bytes(b"image", instruction="Retrieve images")
+            payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertEqual(
+            [{"prompt_string": "<__media__>", "multimodal_data": ["aW1hZ2U="]}],
+            payload["input"],
+        )
 
     def test_server_parses_openai_embedding_response(self) -> None:
         server = LlamaCppServer(load_server_config())
@@ -117,6 +155,20 @@ class LlamaCppBackendTests(unittest.TestCase):
         np.testing.assert_allclose(np.array([0.6, 0.8], dtype=np.float32), vector)
         self.assertAlmostEqual(1.0, float(np.linalg.norm(vector)), places=6)
 
+    def test_embedding_backend_normalizes_finite_gemma_vectors_at_float32_limits(self) -> None:
+        large_vector = np.full(768, np.finfo(np.float32).max, dtype=np.float32)
+        with patch(
+            "memesort_worker.llama_cpp_backend.LlamaCppEmbeddingAdapter.embed_text",
+            return_value=large_vector,
+        ):
+            backend = LlamaCppEmbeddingBackend(InferenceScheduler())
+            self.addCleanup(backend.close)
+            vector = backend.embed_text("large finite vector", output_dimension=768)
+
+        self.assertEqual(np.dtype(np.float32), vector.dtype)
+        self.assertTrue(np.isfinite(vector).all())
+        self.assertAlmostEqual(1.0, float(np.linalg.norm(vector.astype(np.float64))), places=6)
+
     def test_embedding_backend_rejects_zero_and_non_finite_vectors(self) -> None:
         backend = LlamaCppEmbeddingBackend(InferenceScheduler())
         for vector, message in (
@@ -145,7 +197,11 @@ class LlamaCppBackendTests(unittest.TestCase):
                 mmproj_path=projector,
             )
             server = LlamaCppServer(config)
-            with patch(
+            with patch.dict("os.environ", {
+                "GGML_VK_DISABLE_F16": "0",
+                "LLAMA_ARG_IMAGE_MIN_TOKENS": "280",
+                "LLAMA_ARG_IMAGE_MAX_TOKENS": "280",
+            }), patch(
                 "memesort_worker.llama_cpp_backend.subprocess.Popen"
             ) as popen, patch(
                 "memesort_worker.llama_cpp_backend._validate_manifest_runtime"
@@ -160,6 +216,19 @@ class LlamaCppBackendTests(unittest.TestCase):
             )
             self.assertEqual(config.pooling, command[command.index("--pooling") + 1])
             self.assertEqual("2", command[command.index("--embd-normalize") + 1])
+            self.assertEqual("mean", command[command.index("--pooling") + 1])
+            self.assertEqual("2048", command[command.index("--ctx-size") + 1])
+            self.assertEqual("2048", command[command.index("--batch-size") + 1])
+            self.assertEqual("2048", command[command.index("--ubatch-size") + 1])
+            self.assertEqual("off", command[command.index("--flash-attn") + 1])
+            self.assertEqual("99", command[command.index("--n-gpu-layers") + 1])
+            self.assertEqual("1", command[command.index("--parallel") + 1])
+            self.assertEqual("1", popen.call_args.kwargs["env"]["GGML_VK_DISABLE_F16"])
+            self.assertEqual("<__media__>", popen.call_args.kwargs["env"]["LLAMA_MEDIA_MARKER"])
+            self.assertNotIn("--image-max-tokens", command)
+            self.assertNotIn("--image-min-tokens", command)
+            self.assertFalse("LLAMA_ARG_IMAGE_MIN_TOKENS" in popen.call_args.kwargs["env"])
+            self.assertFalse("LLAMA_ARG_IMAGE_MAX_TOKENS" in popen.call_args.kwargs["env"])
             self.assertIn("--log-disable", command)
             self.assertEqual(
                 subprocess.DEVNULL,
@@ -259,8 +328,8 @@ class LlamaCppBackendTests(unittest.TestCase):
                 gpu_name="Vulkan0: Test GPU",
                 gpu_vendor="amd",
                 gpu_vendor_id="0x1002",
-                text_smoke_vector_dim=2048,
-                image_smoke_vector_dim=2048,
+                text_smoke_vector_dim=768,
+                image_smoke_vector_dim=768,
                 diagnostic_steps=[],
                 smoke_test_ok=True,
                 error=None,
@@ -277,6 +346,68 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertFalse(ready)
         self.assertIn("session", detail.lower())
         self.assertIsNotNone(persisted)
+
+    def test_gemma_runtime_authorization_reports_identity_and_validates_http_inputs(self) -> None:
+        default_provider.cache_clear()
+        self.addCleanup(default_provider.cache_clear)
+        raw = json.loads(load_runtime_manifest().source_path.read_text())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = root / "runtime-manifest.json"
+            for key, payload in (("main", b"gguf-main"), ("projector", b"gguf-mmproj")):
+                raw["model"][key]["size_bytes"] = len(payload)
+                raw["model"][key]["sha256"] = hashlib.sha256(payload).hexdigest()
+            manifest_path.write_text(json.dumps(raw))
+            manifest = load_runtime_manifest(manifest_path)
+            for path, payload in (
+                (manifest.llama_server_path, b"server"),
+                (manifest.main_model_path, b"gguf-main"),
+                (manifest.projector_path, b"gguf-mmproj"),
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+            write_runtime_activation(manifest)
+            inputs = []
+
+            def fake_http(request, timeout=None):
+                if request.get_method() == "GET":
+                    return io.BytesIO(b'{"status": "ok"}')
+                payload = json.loads(request.data)
+                inputs.append(payload["input"])
+                return io.BytesIO(json.dumps({"data": [{"embedding": [1.0] + [0.0] * 767}]}).encode())
+
+            with patch.dict("os.environ", {"MEMESORT_APP_ROOT": str(root)}), patch(
+                "memesort_worker.runtime_service.probe_vulkan0",
+                return_value=VulkanDeviceInfo(0, 0x1002, "amd", 1, "Test GPU"),
+            ), patch(
+                "memesort_worker.llama_cpp_backend.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, b"Vulkan0: Test GPU", b""),
+            ), patch("memesort_worker.llama_cpp_backend.subprocess.Popen") as popen, patch(
+                "memesort_worker.llama_cpp_backend.urlopen", side_effect=fake_http
+            ):
+                popen.return_value.poll.return_value = None
+                runtime = PinnedRuntime(root / "library")
+                try:
+                    result = runtime.authorize()
+                    self.assertTrue(runtime.is_ready_for_indexing()[0])
+                    self.assertEqual(768, result.text_smoke_vector_dim)
+                    self.assertEqual(768, result.image_smoke_vector_dim)
+                    detail = result.diagnostic_steps[0]["detail"]
+                    self.assertIn("b11457", detail)
+                    self.assertIn("unsloth/embeddinggemma-2-GGUF:Q8_0", detail)
+                    self.assertEqual("task: search result | query: confused reaction image", inputs[0])
+                    self.assertEqual("<__media__>", inputs[1][0]["prompt_string"])
+                    self.assertTrue(inputs[1][0]["multimodal_data"][0])
+                    raw["llama_cpp"]["server"]["batch_size"] = 1024
+                    manifest_path.write_text(json.dumps(raw))
+                    ready, reason = runtime.is_ready_for_indexing()
+                    self.assertFalse(ready)
+                    self.assertIn("stale", reason)
+                    with self.assertRaisesRegex(RuntimeActivationError, "does not match"):
+                        validate_runtime_activation(load_runtime_manifest())
+                finally:
+                    runtime.close()
+                    _close_runtime_loggers()
 
     def test_vulkan_health_check_does_not_download_missing_gguf(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -351,14 +482,14 @@ class LlamaCppBackendTests(unittest.TestCase):
                                 "memesort_worker.runtime_service.validate_runtime_activation"
                             ):
                                 with patch(
-                                    "memesort_worker.llama_cpp_backend.verify_qwen3_vl_embedding_2b_bundle"
+                                    "memesort_worker.llama_cpp_backend.verify_model_bundle"
                                 ) as verify_bundle:
                                     backend = Mock()
                                     backend.embed_text.return_value = np.ones(
-                                        2048, dtype=np.float32
+                                        768, dtype=np.float32
                                     )
                                     backend.embed_image_bytes.return_value = np.ones(
-                                        2048, dtype=np.float32
+                                        768, dtype=np.float32
                                     )
                                     result = run_runtime_health_check(
                                         embedding_backend_factory=lambda: backend
@@ -374,7 +505,7 @@ class LlamaCppBackendTests(unittest.TestCase):
         self.assertEqual("Vulkan0: Test GPU", result.gpu_name)
         self.assertEqual("amd", result.gpu_vendor)
         self.assertEqual("0x1002", result.gpu_vendor_id)
-        self.assertEqual(2048, result.image_smoke_vector_dim)
+        self.assertEqual(768, result.image_smoke_vector_dim)
         self.assertEqual("image-embedding-smoke", result.diagnostic_steps[-1]["step"])
         backend.embed_text.assert_called_once()
         backend.embed_image_bytes.assert_called_once()

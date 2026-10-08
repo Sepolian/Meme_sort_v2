@@ -4,6 +4,7 @@ import copy
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from memesort_worker.runtime_manifest import (
@@ -28,10 +29,36 @@ class RuntimeManifestTests(unittest.TestCase):
 
         self.assertEqual(1, manifest.schema_version)
         self.assertEqual("Vulkan0", manifest.platform.device)
-        self.assertEqual(2048, manifest.model.output_dimension)
+        self.assertEqual(768, manifest.model.output_dimension)
         self.assertEqual("float32", manifest.embedding.storage_dtype)
+        self.assertEqual("unsloth/embeddinggemma-2-GGUF:Q8_0", manifest.model.id)
+        self.assertEqual("google/embeddinggemma-2", manifest.model.base_model_id)
+        self.assertEqual("b11457", manifest.llama_cpp.build)
+        self.assertEqual(33377746, manifest.llama_cpp.archive.size_bytes)
         self.assertEqual(
-            manifest.project_root / ".runtime" / "llama.cpp-b9982-vulkan" / "llama-server.exe",
+            "d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6",
+            manifest.llama_cpp.archive.sha256,
+        )
+        self.assertEqual(309855520, manifest.model.main.size_bytes)
+        self.assertEqual(554821120, manifest.model.projector.size_bytes)
+        self.assertEqual(
+            "6f1bd4ac6c5df7444f9cca7ca36cafe6cfa34cd6f49fefb1e0b4be8143aed8bc",
+            manifest.model.main.sha256,
+        )
+        self.assertEqual(
+            "90e7b0238009e2954f856f2081dcf7f35af026b64c765e98f4777053e1754460",
+            manifest.model.projector.sha256,
+        )
+        self.assertEqual("task: search result | query: ", manifest.embedding.instruction)
+        self.assertEqual("image-only", manifest.embedding.image_input_policy)
+        self.assertEqual("mean", manifest.embedding.pooling)
+        self.assertEqual(2048, manifest.llama_cpp.server.context_size)
+        self.assertEqual(2048, manifest.llama_cpp.server.batch_size)
+        self.assertEqual(2048, manifest.llama_cpp.server.ubatch_size)
+        self.assertEqual("off", manifest.llama_cpp.server.flash_attention)
+        self.assertTrue(manifest.llama_cpp.server.vulkan_disable_f16)
+        self.assertEqual(
+            manifest.project_root / ".runtime" / "llama.cpp-b11457-vulkan" / "llama-server.exe",
             manifest.llama_server_path,
         )
         self.assertEqual(71, len(manifest.recipe_id))
@@ -48,11 +75,11 @@ class RuntimeManifestTests(unittest.TestCase):
             )
             self.assertEqual(
                 manifest.llama_install_dir,
-                portable_data_root / "runtime" / "llama.cpp-b9982-vulkan",
+                portable_data_root / "runtime" / "llama.cpp-b11457-vulkan",
             )
             self.assertEqual(
                 manifest.model_install_dir,
-                portable_data_root / "models" / "gguf" / "qwen3-2b-q4_k_m",
+                portable_data_root / "models" / "gguf" / "embeddinggemma-2-q8_0",
             )
             self.assertEqual(
                 manifest.activation_record_path,
@@ -116,6 +143,35 @@ class RuntimeManifestTests(unittest.TestCase):
             self._load_raw(raw).recipe_fingerprint,
             self._load_raw(modified).recipe_fingerprint,
         )
+
+    def test_effective_gemma_settings_change_runtime_and_recipe_compatibility(self) -> None:
+        manifest = load_runtime_manifest()
+        for settings in (
+            {"batch_size": 1024},
+            {"ubatch_size": 1024},
+            {"flash_attention": "on"},
+            {"vulkan_disable_f16": False},
+        ):
+            with self.subTest(settings=settings):
+                changed = replace(
+                    manifest,
+                    llama_cpp=replace(manifest.llama_cpp, server=replace(manifest.llama_cpp.server, **settings)),
+                )
+                self.assertNotEqual(manifest.runtime_fingerprint, changed.runtime_fingerprint)
+                self.assertNotEqual(manifest.recipe_fingerprint, changed.recipe_fingerprint)
+        changed_prompt = replace(manifest, embedding=replace(manifest.embedding, instruction="task: search result | query:"))
+        self.assertNotEqual(manifest.runtime_fingerprint, changed_prompt.runtime_fingerprint)
+        self.assertNotEqual(manifest.recipe_fingerprint, changed_prompt.recipe_fingerprint)
+        image_policy = replace(manifest, embedding=replace(manifest.embedding, image_input_policy="image-with-instruction"))
+        self.assertNotEqual(manifest.runtime_fingerprint, image_policy.runtime_fingerprint)
+        self.assertNotEqual(manifest.recipe_fingerprint, image_policy.recipe_fingerprint)
+
+    def test_new_server_fields_are_validated_at_the_manifest_boundary(self) -> None:
+        for field, value in (("batch_size", 0), ("ubatch_size", True), ("flash_attention", "on"), ("vulkan_disable_f16", "1")):
+            raw = self._raw_manifest()
+            raw["llama_cpp"]["server"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(RuntimeManifestError, field):
+                self._load_raw(raw)
 
     def test_paths_cannot_escape_project_root(self) -> None:
         raw = self._raw_manifest()

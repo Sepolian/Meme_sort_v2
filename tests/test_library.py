@@ -27,6 +27,7 @@ from memesort_worker.indexing_pipeline import run_pending_jobs
 from memesort_worker.asset_catalog import (
     BatchAssetActionResult,
     DATABASE_NAME,
+    accept_duplicate_pair,
     delete_asset,
     delete_pending_jobs,
     import_folder,
@@ -35,7 +36,7 @@ from memesort_worker.asset_catalog import (
     rebuild_active_indexes,
     retry_failed_jobs,
 )
-from memesort_worker.retrieval_service import search_text
+from memesort_worker.retrieval_service import find_similar_assets, search_image_path, search_text
 from runtime_fakes import FakeIndexingRuntime
 from memesort_worker.runtime_descriptor import get_runtime_descriptor
 from memesort_worker.pinned_runtime import PinnedRuntime
@@ -295,7 +296,124 @@ class LibraryTests(unittest.TestCase):
         self.assertIsNotNone(assets.assets[0]["thumbnail_url"])
         self.assertEqual(1, embedding_count)
         self.assertEqual(1, ocr_count)
-        self.assertEqual(2048, backend.vector.shape[0])
+        self.assertEqual(768, backend.vector.shape[0])
+
+    def test_gemma_library_retrieves_still_and_gif_with_strongest_matched_frames(self) -> None:
+        # Deterministic runtime evidence, not a model-quality comparison.
+        class ColorBackend:
+            backend_id = "fake-runtime::color-vectors"
+
+            def embed_text(self, text, output_dimension, instruction=None):
+                assert text == "绿色"
+                assert instruction == "task: search result | query: "
+                assert output_dimension == 768
+                vector = np.zeros(768, dtype=np.float32)
+                vector[1] = 1.0
+                return vector
+
+            def embed_image_bytes(self, image_bytes, output_dimension, instruction=None):
+                assert output_dimension == 768
+                with Image.open(io.BytesIO(image_bytes)) as image:
+                    assert image.format == "PNG"
+                    assert image.mode == "RGB"
+                    assert image.size == (480, 320)
+                    color = image.getpixel((0, 0))
+                color_axis = {(255, 0, 0): 0, (0, 255, 0): 1, (0, 0, 255): 2, (255, 255, 0): 3}
+                vector = np.zeros(768, dtype=np.float32)
+                vector[color_axis[color]] = 1.0
+                return vector
+
+        class ColorOcrBackend(StubOcrBackend):
+            def recognize_image(self, image_path):
+                text = "绿色反应"
+                return {"engine": self.backend_id, "text": text, "texts": [text],
+                        "scores": [1.0], "boxes": [[]], "language_hint": "zh"}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            library_root = root / "library"
+            source_root = root / "source"
+            source_root.mkdir()
+            still_path = source_root / "red.png"
+            Image.new("RGB", (900, 600), (255, 0, 0)).save(still_path)
+            (source_root / "red-copy.png").write_bytes(still_path.read_bytes())
+            colors = [(0, 0, 255), (128, 0, 128), (0, 255, 0), (255, 255, 255),
+                      (255, 255, 0), (0, 0, 0), (255, 0, 0)]
+            frames = [Image.new("RGB", (960, 640), color) for color in colors]
+            gif_path = source_root / "reaction.gif"
+            frames[0].save(gif_path, save_all=True, append_images=frames[1:], duration=100, loop=0)
+            imported = import_folder(library_root, source_root)
+            self.assertEqual(2, imported.new_assets)
+            self.assertEqual(1, imported.duplicate_assets)
+            with LibraryStore(library_root) as store:
+                self.assertEqual({"pending_initial_index"}, {asset["status"] for asset in store.list_assets_detailed().assets})
+
+            runtime = FakeIndexingRuntime(embedding_backend=ColorBackend(), ocr_backend=ColorOcrBackend())
+            indexed = run_pending_jobs(library_root, runtime)
+            with LibraryStore(library_root) as store:
+                self.assertEqual(0, indexed.failed_jobs, store.get_library_status().recent_jobs)
+            self.assertEqual(5, indexed.completed_jobs)
+            with LibraryStore(library_root) as store:
+                recipe_id = store.active_recipe.recipe_id
+                self.assertEqual(768, store.active_recipe.output_dimension)
+                assets = store.list_assets_detailed().assets
+                self.assertEqual({"indexed"}, {asset["status"] for asset in assets})
+                still = next(asset for asset in assets if asset["media_type"] == "image/png")
+                gif = next(asset for asset in assets if asset["media_type"] == "image/gif")
+                self.assertEqual(2, still["source_record_count"])
+                self.assertEqual(1, gif["source_record_count"])
+                embeddings = store.list_active_embeddings()
+                self.assertEqual(5, len(embeddings))
+                self.assertEqual({"frame:0", "frame:2", "frame:4", "frame:6"}, {
+                    embedding.source_ref for embedding in embeddings if embedding.asset_id == gif["asset_id"]
+                })
+                for embedding in embeddings:
+                    self.assertEqual((768,), embedding.vector.shape)
+                    self.assertEqual(np.dtype("float32"), embedding.vector.dtype)
+                    self.assertTrue(np.isfinite(embedding.vector).all())
+                    self.assertAlmostEqual(1.0, float(np.linalg.norm(embedding.vector)), places=6)
+
+            text_result = search_text(library_root, "绿色", runtime=runtime)
+            self.assertEqual(recipe_id, text_result.active_recipe_id)
+            self.assertEqual(2, len(text_result.results))
+            self.assertEqual(still["asset_id"], text_result.results[0]["asset_id"])
+            self.assertEqual(["visual", "ocr"], text_result.results[0]["match_sources"])
+            self.assertAlmostEqual(1.0 / 61.0 + 1.0 / 62.0, text_result.results[0]["score"])
+            self.assertEqual(gif["asset_id"], text_result.results[1]["asset_id"])
+            self.assertEqual("frame:2", text_result.results[1]["matched_source_ref"])
+            self.assertEqual(["visual"], text_result.results[1]["match_sources"])
+            self.assertEqual(1.0, text_result.results[1]["visual_score"])
+
+            query_path = root / "green.png"
+            Image.new("RGB", (1200, 800), (0, 255, 0)).save(query_path)
+            image_result = search_image_path(library_root, query_path, runtime=runtime)
+            self.assertEqual(recipe_id, image_result.active_recipe_id)
+            self.assertEqual(2, len(image_result.results))
+            self.assertEqual(gif["asset_id"], image_result.results[0]["asset_id"])
+            self.assertEqual("frame:2", image_result.results[0]["matched_source_ref"])
+            self.assertEqual(1.0, image_result.results[0]["score"])
+            gif_result = search_image_path(library_root, gif_path, runtime=runtime)
+            self.assertEqual("image/gif", gif_result.query_media_type)
+            self.assertEqual(2, len({result["asset_id"] for result in gif_result.results}))
+            self.assertEqual(2, len(gif_result.results))
+
+            similar = find_similar_assets(library_root, str(still["asset_id"]))
+            self.assertEqual(recipe_id, similar.active_recipe_id)
+            self.assertEqual(1, len(similar.results))
+            self.assertEqual(gif["asset_id"], similar.results[0]["asset_id"])
+            self.assertEqual("frame:6", similar.results[0]["matched_source_ref"])
+            self.assertEqual(1.0, similar.results[0]["score"])
+            with LibraryStore(library_root) as store:
+                duplicates = store.scan_duplicate_assets()
+                self.assertEqual(0.92, duplicates.threshold)
+                self.assertEqual(1, len(duplicates.pairs))
+                pair = duplicates.pairs[0]
+                self.assertEqual({still["asset_id"], gif["asset_id"]}, {pair["asset_a_id"], pair["asset_b_id"]})
+                self.assertEqual({"original", "frame:6"}, {pair["asset_a_matched_source_ref"], pair["asset_b_matched_source_ref"]})
+            accept_duplicate_pair(library_root, still["asset_id"], gif["asset_id"])
+            with LibraryStore(library_root) as store:
+                self.assertEqual([], store.scan_duplicate_assets().pairs)
+                self.assertEqual(recipe_id, store.active_recipe.recipe_id)
 
     def test_text_search_uses_active_manifest_embedding_recipe(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
