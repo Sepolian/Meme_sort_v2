@@ -104,10 +104,11 @@ def _coerce_normalized_dimension(
     if not np.all(np.isfinite(vector)):
         raise EmbeddingBackendError("Model returned NaN or infinite embedding values")
     result = np.asarray(vector, dtype=np.float32)
-    norm = float(np.linalg.norm(result.astype(np.float64, copy=False)))
+    wide_result = result.astype(np.float64, copy=False)
+    norm = float(np.linalg.norm(wide_result))
     if not np.isfinite(norm) or norm == 0:
         raise EmbeddingBackendError("Model returned zero vector")
-    normalized = np.asarray(result / norm, dtype=np.float32)
+    normalized = np.asarray(wide_result / norm, dtype=np.float32)
     if not np.all(np.isfinite(normalized)):
         raise EmbeddingBackendError("Embedding normalization produced non-finite values")
     return normalized
