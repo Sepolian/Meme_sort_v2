@@ -16,13 +16,14 @@ def search_text(
     query: str,
     top_k: int = 10,
     request_id: str | None = None,
+    provider: RuntimeRecipeProvider | None = None,
     *,
     runtime,
 ) -> library.SearchResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
 
-    with LibraryStore(library_root) as store:
+    with LibraryStore(library_root, provider=provider) as store:
         embeddings = store.list_active_embeddings()
         ocr_results = store.collect_ocr_search_results(query, limit=max(top_k * 4, 20))
 
@@ -127,11 +128,12 @@ def find_similar_assets(
     library_root: Path | str,
     asset_id: str,
     top_k: int = 10,
+    provider: RuntimeRecipeProvider | None = None,
 ) -> library.SimilarityResult:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
 
-    with LibraryStore(library_root) as store:
+    with LibraryStore(library_root, provider=provider) as store:
         query_vectors = store.list_asset_embedding_vectors(asset_id)
         if not query_vectors:
             raise ValueError(

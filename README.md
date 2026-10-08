@@ -98,7 +98,11 @@ Run `MemeSort.exe` from the extracted portable folder, after its portable setup 
 2. Import a local folder. Files are copied into the library; repeated content adds a source record rather than another asset.
 3. Start indexing. One managed llama-server and one serialized inference queue serve all searches and background indexing; search jobs have priority but do not interrupt a running indexing call.
 
-Changing the manifest is a developer upgrade, not an in-app setting. Update all relevant artifact and model fields in `runtime-manifest.json`, rerun setup, run the health check, then rebuild the active index. A changed recipe fingerprint (including a changed embedding dimension) transactionally resets incompatible semantic vectors and queues the library for the new recipe.
+Changing the manifest is a developer upgrade, not an in-app setting. Update the artifact and model fields in `runtime-manifest.json`, rerun setup, and run the health check before indexing. Opening the Library activates the manifest-derived recipe. The Qwen-to-Gemma change resets the incompatible 2048d semantic vectors and old embedding jobs, then queues every Asset for new 768d embeddings in one transaction. Repeated activation keeps the same recipe and jobs; a queueing failure rolls the activation back.
+
+Reindexing preserves Library Copies, Source Records, thumbnails, existing OCR results, and Accepted Duplicate Pairs. Pending and Failed Assets remain available for browsing, management, and retry. Semantic retrieval uses only the Active Index Recipe, so coverage returns as indexing completes; the old Qwen vectors cannot be reused or mixed with Gemma vectors. Existing OCR can still contribute to text results while semantic embeddings regenerate.
+
+Still Assets keep 480px preprocessing. GIFs keep up to four sampled frames and appear as one Asset with their strongest Matched Frame. Text search combines semantic and OCR results, image search embeds the query's visual content, and similar-Asset search compares active-recipe embeddings. Near-duplicate review retains its adjustable 0.92 default and excludes Accepted Duplicate Pairs; it requires human review and does not delete Assets automatically.
 
 ## OCR
 
@@ -107,6 +111,8 @@ Semantic embeddings use Vulkan. OCR intentionally uses CPU in `.venv-ocr` for th
 The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) on CPU, with document orientation, unwarping, and text-line orientation disabled. A missing environment is an explicit setup error, never a debug OCR fallback. Its cache is `.models\paddleocr` in the repository workflow and `MemeSortData\models\paddleocr` in a portable package; the worker protocol is UTF-8 on Windows.
 
 ## Validation and evaluation
+
+The accepted replacement tradeoff was measured on one Linux Vega 11 Vulkan device with 30 Assets and 60 Embedding Items. Default-budget Gemma encoded those items 3.53 times faster and answered short keyword queries approximately 4.96 times faster than Qwen. Complete-description Recall@1 changed from 29/30 to 27/30; short-keyword Recall@1 with fixed OCR fusion changed from 36/43 to 35/43. These embedding timings exclude OCR, import, SQLite, and some preprocessing work. They do not promise equivalent retrieval quality, whole-import speedups, or Windows performance.
 
 Run the complete automated suite:
 
