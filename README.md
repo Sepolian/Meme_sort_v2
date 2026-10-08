@@ -114,6 +114,26 @@ The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_de
 
 The accepted replacement tradeoff was measured on one Linux Vega 11 Vulkan device with 30 Assets and 60 Embedding Items. Default-budget Gemma encoded those items 3.53 times faster and answered short keyword queries approximately 4.96 times faster than Qwen. Complete-description Recall@1 changed from 29/30 to 27/30; short-keyword Recall@1 with fixed OCR fusion changed from 36/43 to 35/43. These embedding timings exclude OCR, import, SQLite, and some preprocessing work. They do not promise equivalent retrieval quality, whole-import speedups, or Windows performance.
 
+The 0.92 duplicate-review default is retained without recalibration. The saved comparison scanned all 435 unordered pairs in the 30-Asset sample and found the same two candidates for Qwen and default-budget Gemma, with changed scores. That sample has no duplicate ground truth and does not establish a calibrated threshold.
+
+The 2026-10-07 implementation smoke used the shared Pinned Runtime, managed b11457 launch, and existing Library interfaces on Linux with AMD Radeon Vega 11 (RADV RAVEN). It produced 14 finite, normalized float32 vectors of exactly 768 dimensions, indexed two distinct still Assets and a four-frame GIF into six Embedding Items, and passed text/image/GIF-image search, similar-Asset retrieval, duplicate review, and Accepted Duplicate Pair exclusion. The two still vectors had cosine similarity 0.742881; an image query selected GIF frame 2 as the strongest match. One server served the session and stopped on close. The temporary Library was removed; the Windows manifest and all 33 original evaluation artifacts were unchanged, and no production Library was opened.
+
+For Linux, the harness substituted local executable/model/activation paths and the native Vulkan loader, and bypassed Windows-only platform admission. It retained the manifest's Windows target, verified model hashes, prompt policy, and effective inference settings. OCR returned empty test results to isolate semantic inference; the automated Library regressions cover OCR fusion and preservation. Local checks used Python 3.12.3, NumPy 2.4.2, Pillow 10.2.0, and Linux llama.cpp 0.6.0-dev build 11457 (`5ad1c5da0`), rather than the Windows setup toolchain. This evidence qualifies the implemented semantic workflow on that Linux device; Windows and other GPU vendors remain unverified.
+
+### Windows release qualification
+
+Complete and retain this record on supported Windows x64 Vulkan0 hardware before releasing the replacement. Record each tested device and driver; a pass on one device does not qualify every AMD, Intel, or NVIDIA GPU.
+
+| Check | Required evidence |
+| --- | --- |
+| Hardware admission | Windows build, GPU name/vendor ID, driver version, and matching native Vulkan/`llama-server --list-devices` Vulkan0 identity; supported AMD, Intel, or NVIDIA admission and clear rejection of an unsupported or absent device. |
+| Repository and portable setup | Clean repository setup and portable setup as applicable; verified Windows archive/main/projector sizes and SHA256, correct managed paths, current activation fingerprint, and explicit errors for missing or tampered artifacts. |
+| Current-session health | Descriptor identifies EmbeddingGemma 2, b11457, Vulkan0, and 768d; real text/image outputs are finite and normalized, stale activation/health cannot authorize indexing, and a new session requires its own health check. |
+| Library and reindexing | Still and four-frame GIF indexing succeeds; a Qwen Library queues new semantic work without mixing dimensions and retains Library Copies, Source Records, OCR, and Accepted Duplicate Pairs. |
+| Retrieval and review | Text search including Chinese OCR fusion, still/GIF image queries, one GIF Asset with the strongest Matched Frame, similar-Asset retrieval, exact-content coalescing, adjustable 0.92 duplicate review, and Keep Both exclusion. |
+| Startup, precision, and ownership | Actual 2048 context/batch/microbatch, mean/L2, one slot, 99 layers, Flash Attention off, `GGML_VK_DISABLE_F16=1`, and no visual-budget overrides; distinct images yield distinct valid vectors; startup/precision failures are visible; idle unloading and application shutdown stop the owned process. |
+| Performance and resources | Cold-start time, still/GIF encoding time, text/image query latency, and CPU/RAM/GPU-memory observations during indexing/search and after shutdown. Compare on that device before claiming a Windows speedup or whole-import improvement. |
+
 Run the complete automated suite:
 
 ```powershell
