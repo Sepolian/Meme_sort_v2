@@ -32,44 +32,48 @@
     }
   },
   "llama_cpp": {
-    "build": "b9982",
-    "install_dir": ".runtime/llama.cpp-b9982-vulkan",
+    "build": "b11457",
+    "install_dir": ".runtime/llama.cpp-b11457-vulkan",
     "executable": "llama-server.exe",
     "archive": {
-      "filename": "llama-b9982-bin-win-vulkan-x64.zip",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b9982/llama-b9982-bin-win-vulkan-x64.zip",
-      "sha256": "b8c49b3ff732d663dbbf9b1fcefb1153816d072c89bc0579197cea5d19873616",
-      "size_bytes": 32938852
+      "filename": "llama-b11457-bin-win-vulkan-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11457/llama-b11457-bin-win-vulkan-x64.zip",
+      "sha256": "d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6",
+      "size_bytes": 33377746
     },
     "server": {
       "gpu_layers": 99,
-      "context_size": 4096,
+      "context_size": 2048,
       "parallel_slots": 1,
       "startup_timeout_seconds": 300,
       "request_timeout_seconds": 300,
       "device_probe_timeout_seconds": 20,
-      "idle_timeout_seconds": 600
+      "idle_timeout_seconds": 600,
+      "batch_size": 2048,
+      "ubatch_size": 2048,
+      "flash_attention": "off",
+      "vulkan_disable_f16": true
     }
   },
   "model": {
-    "id": "DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF:Q4_K_M",
-    "base_model_id": "Qwen/Qwen3-VL-Embedding-2B",
-    "conversion_repository": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF",
-    "install_dir": ".models/gguf/qwen3-2b-q4_k_m",
+    "id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+    "base_model_id": "google/embeddinggemma-2",
+    "conversion_repository": "https://huggingface.co/unsloth/embeddinggemma-2-GGUF",
+    "install_dir": ".models/gguf/embeddinggemma-2-q8_0",
     "protocol": "llama.cpp-openai-multimodal-embeddings-v1",
-    "request_model": "qwen3-vl-embedding",
-    "output_dimension": 2048,
+    "request_model": "embeddinggemma-2",
+    "output_dimension": 768,
     "main": {
-      "filename": "Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf",
-      "url": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF/resolve/main/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf",
-      "sha256": "42a4ebc629ecc6514649e12b1529b857f54900273bb854f853c970fb90edd09d",
-      "size_bytes": 1107410528
+      "filename": "embeddinggemma-2-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/embeddinggemma-2-GGUF/resolve/031f0d4b35536f69ab3509d4893c923264fcf253/embeddinggemma-2-Q8_0.gguf",
+      "sha256": "6f1bd4ac6c5df7444f9cca7ca36cafe6cfa34cd6f49fefb1e0b4be8143aed8bc",
+      "size_bytes": 309855520
     },
     "projector": {
-      "filename": "mmproj-Qwen.Qwen3-VL-Embedding-2B.f16.gguf",
-      "url": "https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF/resolve/main/mmproj-Qwen.Qwen3-VL-Embedding-2B.f16.gguf",
-      "sha256": "3f89a7768ffa6606935319f71bf56bb71871249ba549bf1080a0caea7a088613",
-      "size_bytes": 819395136
+      "filename": "mmproj-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/embeddinggemma-2-GGUF/resolve/031f0d4b35536f69ab3509d4893c923264fcf253/mmproj-Q8_0.gguf",
+      "sha256": "90e7b0238009e2954f856f2081dcf7f35af026b64c765e98f4777053e1754460",
+      "size_bytes": 554821120
     }
   },
   "preprocessing": {
@@ -83,12 +87,13 @@
     "apply_exif_orientation": true
   },
   "embedding": {
-    "instruction_id": "qwen3vl-text-to-image-default-v1",
-    "instruction": "Retrieve images that best match the user's text query.",
+    "instruction_id": "embeddinggemma2-query-prefix-image-only-v1",
+    "instruction": "task: search result | query: ",
     "media_marker": "<__media__>",
-    "pooling": "last",
+    "pooling": "mean",
     "normalization": "l2",
-    "storage_dtype": "float32"
+    "storage_dtype": "float32",
+    "image_input_policy": "image-only"
   },
   "logging": {
     "file_count": 5,

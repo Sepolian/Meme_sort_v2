@@ -34,9 +34,14 @@ class LlamaCppServerConfig:
     mmproj_path: Path
     request_model: str
     media_marker: str
+    text_prefix: str
     device: str
     gpu_layers: int
     context_size: int
+    batch_size: int
+    ubatch_size: int
+    flash_attention: str
+    vulkan_disable_f16: bool
     parallel_slots: int
     pooling: str
     normalization: str
@@ -58,9 +63,14 @@ class LlamaCppServerConfig:
             mmproj_path=manifest.projector_path,
             request_model=manifest.model.request_model,
             media_marker=manifest.embedding.media_marker,
+            text_prefix=manifest.embedding.instruction,
             device=manifest.platform.device,
             gpu_layers=manifest.llama_cpp.server.gpu_layers,
             context_size=manifest.llama_cpp.server.context_size,
+            batch_size=manifest.llama_cpp.server.batch_size,
+            ubatch_size=manifest.llama_cpp.server.ubatch_size,
+            flash_attention=manifest.llama_cpp.server.flash_attention,
+            vulkan_disable_f16=manifest.llama_cpp.server.vulkan_disable_f16,
             parallel_slots=manifest.llama_cpp.server.parallel_slots,
             pooling=manifest.embedding.pooling,
             normalization=manifest.embedding.normalization,
@@ -93,7 +103,7 @@ def discover_llama_server() -> Path:
     )
 
 
-def verify_qwen3_vl_embedding_2b_bundle(
+def verify_model_bundle(
     main_model: Path,
     mmproj: Path,
     manifest: RuntimeManifest | None = None,
@@ -218,12 +228,24 @@ class LlamaCppServer:
             str(self.config.gpu_layers),
             "--ctx-size",
             str(self.config.context_size),
+            "--batch-size",
+            str(self.config.batch_size),
+            "--ubatch-size",
+            str(self.config.ubatch_size),
+            "--flash-attn",
+            self.config.flash_attention,
             "--parallel",
             str(self.config.parallel_slots),
             "--log-disable",
         ]
         env = os.environ.copy()
+        for key in ("LLAMA_ARG_IMAGE_MIN_TOKENS", "LLAMA_ARG_IMAGE_MAX_TOKENS"):
+            env.pop(key, None)
         env["LLAMA_MEDIA_MARKER"] = self.config.media_marker
+        if self.config.vulkan_disable_f16:
+            env["GGML_VK_DISABLE_F16"] = "1"
+        else:
+            env.pop("GGML_VK_DISABLE_F16", None)
         creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
             self._process = subprocess.Popen(
@@ -331,24 +353,21 @@ class LlamaCppEmbeddingAdapter:
         self.server.close()
 
     def embed_text(self, text: str, instruction: str | None = None) -> np.ndarray:
-        return self.server.request_embedding(_format_text_prompt(text, instruction))
+        if instruction is not None and instruction != self.config.text_prefix:
+            raise LlamaCppBackendError(
+                "Text instruction diverged from runtime-manifest.json."
+            )
+        return self.server.request_embedding(f"{self.config.text_prefix}{text}")
 
     def embed_image_bytes(
         self,
         image_bytes: bytes,
         instruction: str | None = None,
     ) -> np.ndarray:
-        prompt = _format_text_prompt(self.config.media_marker, instruction)
         encoded = base64.b64encode(image_bytes).decode("ascii")
         return self.server.request_embedding(
-            [{"prompt_string": prompt, "multimodal_data": [encoded]}]
+            [{"prompt_string": self.config.media_marker, "multimodal_data": [encoded]}]
         )
-
-
-def _format_text_prompt(content: str, instruction: str | None) -> str:
-    if instruction:
-        return f"{instruction.strip()}\n{content}"
-    return content
 
 
 def _embedding_from_response(response: dict[str, Any]) -> np.ndarray:

@@ -2,18 +2,20 @@
 
 MemeSort is a local Windows library for image and GIF assets. It keeps a managed library copy of imported media, creates semantic embeddings and OCR locally, and supports text search, image search, similar-asset retrieval, and duplicate review.
 
-Semantic inference has one supported runtime: the pinned `llama.cpp` Vulkan build and pinned Qwen3-VL-Embedding GGUF bundle declared by [runtime-manifest.json](runtime-manifest.json). It always uses `Vulkan0`; there is no CPU, CUDA, Transformers, custom-model, or external-server fallback. PaddleOCR remains an isolated CPU service for OCR.
+Semantic inference has one supported runtime: the pinned `llama.cpp` Vulkan build and pinned EmbeddingGemma 2 Q8_0 GGUF bundle declared by [runtime-manifest.json](runtime-manifest.json). It always uses `Vulkan0`; there is no CPU, CUDA, Transformers, custom-model, or external-server fallback. PaddleOCR remains an isolated CPU service for OCR.
 
 ## Supported environment
 
 - Windows 10/11 x64
 - A Vulkan-capable AMD (`0x1002`), Intel (`0x8086`), or NVIDIA (`0x10de`) GPU selected as `Vulkan0`
 - Python 3.13.14 for the application and Python 3.12.13 for isolated OCR
-- llama.cpp `b9982` Windows Vulkan build
-- Qwen3-VL-Embedding 2B `Q4_K_M` GGUF with its F16 multimodal projector
+- llama.cpp `b11457` Windows Vulkan build
+- EmbeddingGemma 2 `Q8_0` GGUF with its matching `Q8_0` multimodal projector
 - PaddlePaddle 3.2.2 CPU with PaddleOCR 3.6.0 / PP-OCRv5 mobile
 
-The runtime health check validates the manifest activation, verifies the pinned artifacts, admits one of the supported GPU vendors at `Vulkan0`, and makes both a text and an image embedding. The verified Radeon 780M smoke test produced 2048-dimensional vectors for both paths.
+The runtime health check validates the manifest activation, verifies the pinned artifacts, admits one of the supported GPU vendors at `Vulkan0`, and requires 768-dimensional text and image embeddings. The Runtime Descriptor and health diagnostics identify EmbeddingGemma 2 and b11457. Windows real-device setup and inference acceptance for this bundle remains a release gate; the historical Qwen Radeon 780M smoke test does not qualify it.
+
+The managed server uses mean pooling, L2 normalization, float32 vectors, 2048-token context/batch/physical microbatch sizes, one parallel slot, 99 GPU layers, Flash Attention off, and `GGML_VK_DISABLE_F16=1` in the child environment. It retains the model's default visual budget. Text inputs are `task: search result | query: ` followed directly by the query, including the trailing space; image and GIF-frame inputs contain only media, with no text instruction.
 
 ## Setup
 
@@ -26,15 +28,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Setup is the only supported installer for the semantic runtime. It reads `runtime-manifest.json`, then downloads and verifies the project-local uv tool, llama.cpp Vulkan archive, GGUF model and projector; creates `.venv` and `.venv-ocr`; writes the activation record; and displays `llama-server --list-devices`.
 
-The current semantic bundle is approximately 1.93 GB. Its archive names, sizes, and SHA256 hashes are all pinned in the manifest, including:
+The main model and projector total 864,676,640 bytes (approximately 865 MB). Artifact sizes and SHA256 hashes are pinned in the manifest:
 
-| File | SHA256 |
-| --- | --- |
-| `llama-b9982-bin-win-vulkan-x64.zip` | `b8c49b3ff732d663dbbf9b1fcefb1153816d072c89bc0579197cea5d19873616` |
-| `Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf` | `42a4ebc629ecc6514649e12b1529b857f54900273bb854f853c970fb90edd09d` |
-| `mmproj-Qwen.Qwen3-VL-Embedding-2B.f16.gguf` | `3f89a7768ffa6606935319f71bf56bb71871249ba549bf1080a0caea7a088613` |
+| File | Bytes | SHA256 |
+| --- | ---: | --- |
+| `llama-b11457-bin-win-vulkan-x64.zip` | 33,377,746 | `d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6` |
+| `embeddinggemma-2-Q8_0.gguf` | 309,855,520 | `6f1bd4ac6c5df7444f9cca7ca36cafe6cfa34cd6f49fefb1e0b4be8143aed8bc` |
+| `mmproj-Q8_0.gguf` | 554,821,120 | `90e7b0238009e2954f856f2081dcf7f35af026b64c765e98f4777053e1754460` |
 
-Sources are the llama.cpp [b9982 release](https://github.com/ggml-org/llama.cpp/releases/tag/b9982) and the [DevQuasar GGUF repository](https://huggingface.co/DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF).
+The Windows archive was downloaded and checked against the official llama.cpp [b11457 release](https://github.com/ggml-org/llama.cpp/releases/tag/b11457). Model downloads use the immutable [Unsloth GGUF revision 031f0d4b](https://huggingface.co/unsloth/embeddinggemma-2-GGUF/tree/031f0d4b35536f69ab3509d4893c923264fcf253); its published sizes and hashes match the evaluated bundle. The projector also contains an audio encoder; supported Assets remain still images and GIFs.
 
 ## Portable desktop package
 
@@ -92,7 +94,7 @@ The smoke harness starts the packaged headless sidecar with no models installed,
 
 Run `MemeSort.exe` from the extracted portable folder, after its portable setup has completed. In the application:
 
-1. Run the Vulkan health check and confirm the reported GPU vendor, `Vulkan0`, and 2048d text and image smoke tests.
+1. Run the Vulkan health check and confirm the reported GPU vendor, `Vulkan0`, and 768d text and image smoke tests.
 2. Import a local folder. Files are copied into the library; repeated content adds a source record rather than another asset.
 3. Start indexing. One managed llama-server and one serialized inference queue serve all searches and background indexing; search jobs have priority but do not interrupt a running indexing call.
 
@@ -147,7 +149,7 @@ Evaluate OCR:
 Check device discovery using the executable declared by the active manifest:
 
 ```powershell
-.\.runtime\llama.cpp-b9982-vulkan\llama-server.exe --list-devices
+.\.runtime\llama.cpp-b11457-vulkan\llama-server.exe --list-devices
 ```
 
 If `Vulkan0` is absent or its vendor is not AMD, Intel, or NVIDIA, update the display driver or use a supported GPU. If activation or a GGUF hash check fails, rerun the setup script; do not replace an artifact manually. If OCR setup fails, remove an incomplete `.models\paddleocr` directory and retry its job with network access.

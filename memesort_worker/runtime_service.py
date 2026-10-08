@@ -84,7 +84,10 @@ def run_runtime_health_check(
         {
             "step": "runtime-manifest",
             "status": "ok",
-            "detail": manifest.runtime_fingerprint,
+            "detail": (
+                f"llama.cpp {manifest.llama_cpp.build}; {manifest.model.id}; "
+                f"{manifest.model.output_dimension}d; runtime={manifest.runtime_fingerprint}"
+            ),
         },
     ]
 
@@ -146,14 +149,14 @@ def _run_llama_cpp_runtime_health_check(
         from .llama_cpp_backend import (
             discover_llama_server,
             probe_llama_devices,
-            verify_qwen3_vl_embedding_2b_bundle,
+            verify_model_bundle,
         )
 
         main_model = manifest.main_model_path
         mmproj = manifest.projector_path
         validate_runtime_activation(manifest)
         validate_pinned_runtime_files(manifest)
-        verify_qwen3_vl_embedding_2b_bundle(main_model, mmproj, manifest)
+        verify_model_bundle(main_model, mmproj, manifest)
         diagnostic_steps.append(
             {
                 "step": "resolve-gguf-bundle",

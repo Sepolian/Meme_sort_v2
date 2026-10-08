@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from urllib.parse import urlsplit
@@ -68,6 +68,10 @@ class ToolchainSpec:
 class LlamaServerSpec:
     gpu_layers: int
     context_size: int
+    batch_size: int
+    ubatch_size: int
+    flash_attention: str
+    vulkan_disable_f16: bool
     parallel_slots: int
     startup_timeout_seconds: float
     request_timeout_seconds: float
@@ -114,6 +118,7 @@ class EmbeddingSpec:
     instruction_id: str
     instruction: str
     media_marker: str
+    image_input_policy: str
     pooling: str
     normalization: str
     storage_dtype: str
@@ -194,6 +199,10 @@ class RuntimeManifest:
                 "build": self.llama_cpp.build,
                 "archive_sha256": self.llama_cpp.archive.sha256,
                 "context_size": self.llama_cpp.server.context_size,
+                "batch_size": self.llama_cpp.server.batch_size,
+                "ubatch_size": self.llama_cpp.server.ubatch_size,
+                "flash_attention": self.llama_cpp.server.flash_attention,
+                "vulkan_disable_f16": self.llama_cpp.server.vulkan_disable_f16,
             },
             "model": {
                 "id": self.model.id,
@@ -213,14 +222,7 @@ class RuntimeManifest:
                 "alpha_background": self.preprocessing.alpha_background,
                 "apply_exif_orientation": self.preprocessing.apply_exif_orientation,
             },
-            "embedding": {
-                "instruction_id": self.embedding.instruction_id,
-                "instruction": self.embedding.instruction,
-                "media_marker": self.embedding.media_marker,
-                "pooling": self.embedding.pooling,
-                "normalization": self.embedding.normalization,
-                "storage_dtype": self.embedding.storage_dtype,
-            },
+            "embedding": asdict(self.embedding),
         }
 
     @property
@@ -265,8 +267,13 @@ class RuntimeManifest:
                 "archive_sha256": self.llama_cpp.archive.sha256,
                 "archive_size_bytes": self.llama_cpp.archive.size_bytes,
                 "executable": self.llama_cpp.executable,
+                "server": asdict(self.llama_cpp.server),
             },
             "model": {
+                "id": self.model.id,
+                "protocol": self.model.protocol,
+                "request_model": self.model.request_model,
+                "output_dimension": self.model.output_dimension,
                 "main_filename": self.model.main.filename,
                 "main_sha256": self.model.main.sha256,
                 "main_size_bytes": self.model.main.size_bytes,
@@ -274,6 +281,7 @@ class RuntimeManifest:
                 "projector_sha256": self.model.projector.sha256,
                 "projector_size_bytes": self.model.projector.size_bytes,
             },
+            "embedding": asdict(self.embedding),
         }
 
     @property
@@ -416,6 +424,10 @@ def _parse_manifest(
         {
             "gpu_layers",
             "context_size",
+            "batch_size",
+            "ubatch_size",
+            "flash_attention",
+            "vulkan_disable_f16",
             "parallel_slots",
             "startup_timeout_seconds",
             "request_timeout_seconds",
@@ -435,6 +447,18 @@ def _parse_manifest(
             ),
             context_size=_positive_int(
                 server_raw["context_size"], "llama_cpp.server.context_size"
+            ),
+            batch_size=_positive_int(
+                server_raw["batch_size"], "llama_cpp.server.batch_size"
+            ),
+            ubatch_size=_positive_int(
+                server_raw["ubatch_size"], "llama_cpp.server.ubatch_size"
+            ),
+            flash_attention=_literal(
+                server_raw["flash_attention"], "off", "llama_cpp.server.flash_attention"
+            ),
+            vulkan_disable_f16=_boolean(
+                server_raw["vulkan_disable_f16"], "llama_cpp.server.vulkan_disable_f16"
             ),
             parallel_slots=_positive_int(
                 server_raw["parallel_slots"], "llama_cpp.server.parallel_slots"
@@ -544,6 +568,7 @@ def _parse_manifest(
             "instruction_id",
             "instruction",
             "media_marker",
+            "image_input_policy",
             "pooling",
             "normalization",
             "storage_dtype",
@@ -554,11 +579,16 @@ def _parse_manifest(
         instruction_id=_string(
             embedding_raw["instruction_id"], "embedding.instruction_id"
         ),
-        instruction=_string(embedding_raw["instruction"], "embedding.instruction"),
+        instruction=_string(
+            embedding_raw["instruction"], "embedding.instruction", strip=False
+        ),
         media_marker=_string(
             embedding_raw["media_marker"], "embedding.media_marker"
         ),
-        pooling=_literal(embedding_raw["pooling"], "last", "embedding.pooling"),
+        image_input_policy=_literal(
+            embedding_raw["image_input_policy"], "image-only", "embedding.image_input_policy"
+        ),
+        pooling=_literal(embedding_raw["pooling"], "mean", "embedding.pooling"),
         normalization=_literal(
             embedding_raw["normalization"], "l2", "embedding.normalization"
         ),
@@ -629,10 +659,10 @@ def _expect_keys(raw: Mapping[str, Any], expected: set[str], location: str) -> N
         raise RuntimeManifestError(f"{location} fields invalid: {'; '.join(parts)}")
 
 
-def _string(value: Any, location: str) -> str:
+def _string(value: Any, location: str, *, strip: bool = True) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeManifestError(f"{location} must be a non-empty string")
-    return value.strip()
+    return value.strip() if strip else value
 
 
 def _literal(value: Any, expected: str, location: str) -> str:
