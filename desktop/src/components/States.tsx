@@ -1,3 +1,4 @@
+import archivePrints from "../assets/archive-prints.svg";
 import type { ReactNode } from "react";
 
 export function LoadingState() {
@@ -13,6 +14,7 @@ export function LoadingState() {
 export function SidecarDisconnected({ onRetry }: { onRetry: () => void }) {
   return (
     <main className="state-panel state-error" aria-live="assertive">
+      <img className="archive-prints" src={archivePrints} alt="" />
       <p className="eyebrow">Connection unavailable</p>
       <h1>MemeSort cannot reach its sidecar</h1>
       <p>The Library is unchanged. Retry the connection or restart MemeSort if the sidecar did not start.</p>

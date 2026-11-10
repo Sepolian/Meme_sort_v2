@@ -1,3 +1,4 @@
+import archivePrints from "../../assets/archive-prints.svg";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
@@ -136,10 +137,13 @@ function BrowseResultContext({
 }) {
   const filterSummary = browseFilterSummary(media, status);
   return (
-    <p className="library-result-context" role="status" aria-label="Browse results">
-      <strong>{filterSummary ? `Showing ${visible} of ${assetCount(total)}` : assetCount(total)}</strong>
-      <span>{filterSummary ?? "Browse mode · all loaded Assets."}</span>
-    </p>
+    <div className="sheet-caption">
+      <p className="library-result-context" role="status" aria-label="Browse results">
+        <strong>Contact sheet</strong>
+        {filterSummary ? <span>Showing {visible} of {assetCount(total)} · {filterSummary}</span> : null}
+      </p>
+      <span className="toolbar-hint">Drop files or folders to import</span>
+    </div>
   );
 }
 
@@ -665,7 +669,6 @@ export function AssetsWorkspace({
   };
 
   return <>
-    <section className="asset-toolbar"><div className="asset-toolbar-actions"><span className="toolbar-hint">Drag image files or folders onto the asset wall to import</span></div></section>
     {selectedIds.size > 0 ? (
       <section className="selection-toolbar" role="toolbar" aria-label="Selection toolbar">
         <span>{selectedIds.size} selected</span>
@@ -738,9 +741,10 @@ export function AssetsWorkspace({
     <div className="asset-wall">
       {!assets.length ? (
         <div className={`import-drop-card${dragPreview ? " import-drop-card-accepting" : ""}`} aria-label="Import drop card" ref={wallRef}>
+          <img className="archive-prints" src={archivePrints} alt="" />
           <h2>Drag image files or folders here</h2>
-          <p>Release them over this card to start an Import Batch. Sources are scanned and validated before anything is written to the Library.</p>
-          <p className="import-drop-card-hint">Keyboard alternative: use Import in the Library toolbar to choose files or a folder.</p>
+          <p>Your collection starts here. Drop stills and GIFs to import them.</p>
+          <p className="import-drop-card-hint">Or use Import above to choose files or a folder.</p>
         </div>
       ) : isLocalMode ? (
         localMatches.length ? (

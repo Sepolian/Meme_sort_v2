@@ -1,3 +1,4 @@
+import { Icon } from "../../components/Icon";
 import { useEffect, useRef, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { useEscapeSurface } from "../../components/useEscapeSurface";
@@ -107,7 +108,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
         disabled={controlsDisabled}
         onClick={() => setMenuOpen((open) => !open)}
       >
-        Import
+        <Icon name="plus" /> Import
       </button>
       {menuOpen ? (
         <div

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../../components/Icon";
 import type {
   LibraryDensity,
   LibraryMediaFilter,
@@ -96,7 +97,7 @@ export function LibraryControls({
           aria-controls="library-view-options"
           onClick={() => setViewOpen((open) => !open)}
         >
-          View
+          <Icon name="sliders" /> View
           {statusFilterActive ? <span className="library-filter-indicator" aria-hidden="true">●</span> : null}
         </button>
         {viewOpen ? (

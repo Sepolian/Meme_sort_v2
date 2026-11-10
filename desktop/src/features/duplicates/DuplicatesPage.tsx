@@ -226,13 +226,12 @@ export function DuplicatesPage({ client }: { client: MemeSortClient }) {
   return (
     <main className="page" tabIndex={-1} aria-labelledby="page-title">
       <div className="page-heading">
-        <p className="eyebrow">Library maintenance</p>
+        <p className="eyebrow">02 / Review</p>
         <h1 id="page-title">Duplicate assets</h1>
       </div>
       <section className="surface search-panel">
         <h2>Duplicate review</h2>
         <p>Compare Indexed Asset pairs from the Active Index Recipe. GIF matches use the strongest frame-to-frame score.</p>
-        <p>Dimensions and Source Record counts come from the current Asset list; score and Matched Frames come from the duplicate scan.</p>
         <label htmlFor="duplicate-threshold">Duplicate threshold</label>
         <div className="search-form">
           <input id="duplicate-threshold" type="number" min="0" max="1" step="0.01" value={threshold} onChange={(event) => setThreshold(event.target.value)} />

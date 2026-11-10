@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 132" fill="none">
+  <!-- Three small prints: a landscape, a sunburst and the archive cat. -->
+  <g stroke="#1d1d1f" stroke-width="2" stroke-linejoin="round">
+    <g transform="rotate(-14 68 79)">
+      <path fill="#ffffff" d="M23 32h83v86H23z"/>
+      <path fill="#d9dee7" d="M29 38h71v62H29z"/>
+      <path fill="#687384" d="m29 84 24-28 18 19 10-10 19 18v17H29z"/>
+      <circle cx="83" cy="52" r="7" fill="#ffffff"/>
+      <path d="M31 109h16m4 0h5"/>
+    </g>
+    <g transform="rotate(12 170 72)">
+      <path fill="#ffffff" d="M133 25h81v88h-81z"/>
+      <path fill="#9aa4b2" d="M139 31h69v65h-69z"/>
+      <path fill="#f4f6f8" d="m173 40 4 13 12-7-6 13 15 2-14 6 9 11-14-4-2 15-6-14-10 9 3-14-14-1 12-8-9-10 14 4z"/>
+      <path d="M188 103h16"/>
+    </g>
+    <g transform="rotate(-3 121 70)">
+      <path fill="#ffffff" d="M77 12h90v105H77z"/>
+      <path fill="#78b7ff" d="M83 18h78v77H83z"/>
+      <path fill="#282a30" d="m95 59 1-27 18 12q9-3 18-1l16-12 2 28q5 24-27 27-33 0-28-27Z"/>
+      <g fill="#ffffff" stroke="none"><ellipse cx="111" cy="58" rx="7" ry="8"/><ellipse cx="134" cy="58" rx="7" ry="8"/></g>
+      <path d="M113 54v8m23-9v8m-17 7 4 2 3-3" stroke-width="3"/>
+      <path d="m96 70-11-3m11 7-11 2m62-7 11-4m-11 8 11 1" stroke="#ffffff"/>
+      <path d="M85 104h25m32 0h3m4 0h3m4 0h3"/>
+    </g>
+  </g>
+</svg>

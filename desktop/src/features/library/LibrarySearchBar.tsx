@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "../../components/Icon";
 
 export type LibrarySearchMode = "meaning" | "filename";
 
@@ -141,29 +142,32 @@ export function LibrarySearchBar({
           onSubmit(draft);
         }}
       >
-        <label htmlFor="library-search-input">Search Library</label>
+        <label className="sr-only" htmlFor="library-search-input">Search Library</label>
         <div className="library-search-row">
-          <input
-            id="library-search-input"
-            value={draft}
-            onChange={(event) =>
-              handleChange(
-                event.currentTarget.value,
-                (event.nativeEvent as InputEvent).isComposing,
-              )
-            }
-            onCompositionStart={() => {
-              isComposingRef.current = true;
-              setIsComposing(true);
-            }}
-            onCompositionEnd={(event) => handleCompositionEnd(event.currentTarget.value)}
-            placeholder={
-              mode === "meaning"
-                ? "Describe the reaction to search by meaning"
-                : "Filter by filename or primary source path"
-            }
-            autoComplete="off"
-          />
+          <div className="query-field">
+            <Icon name="search" />
+            <input
+              id="library-search-input"
+              value={draft}
+              onChange={(event) =>
+                handleChange(
+                  event.currentTarget.value,
+                  (event.nativeEvent as InputEvent).isComposing,
+                )
+              }
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+                setIsComposing(true);
+              }}
+              onCompositionEnd={(event) => handleCompositionEnd(event.currentTarget.value)}
+              placeholder={
+                mode === "meaning"
+                  ? "Describe a reaction…"
+                  : "Search filenames or paths…"
+              }
+              autoComplete="off"
+            />
+          </div>
           <select
             className="library-search-mode"
             aria-label="Search mode"
@@ -187,7 +191,7 @@ export function LibrarySearchBar({
               disabled={imageDisabled}
               onClick={onImageSearch}
             >
-              {isChoosingImage ? "Choosing…" : "Search by image"}
+              <Icon name="image" />{isChoosingImage ? "Choosing…" : "Search by image"}
             </button>
           ) : null}
           {draft !== "" ? (

@@ -32,6 +32,8 @@ import type { ThemePreference } from "./features/theme/theme";
 import { TitleBar } from "./features/window/TitleBar";
 import { useWindowControls } from "./features/window/window-controls";
 import { tauriErrorDetail } from "./api/tauri-error";
+import memesortIcon from "./assets/memesort-icon.png";
+import { Icon } from "./components/Icon";
 import "./App.css";
 
 interface AppProps {
@@ -48,8 +50,8 @@ interface PageProps {
 }
 
 const primaryNavigation = [
-  { to: "/", label: "Library", end: true },
-  { to: "/duplicates", label: "Duplicates" },
+  { to: "/", label: "Library", icon: "library" as const, end: true },
+  { to: "/duplicates", label: "Duplicates", icon: "duplicates" as const },
 ];
 
 const settingsNavigation = [{ to: "/settings", label: "Settings" }];
@@ -351,7 +353,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
     <Page
       className="page-library"
       title="Your library"
-      eyebrow="MemeSort desktop"
+      eyebrow="01 / Collection"
       headingMeta={
         <span className="library-heading-count">
           <strong>{state.library_status.total_assets}</strong>{" "}
@@ -430,7 +432,7 @@ function LibraryPage({ state, client }: { state: AppState; client: MemeSortClien
 
 function SettingsRoute({ state, client, onStateChanged }: { state: AppState; client: MemeSortClient; onStateChanged: () => void }) {
   return (
-    <Page title="Settings" eyebrow="Configuration">
+    <Page title="Settings" eyebrow="03 / Preferences">
       <SettingsPage client={client} appState={state} onStateChanged={onStateChanged} />
     </Page>
   );
@@ -527,10 +529,15 @@ function AppShell({ client }: { client: MemeSortClient }) {
     <div className="app-shell">
       <TitleBar controls={windowControls} />
       <aside className="sidebar" aria-label="Primary navigation">
+        <div className="rail-masthead" aria-hidden="true">
+          <img src={memesortIcon} alt="" width="42" height="42" />
+          <span>MemeSort<small>Media archive</small></span>
+        </div>
+        <span className="rail-label">Workspace</span>
         <nav aria-label="Primary">
-          {primaryNavigation.map(({ to, label, end }) => (
+          {primaryNavigation.map(({ to, label, end, icon }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
-              {label}
+              <Icon name={icon} />{label}
             </NavLink>
           ))}
         </nav>
@@ -538,11 +545,11 @@ function AppShell({ client }: { client: MemeSortClient }) {
           <nav aria-label="Settings">
             {settingsNavigation.map(({ to, label }) => (
               <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}>
-                {label}
+                <Icon name="sliders" />{label}
               </NavLink>
             ))}
           </nav>
-          <button ref={helpTriggerRef} className="text-button" type="button" onClick={() => setShowHelp(true)}>Keyboard help</button>
+          <button ref={helpTriggerRef} className="text-button" type="button" onClick={() => setShowHelp(true)}><Icon name="keyboard" />Keyboard help</button>
           <ThemeSidebarControl />
         </div>
       </aside>
