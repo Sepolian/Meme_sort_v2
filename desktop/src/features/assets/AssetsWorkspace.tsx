@@ -1,4 +1,4 @@
-import archivePrints from "../../assets/archive-prints.svg";
+import archivePrints from "../../assets/archive-prints.svg?no-inline";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";

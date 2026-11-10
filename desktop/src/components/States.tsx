@@ -1,4 +1,4 @@
-import archivePrints from "../assets/archive-prints.svg";
+import archivePrints from "../assets/archive-prints.svg?no-inline";
 import type { ReactNode } from "react";
 
 export function LoadingState() {
