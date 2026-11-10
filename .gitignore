@@ -36,3 +36,6 @@ labels/
 docs/plans/
 
 *_smoke_*/
+.DS_Store
+/docs/research
+/.scratch
