@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
-from .app_paths import AppPaths, ENV_PORTABLE_ROOT
+from .app_paths import AppPaths, ENV_DATA_ROOT, ENV_PORTABLE_ROOT
 
 
 MANIFEST_FILENAME = "runtime-manifest.json"
@@ -317,7 +317,7 @@ def load_runtime_manifest(
         raise RuntimeManifestError("Runtime manifest root must be an object")
     if portable_data_root is not None:
         resolved_data_root = Path(portable_data_root).expanduser().resolve()
-    elif os.environ.get(ENV_PORTABLE_ROOT):
+    elif os.environ.get(ENV_PORTABLE_ROOT) or os.environ.get(ENV_DATA_ROOT):
         resolved_data_root = AppPaths.discover().data_root
     else:
         resolved_data_root = None

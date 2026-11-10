@@ -1,4 +1,5 @@
 export interface AppState {
+  setup?: { missing: string[] };
   library_root: string;
   runtime: {
     backend_name: string;

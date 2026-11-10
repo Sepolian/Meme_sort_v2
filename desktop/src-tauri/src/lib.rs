@@ -71,6 +71,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(&event, tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } if label == "main") {
+                app.exit(0);
+            }
             if matches!(
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit

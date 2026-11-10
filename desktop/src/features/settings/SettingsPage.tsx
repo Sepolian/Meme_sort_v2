@@ -1,3 +1,4 @@
+import { isMacOS } from "../../api/platform";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { AppState } from "../../api/types";
 import { ThemeSettingsControl } from "../theme/ThemeSettingsControl";
@@ -22,7 +23,7 @@ function SettingsSection({ id, title, children }: SettingsSectionProps) {
 function RuntimeDescriptorSection({ appState }: { appState: AppState }) {
   return (
     <>
-      <p>MemeSort uses the manifest-pinned llama.cpp Vulkan0 runtime. Runtime selection is not configurable.</p>
+      <p>MemeSort uses the manifest-pinned llama.cpp runtime. Runtime selection is not configurable.</p>
       <section className="surface import-card" aria-labelledby="settings-runtime-descriptor-title">
         <h3 id="settings-runtime-descriptor-title">Runtime Descriptor</h3>
         <p>{appState.runtime.model_label ?? "Manifest-pinned model"} · {appState.runtime.output_dimension ?? "unknown"}d · {appState.runtime.storage_dtype ?? "unknown"}</p>
@@ -39,6 +40,13 @@ function RuntimeDescriptorSection({ appState }: { appState: AppState }) {
 }
 
 function InstallationSection() {
+  if (isMacOS()) return (
+    <>
+      <p>Complete the one-time macOS runtime and OCR setup using the external setup script, then relaunch MemeSort.</p>
+      <p>Your Library, models, runtime, and logs live under ~/Library/Application Support/MemeSort. Moving or replacing the app preserves this data.</p>
+      <p>Library browsing and import remain available before setup. Semantic search and indexing require a successful health check in this app session.</p>
+    </>
+  );
   return (
     <>
       <p>
@@ -87,7 +95,7 @@ export function SettingsPage({
       <SettingsSection id="settings-appearance" title="Appearance">
         <p>
           Theme preference is persisted as system, dark, or light and defaults
-          to system. System follows Windows appearance without a reload.
+          to system. System follows the operating system appearance without a reload.
         </p>
         <ThemeSettingsControl />
       </SettingsSection>

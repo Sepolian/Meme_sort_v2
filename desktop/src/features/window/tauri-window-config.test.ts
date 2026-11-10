@@ -25,6 +25,13 @@ describe("native window configuration", () => {
     }));
   });
 
+  it("uses normal native decorations for the Mac app", () => {
+    const config = readProjectJson<{ app: { windows: Array<{ label: string; decorations: boolean }> }; bundle: { active: boolean; targets: string[]; resources: Record<string, string> } }>("../../../src-tauri/tauri.macos.conf.json");
+    expect(config.app.windows).toContainEqual(expect.objectContaining({ label: "main", decorations: true }));
+    expect(config.bundle).toMatchObject({ active: true, targets: ["app"] });
+    expect(Object.values(config.bundle.resources)).toContain("sidecar/");
+  });
+
   it("grants the window operations used by the title bar", () => {
     const capability = readProjectJson<{ permissions: string[] }>("../../../src-tauri/capabilities/default.json");
 

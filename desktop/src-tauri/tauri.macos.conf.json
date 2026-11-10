@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "MemeSort",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "decorations": true,
+        "resizable": true,
+        "transparent": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app"
+    ],
+    "resources": {
+      "resources/sidecar/": "sidecar/"
+    },
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

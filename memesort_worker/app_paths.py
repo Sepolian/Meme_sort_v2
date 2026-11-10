@@ -14,6 +14,7 @@ DATA_DIR_NAME = "MemeSortData"
 ENV_APP_ROOT = "MEMESORT_APP_ROOT"
 ENV_LIBRARY_ROOT = "MEMESORT_LIBRARY_ROOT"
 ENV_PORTABLE_ROOT = "MEMESORT_PORTABLE_ROOT"
+ENV_DATA_ROOT = "MEMESORT_DATA_ROOT"
 
 MANIFEST_FILENAME = "runtime-manifest.json"
 
@@ -25,9 +26,9 @@ class AppPaths:
     Its job is to stop modules assuming ``Path(__file__).parents[...]`` is the
     product root, so the runtime manifest resolves correctly in a
     development checkout, a PyInstaller frozen build, and under test. The
-    portable root is the directory containing ``MemeSort.exe``. All mutable
-    application data belongs beneath its ``MemeSortData`` directory, never the
-    process current directory or a roaming user-profile location.
+    Windows portable root contains ``MemeSort.exe`` and ``MemeSortData``.
+    macOS keeps mutable data in Application Support, separately from bundled
+    resources. Neither layout depends on the process current directory.
     """
 
     application_root: Path
@@ -43,7 +44,12 @@ class AppPaths:
         environ = os.environ if env is None else env
         application_root, manifest_path = _resolve_application_layout(environ)
         portable_root = _resolve_portable_root(application_root, environ)
-        data_root = portable_root / DATA_DIR_NAME
+        if environ.get(ENV_DATA_ROOT):
+            data_root = Path(environ[ENV_DATA_ROOT]).expanduser().resolve()
+        elif sys.platform == "darwin" and not environ.get(ENV_PORTABLE_ROOT):
+            data_root = (Path.home() / "Library" / "Application Support" / "MemeSort").resolve()
+        else:
+            data_root = portable_root / DATA_DIR_NAME
         return cls(
             application_root=application_root,
             manifest_path=manifest_path,

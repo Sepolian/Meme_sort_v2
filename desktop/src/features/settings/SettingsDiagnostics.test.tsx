@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import { createUnconfiguredClient } from "../../api/test-client";
@@ -177,6 +177,18 @@ function renderApp(route: string, client: MemeSortClient) {
 }
 
 describe("Settings Runtime and installation (ticket 15)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows missing Mac setup and Application Support guidance", async () => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+    const client = createClient();
+    client.getAppState.mockResolvedValue({ ...diagnosticsAppState(), setup: { missing: ["semantic runtime", "OCR environment"] } });
+    renderApp("/settings", client);
+    expect(await screen.findByLabelText("Setup needed")).toHaveTextContent("semantic runtime, OCR environment");
+    expect(screen.getByText(/Application Support\/MemeSort/)).toBeInTheDocument();
+    expect(screen.queryByText("setup_portable_runtime.bat", { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Window controls")).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();

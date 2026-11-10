@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
-from .app_paths import AppPaths, ENV_PORTABLE_ROOT
+from .app_paths import AppPaths, ENV_DATA_ROOT, ENV_PORTABLE_ROOT
 
 
 class OcrBackend(Protocol):
@@ -123,6 +123,8 @@ def _ocr_python_path() -> Path:
             / "Scripts"
             / "python.exe"
         )
+    if os.environ.get(ENV_DATA_ROOT) or sys.platform == "darwin":
+        return AppPaths.discover().runtime_root / "ocr-venv" / "bin" / "python"
     root = _project_root()
     return root / ".venv-ocr" / "Scripts" / "python.exe"
 
@@ -130,13 +132,25 @@ def _ocr_python_path() -> Path:
 def _ocr_worker_path() -> Path:
     if os.environ.get(ENV_PORTABLE_ROOT):
         return AppPaths.discover().portable_root / "scripts" / "paddle_ocr_worker.py"
-    return _project_root() / "scripts" / "paddle_ocr_worker.py"
+    return AppPaths.discover().manifest_path.parent / "scripts" / "paddle_ocr_worker.py"
 
 
 def _ocr_model_cache_path() -> Path:
-    if os.environ.get(ENV_PORTABLE_ROOT):
+    if os.environ.get(ENV_PORTABLE_ROOT) or os.environ.get(ENV_DATA_ROOT) or sys.platform == "darwin":
         return AppPaths.discover().models_root / "paddleocr"
     return _project_root() / ".models" / "paddleocr"
+
+
+def ocr_files_available() -> bool:
+    cache = _ocr_model_cache_path() / "official_models"
+    return (
+        _ocr_python_path().is_file()
+        and _ocr_worker_path().is_file()
+        and all(
+            (cache / name / "inference.pdiparams").is_file()
+            for name in ("PP-OCRv5_mobile_det", "PP-OCRv5_mobile_rec")
+        )
+    )
 
 
 def get_ocr_backend() -> OcrBackend:

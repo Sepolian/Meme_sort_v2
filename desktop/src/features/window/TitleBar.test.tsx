@@ -15,6 +15,13 @@ function controls(overrides: Partial<WindowControls> = {}): WindowControls {
 }
 
 describe("TitleBar", () => {
+  it("leaves Mac window controls to the native title bar", () => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+    render(<TitleBar controls={controls()} />);
+    expect(screen.queryByLabelText("Window controls")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Window drag region")).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
   it("provides accessible window controls without making the buttons draggable", () => {
     const windowControls = controls();
     render(<TitleBar controls={windowControls} />);

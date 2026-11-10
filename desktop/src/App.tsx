@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { isMacOS } from "./api/platform";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { tauriClient, type MemeSortClient } from "./api/tauri-client";
 import type { AppState } from "./api/types";
@@ -555,6 +556,13 @@ function AppShell({ client }: { client: MemeSortClient }) {
       </aside>
       <div className="workspace">
         <div className="workspace-main">
+          {isMacOS() && !!stateQuery.data?.setup?.missing.length ? (
+            <aside className="notice notice-warning" role="status" aria-label="Setup needed">
+              <strong>Setup needed</strong>
+              <span>Missing: {stateQuery.data.setup.missing.join(", ")}. Library browsing remains available.</span>
+              <Link to="/settings">Setup instructions</Link>
+            </aside>
+          ) : null}
           {stateQuery.isPending ? <LoadingState /> : null}
           {stateQuery.isError ? <SidecarDisconnected onRetry={() => void stateQuery.refetch()} /> : null}
           {stateQuery.isSuccess ? <ApplicationRoutes state={stateQuery.data} client={client} onStateChanged={() => void stateQuery.refetch()} /> : null}

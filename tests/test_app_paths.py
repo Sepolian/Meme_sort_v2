@@ -32,6 +32,21 @@ class AppPathsDiscoveryTests(unittest.TestCase):
             self.assertEqual(paths.models_root, data_root / "models")
             self.assertEqual(paths.runtime_root, data_root / "runtime")
 
+    def test_mac_install_replacement_keeps_data_in_application_support(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = Path(temp_dir) / "用户 home"
+            with mock.patch("sys.platform", "darwin"), mock.patch.object(Path, "home", return_value=home):
+                first = AppPaths.discover(env={ENV_APP_ROOT: str(Path(temp_dir) / "First.app")})
+                replacement = AppPaths.discover(env={ENV_APP_ROOT: str(Path(temp_dir) / "Moved app.app")})
+
+            expected = (home / "Library" / "Application Support" / "MemeSort").resolve()
+            self.assertEqual(first.data_root, expected)
+            self.assertEqual(replacement.data_root, expected)
+            self.assertEqual(first.default_library_root, expected / "library")
+            self.assertEqual(first.models_root, expected / "models")
+            self.assertEqual(first.runtime_root, expected / "runtime")
+            self.assertNotEqual(first.manifest_path, replacement.manifest_path)
+
     def test_development_layout_points_at_source_checkout(self) -> None:
         paths = AppPaths.discover(env={})
 
@@ -40,6 +55,7 @@ class AppPathsDiscoveryTests(unittest.TestCase):
         self.assertEqual(paths.manifest_path, package_dir.parent / "runtime-manifest.json")
         self.assertTrue(paths.manifest_path.is_file())
 
+    @mock.patch("sys.platform", "win32")
     def test_application_root_is_the_default_portable_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             app_root = Path(temp_dir) / "MemeSort-portable"
@@ -53,6 +69,7 @@ class AppPathsDiscoveryTests(unittest.TestCase):
             self.assertEqual(paths.portable_root, app_root.resolve())
             self.assertEqual(paths.default_library_root, app_root.resolve() / "MemeSortData" / "library")
 
+    @mock.patch("sys.platform", "win32")
     def test_environment_overrides_take_priority(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

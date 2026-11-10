@@ -1,3 +1,4 @@
+import { isMacOS } from "../../api/platform";
 import memesortIcon from "../../assets/memesort-icon.png";
 import type { WindowControls } from "./window-controls";
 
@@ -6,6 +7,7 @@ interface TitleBarProps {
 }
 
 export function TitleBar({ controls }: TitleBarProps) {
+  if (isMacOS()) return null;
   const maximizeLabel = controls.isMaximized ? "Restore window" : "Maximize window";
 
   return (

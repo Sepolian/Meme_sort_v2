@@ -41,7 +41,7 @@ const MAX_IMPORT_SOURCES: usize = 256;
 const MAX_SOURCE_PATH_BYTES: usize = 32 * 1024;
 const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MEDIA_PROTOCOL: &str = "memesort-media";
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 const SIDECAR_BINARY_NAME: &str = "memesort-sidecar-x86_64-pc-windows-msvc.exe";
 
 #[derive(Debug, Serialize)]
@@ -128,6 +128,14 @@ pub struct SidecarSession {
     origin: String,
     #[allow(dead_code)]
     session_cookie: String,
+}
+
+impl Drop for SidecarSession {
+    fn drop(&mut self) {
+        if self.child.try_wait().ok().flatten().is_none() {
+            terminate_child(&mut self.child);
+        }
+    }
 }
 
 pub struct SidecarState(Mutex<Option<SidecarSession>>);
@@ -1410,18 +1418,35 @@ struct SidecarLaunch {
 
 impl SidecarLaunch {
     fn for_current_build(_app: &AppHandle) -> Result<Self, SidecarError> {
+        #[cfg(target_os = "macos")]
+        let data_root = env::var_os("MEMESORT_DATA_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or(
+                _app.path()
+                    .home_dir()
+                    .map_err(|error| {
+                        SidecarError::new(format!("Could not resolve the user home: {error}"))
+                    })?
+                    .join("Library")
+                    .join("Application Support")
+                    .join("MemeSort"),
+            );
+
         #[cfg(debug_assertions)]
         {
             let repository_root = repository_root()?;
+            #[cfg(target_os = "macos")]
+            let library_root = data_root.join("library");
+            #[cfg(not(target_os = "macos"))]
             let library_root = default_library_root(&repository_root);
-            let log_dir = library_root.join("logs");
             let python = env::var_os("MEMESORT_SIDECAR_PYTHON")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| {
-                    repository_root
-                        .join(".venv")
-                        .join("Scripts")
-                        .join("python.exe")
+                    repository_root.join(".venv").join(if cfg!(windows) {
+                        "Scripts/python.exe"
+                    } else {
+                        "bin/python"
+                    })
                 });
             if !python.is_file() {
                 return Err(SidecarError::new(format!(
@@ -1429,25 +1454,57 @@ impl SidecarLaunch {
                     python.display()
                 )));
             }
+            let arguments = vec![
+                "-m".into(),
+                "memesort_worker.sidecar_entry".into(),
+                "--library-root".into(),
+                library_root.display().to_string(),
+                "--log-dir".into(),
+                library_root.join("logs").display().to_string(),
+            ];
+            #[cfg(target_os = "macos")]
+            let arguments = {
+                let mut arguments = arguments;
+                arguments.extend(["--data-root".into(), data_root.display().to_string()]);
+                arguments
+            };
             Ok(Self {
                 executable: python,
-                arguments: vec![
-                    "-m".into(),
-                    "memesort_worker.sidecar_entry".into(),
-                    "--library-root".into(),
-                    library_root.display().to_string(),
-                    "--log-dir".into(),
-                    log_dir.display().to_string(),
-                ],
+                arguments,
                 working_directory: repository_root,
             })
         }
 
-        #[cfg(not(debug_assertions))]
+        #[cfg(all(not(debug_assertions), target_os = "macos"))]
+        {
+            let resource_root = _app.path().resource_dir().map_err(|error| {
+                SidecarError::new(format!("Could not resolve bundled resources: {error}"))
+            })?;
+            let executable = resource_root
+                .join("sidecar")
+                .join("memesort-sidecar-aarch64-apple-darwin");
+            if !executable.is_file() {
+                return Err(SidecarError::new(format!(
+                    "MemeSort sidecar is missing at {}. Rebuild or reinstall the complete app.",
+                    executable.display()
+                )));
+            }
+            fs::create_dir_all(&data_root).map_err(|error| {
+                SidecarError::new(format!(
+                    "Could not create Application Support data directory: {error}"
+                ))
+            })?;
+            Ok(Self {
+                executable,
+                arguments: vec!["--data-root".into(), data_root.display().to_string()],
+                working_directory: data_root,
+            })
+        }
+
+        #[cfg(all(not(debug_assertions), not(target_os = "macos")))]
         {
             let portable_root = executable_root()?;
             let library_root = default_library_root(&portable_root);
-            let log_dir = library_root.join("logs");
             let executable = portable_root.join("sidecar").join(SIDECAR_BINARY_NAME);
             if !executable.is_file() {
                 return Err(SidecarError::new(format!(
@@ -1461,7 +1518,7 @@ impl SidecarLaunch {
                     "--library-root".into(),
                     library_root.display().to_string(),
                     "--log-dir".into(),
-                    log_dir.display().to_string(),
+                    library_root.join("logs").display().to_string(),
                     "--portable-root".into(),
                     portable_root.display().to_string(),
                 ],
@@ -1478,6 +1535,10 @@ impl SidecarLaunch {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        #[cfg(target_os = "macos")]
+        command
+            .env_remove("MEMESORT_APP_ROOT")
+            .env_remove("MEMESORT_PORTABLE_ROOT");
         #[cfg(windows)]
         command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         command
@@ -1486,7 +1547,7 @@ impl SidecarLaunch {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 fn executable_root() -> Result<PathBuf, SidecarError> {
     env::current_exe()
         .map_err(|error| SidecarError::new(format!("Could not resolve MemeSort.exe: {error}")))?
@@ -1504,6 +1565,7 @@ fn repository_root() -> Result<PathBuf, SidecarError> {
         .ok_or_else(|| SidecarError::new("Could not resolve the MemeSort repository root."))
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 fn default_library_root(portable_root: &Path) -> PathBuf {
     if let Some(root) = env::var_os("MEMESORT_LIBRARY_ROOT") {
         return PathBuf::from(root);
@@ -1858,11 +1920,43 @@ mod tests {
 
     #[test]
     fn derives_the_default_library_from_the_portable_root() {
-        let portable_root = Path::new(r"C:\MemeSort-portable");
+        let portable_root = std::env::temp_dir().join("MemeSort-portable");
 
         assert_eq!(
-            default_library_root(portable_root),
-            PathBuf::from(r"C:\MemeSort-portable\MemeSortData\library")
+            default_library_root(&portable_root),
+            portable_root.join("MemeSortData").join("library")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dropping_a_sidecar_session_reaps_the_child() {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("/bin/sleep")
+            .arg("60")
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let session = SidecarSession {
+            stdin: child.stdin.take().unwrap(),
+            child,
+            origin: String::new(),
+            session_cookie: String::new(),
+        };
+        drop(session);
+        let alive = Command::new("/bin/kill")
+            .args(["-0", &pid.to_string()])
+            .stderr(Stdio::null())
+            .status()
+            .unwrap()
+            .success();
+        if alive {
+            let _ = Command::new("/bin/kill").arg(pid.to_string()).status();
+        }
+        assert!(
+            !alive,
+            "dropping the managed session must not leave a sidecar running"
         );
     }
 
@@ -2107,6 +2201,10 @@ mod tests {
     fn resolves_a_managed_asset_reveal_target_only_through_the_fixed_route() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener.local_addr().expect("listener address").port();
+        let expected_path = std::env::temp_dir()
+            .join("MemeSort originals")
+            .join("图片.png");
+        let response_path = expected_path.clone();
         let server = thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("reveal request should connect");
             let mut request = Vec::new();
@@ -2137,7 +2235,11 @@ mod tests {
             assert!(!request.contains("source_path"));
             stream
                 .write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"resolved_path\":\"C:/MemeSort/originals/asset.png\",\"target\":\"managed\"}",
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{}",
+                        serde_json::json!({"resolved_path": response_path, "target": "managed"})
+                    )
+                    .as_bytes(),
                 )
                 .expect("reveal response should write");
         });
@@ -2153,7 +2255,7 @@ mod tests {
         .expect("managed Asset reveal target should resolve");
         server.join().expect("test server should finish");
 
-        assert_eq!(path, PathBuf::from("C:/MemeSort/originals/asset.png"));
+        assert_eq!(path, expected_path);
     }
 
     #[test]

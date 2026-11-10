@@ -17,7 +17,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Callable, Iterable, TextIO
 
-from .app_paths import AppPaths, ENV_PORTABLE_ROOT
+from .app_paths import AppPaths, ENV_DATA_ROOT, ENV_PORTABLE_ROOT
 from .local_app_host import (
     LocalAppHost,
     LocalAppHostConfig,
@@ -73,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory containing MemeSort.exe; runtime data stays beneath MemeSortData.",
     )
     parser.add_argument(
+        "--data-root",
+        default=None,
+        help="Writable application data directory, separate from bundled resources (macOS).",
+    )
+    parser.add_argument(
         "--write-runtime-activation",
         action="store_true",
         help="Write the verified runtime activation record, then exit.",
@@ -100,29 +105,30 @@ def main(
     protocol_stdin = stdin if stdin is not None else sys.stdin
     protocol_stdout = stdout if stdout is not None else sys.stdout
     protocol_stderr = stderr if stderr is not None else sys.stderr
-    previous_portable_root = os.environ.get(ENV_PORTABLE_ROOT)
+    previous_roots = {key: os.environ.get(key) for key in (ENV_PORTABLE_ROOT, ENV_DATA_ROOT)}
     if args.portable_root:
         os.environ[ENV_PORTABLE_ROOT] = str(Path(args.portable_root).expanduser().resolve())
+    if args.data_root:
+        os.environ[ENV_DATA_ROOT] = str(Path(args.data_root).expanduser().resolve())
     try:
         _configure_protocol_encoding(protocol_stdout)
         if args.write_runtime_activation:
-            if not args.portable_root:
+            if not (args.portable_root or args.data_root):
                 _write_stderr(
                     protocol_stderr,
-                    "Portable activation requires an explicit --portable-root.",
+                    "Runtime activation requires an explicit --portable-root or --data-root.",
                 )
                 return 2
             activation_path = write_runtime_activation(load_runtime_manifest())
             protocol_stdout.write(f"{activation_path}\n")
             protocol_stdout.flush()
             return 0
-        log_handler = _configure_log_handler(args.log_dir, protocol_stderr)
-
         library_root = (
             Path(args.library_root).expanduser().resolve()
             if args.library_root
             else AppPaths.discover().default_library_root
         )
+        log_handler = _configure_log_handler(args.log_dir or str(library_root / "logs"), protocol_stderr)
         host = host_factory(LocalAppHostConfig(library_root=library_root))
 
         try:
@@ -146,10 +152,11 @@ def main(
             _LOG.info("sidecar_stopped clean=%s", report.clean)
             _remove_log_handler(log_handler)
     finally:
-        if previous_portable_root is None:
-            os.environ.pop(ENV_PORTABLE_ROOT, None)
-        else:
-            os.environ[ENV_PORTABLE_ROOT] = previous_portable_root
+        for key, previous in previous_roots.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
 
     if not report.clean:
         _write_stderr(protocol_stderr, "MemeSort sidecar did not shut down cleanly.")

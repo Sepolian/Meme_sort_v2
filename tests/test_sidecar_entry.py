@@ -3,6 +3,7 @@ from __future__ import annotations
 import http.cookiejar
 import io
 import json
+import os
 import queue
 import tempfile
 import threading
@@ -130,7 +131,34 @@ class SidecarEntryTests(unittest.TestCase):
             observed,
         )
 
-    def _start_sidecar(self, library_root: Path):
+    def test_data_root_opens_without_setup_and_rehomes_all_runtime_data(self) -> None:
+        previous_data_root = os.environ.get("MEMESORT_DATA_ROOT")
+        with tempfile.TemporaryDirectory(prefix="Mac 中文 ") as temp_dir:
+            data_root = Path(temp_dir) / "Application Support" / "MemeSort"
+            control, _stdout, _stderr, result, thread, handshake = self._start_sidecar(
+                data_root / "library", data_root=data_root
+            )
+            try:
+                self.assertEqual(str((data_root / "library").resolve()), handshake["library_root"])
+                opener = urllib.request.build_opener(
+                    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+                )
+                with opener.open(handshake["bootstrap_url"], timeout=5) as response:
+                    state = json.load(response)
+                self.assertEqual(0, state["library_status"]["total_assets"])
+                self.assertEqual(["semantic runtime", "OCR environment"], state["setup"]["missing"])
+                self.assertTrue(load_runtime_manifest().model_install_dir.is_relative_to(data_root.resolve() / "models"))
+                self.assertTrue(load_runtime_manifest().llama_install_dir.is_relative_to(data_root.resolve() / "runtime"))
+                self.assertTrue((data_root / "library").is_dir())
+            finally:
+                control.close()
+                thread.join(timeout=5)
+            self.assertEqual([0], result)
+            self.assertFalse(thread.is_alive())
+            self.assertIn("sidecar_stopped clean=True", (data_root / "library" / "logs" / "sidecar.log").read_text())
+            self.assertEqual(previous_data_root, os.environ.get("MEMESORT_DATA_ROOT"))
+
+    def _start_sidecar(self, library_root: Path, *, data_root: Path | None = None):
         control = _ControlPipe()
         stdout = _NotifyingOutput()
         stderr = io.StringIO()
@@ -138,11 +166,11 @@ class SidecarEntryTests(unittest.TestCase):
         thread = threading.Thread(
             target=lambda: result.append(
                 main(
-                    ["--library-root", str(library_root)],
+                    (["--data-root", str(data_root)] if data_root else ["--library-root", str(library_root)]),
                     stdin=control,
                     stdout=stdout,
                     stderr=stderr,
-                    host_factory=_test_host_factory,
+                    host_factory=LocalAppHost if data_root else _test_host_factory,
                 )
             ),
             daemon=True,
@@ -227,13 +255,14 @@ class SidecarEntryTests(unittest.TestCase):
         host = FailingHost()
         stdout = io.StringIO()
         stderr = io.StringIO()
-        result = main(
-            [],
-            stdin=io.StringIO(),
-            stdout=stdout,
-            stderr=stderr,
-            host_factory=lambda _config: host,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = main(
+                ["--library-root", str(Path(temp_dir) / "library")],
+                stdin=io.StringIO(),
+                stdout=stdout,
+                stderr=stderr,
+                host_factory=lambda _config: host,
+            )
 
         self.assertEqual(1, result)
         self.assertEqual("", stdout.getvalue())

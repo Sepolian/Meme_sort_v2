@@ -38,6 +38,14 @@ The main model and projector total 864,676,640 bytes (approximately 865 MB). Art
 
 The Windows archive was downloaded and checked against the official llama.cpp [b11457 release](https://github.com/ggml-org/llama.cpp/releases/tag/b11457). Model downloads use the immutable [Unsloth GGUF revision 031f0d4b](https://huggingface.co/unsloth/embeddinggemma-2-GGUF/tree/031f0d4b35536f69ab3509d4893c923264fcf253); its published sizes and hashes match the evaluated bundle. The projector also contains an audio encoder; supported Assets remain still images and GIFs.
 
+## Apple Silicon Mac app
+
+Build a personal, ad-hoc signed `.app` with `bash scripts/build_macos.sh`.
+See the [Mac packaging instructions](desktop/README.md#apple-silicon-mac-package)
+for prerequisites, output paths, the Application Support data layout, and the
+package smoke check. The Library opens before semantic/OCR setup; installing and
+validating those runtimes is separate from packaging the application.
+
 ## Portable desktop package
 
 The desktop distribution is portable-only: it has no MSI or NSIS installer. From a prepared development checkout, build it with:
