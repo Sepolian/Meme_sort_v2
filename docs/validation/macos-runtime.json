@@ -135,7 +135,7 @@
     "full OCR provisioning and dataset evaluations",
     "personal installation (skipped)",
     "Windows real-device execution",
-    "full final integrated app build/suite",
+    "current macOS app build and setup validation",
     "Rust validation was not repeated because this integration made no Rust changes; full integration validation was deferred."
   ],
   "automated_checks": {
@@ -340,5 +340,183 @@
     "tests/test_runtime_admission.py",
     "tests/test_runtime_manifest.py",
     "tests/test_vulkan_only_runtime.py"
-  ]
+  ],
+  "built_app_setup_validation": {
+    "app": "/private/tmp/MemeSort built app 中文/MemeSort.app",
+    "build_source_head": "4a391f5e0331f877df0366038305dccf148b00a9",
+    "build_method": "Current branch Tauri release .app bundler; reused the previously verified frozen sidecar and installed frontend dependencies. Source dist/MemeSort.app was not changed.",
+    "signature_verification": "codesign --verify --deep --strict passed",
+    "native_architecture_verification": "lipo -verify_arch arm64 passed for bundled frozen sidecar",
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "HOME": "/private/tmp",
+      "inherited_environment": false,
+      "working_directory": "/private/tmp"
+    },
+    "data_root": "/private/tmp/MemeSort built app setup 中文",
+    "direct_frozen_entry": "Contents/Resources/sidecar/memesort-sidecar-aarch64-apple-darwin --setup-macos-runtime --offline --downloads /private/tmp/memesort-acceptance-downloads --data-root <isolated root>",
+    "direct_setup_result": {
+      "semantic_installed": true,
+      "ocr_installed": false,
+      "device": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+      "native_architecture": "arm64",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "activation": "/private/tmp/MemeSort built app setup 中文/runtime/active-runtime.json",
+      "setup_seconds": 9.155,
+      "message": "Semantic runtime installed. CPU OCR provisioning is required; run an application-session health check before indexing."
+    },
+    "bundled_launcher_rerun_result": {
+      "semantic_installed": true,
+      "ocr_installed": false,
+      "device": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+      "native_architecture": "arm64",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "activation": "/private/tmp/MemeSort built app setup 中文/runtime/active-runtime.json",
+      "setup_seconds": 4.168,
+      "message": "Semantic runtime installed. CPU OCR provisioning is required; run an application-session health check before indexing."
+    },
+    "frozen_host_sessions": [
+      {
+        "session": 1,
+        "handshake_with_startup_authorization_seconds": 5.673,
+        "runtime": {
+          "backend_name": "llama.cpp",
+          "device": "MTL0",
+          "llama_cpp_build": "b11457",
+          "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+          "model_label": "embeddinggemma-2",
+          "output_dimension": 768,
+          "storage_dtype": "float32",
+          "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+          "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+          "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+          "still_max_side": 480,
+          "gif_max_side": 480,
+          "gif_frame_count": 4
+        },
+        "missing_setup": [
+          "OCR environment"
+        ],
+        "health": {
+          "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+          "backend_name": "llama.cpp",
+          "device": "MTL0",
+          "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+          "gpu_vendor": "apple",
+          "gpu_vendor_id": null,
+          "text_smoke_vector_dim": 768,
+          "image_smoke_vector_dim": 768,
+          "diagnostic_steps": [
+            {
+              "step": "runtime-manifest",
+              "status": "ok",
+              "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+            },
+            {
+              "step": "resolve-gguf-bundle",
+              "status": "ok",
+              "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+            },
+            {
+              "step": "metal-device",
+              "status": "ok",
+              "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+            },
+            {
+              "step": "llama-server",
+              "status": "ok",
+              "detail": "/private/tmp/MemeSort built app setup 中文/runtime/llama.cpp-b11457-metal/llama-server"
+            },
+            {
+              "step": "text-embedding-smoke",
+              "status": "ok",
+              "detail": "llama.cpp text embedding passed at 768d."
+            },
+            {
+              "step": "image-embedding-smoke",
+              "status": "ok",
+              "detail": "llama.cpp image embedding passed at 768d."
+            }
+          ],
+          "smoke_test_ok": true,
+          "error": null
+        },
+        "clean_exit": true
+      },
+      {
+        "session": 2,
+        "handshake_with_startup_authorization_seconds": 1.333,
+        "runtime": {
+          "backend_name": "llama.cpp",
+          "device": "MTL0",
+          "llama_cpp_build": "b11457",
+          "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+          "model_label": "embeddinggemma-2",
+          "output_dimension": 768,
+          "storage_dtype": "float32",
+          "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+          "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+          "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+          "still_max_side": 480,
+          "gif_max_side": 480,
+          "gif_frame_count": 4
+        },
+        "missing_setup": [
+          "OCR environment"
+        ],
+        "health": {
+          "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+          "backend_name": "llama.cpp",
+          "device": "MTL0",
+          "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+          "gpu_vendor": "apple",
+          "gpu_vendor_id": null,
+          "text_smoke_vector_dim": 768,
+          "image_smoke_vector_dim": 768,
+          "diagnostic_steps": [
+            {
+              "step": "runtime-manifest",
+              "status": "ok",
+              "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+            },
+            {
+              "step": "resolve-gguf-bundle",
+              "status": "ok",
+              "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+            },
+            {
+              "step": "metal-device",
+              "status": "ok",
+              "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+            },
+            {
+              "step": "llama-server",
+              "status": "ok",
+              "detail": "/private/tmp/MemeSort built app setup 中文/runtime/llama.cpp-b11457-metal/llama-server"
+            },
+            {
+              "step": "text-embedding-smoke",
+              "status": "ok",
+              "detail": "llama.cpp text embedding passed at 768d."
+            },
+            {
+              "step": "image-embedding-smoke",
+              "status": "ok",
+              "detail": "llama.cpp image embedding passed at 768d."
+            }
+          ],
+          "smoke_test_ok": true,
+          "error": null
+        },
+        "clean_exit": true
+      }
+    ],
+    "packaged_manifest_matches_checkout": true,
+    "packaged_launcher_matches_checkout": true,
+    "system_ca_bundle_readable": true,
+    "additional_ca_dependency_added": false,
+    "native_ui_opened": false
+  }
 }
