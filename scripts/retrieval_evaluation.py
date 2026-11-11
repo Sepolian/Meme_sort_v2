@@ -201,7 +201,7 @@ def run_evaluation(
             )
 
         report = EvaluationReport(
-            backend="llama.cpp-vulkan",
+            backend=f"llama.cpp-{manifest.backend}",
             model_id=manifest.model.id,
             recipe_fingerprint=manifest.recipe_fingerprint,
             device=manifest.platform.device,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import platform
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -266,3 +267,21 @@ def _require_exact_file(
 def _check_vk_result(result: int, operation: str) -> None:
     if int(result) != VK_SUCCESS:
         raise RuntimeAdmissionError(f"{operation} failed with VkResult {int(result)}.")
+
+
+def validate_macos_arm64(manifest: RuntimeManifest) -> None:
+    if sys.platform != "darwin" or platform.machine().lower() != "arm64":
+        raise RuntimeAdmissionError("The Metal runtime requires native Apple Silicon macOS; Rosetta is unsupported.")
+    if (manifest.platform.os, manifest.platform.architecture, manifest.platform.device) != ("macos", "arm64", "MTL0"):
+        raise RuntimeAdmissionError("Runtime manifest does not match macOS arm64 MTL0.")
+    with manifest.llama_server_path.open("rb") as binary:
+        header = binary.read(8)
+    if header != bytes.fromhex("cffaedfe0c000001"):
+        raise RuntimeAdmissionError("Pinned llama-server is not a native arm64 Mach-O executable. Run setup.")
+
+
+def crosscheck_llama_mtl0(output: str) -> str:
+    lines = [line.strip() for line in output.splitlines() if re.match(r"^\s*MTL0: Apple \S", line)]
+    if len(lines) != 1:
+        raise RuntimeAdmissionError("llama.cpp did not enumerate the required MTL0 Apple GPU; no CPU fallback is permitted.")
+    return lines[0]

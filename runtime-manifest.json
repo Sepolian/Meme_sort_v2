@@ -1,59 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "paths": {
     "download_dir": ".runtime/downloads",
     "activation_record": ".runtime/active-runtime.json",
     "log_dir": ".runtime/logs"
-  },
-  "platform": {
-    "os": "windows",
-    "architecture": "x86_64",
-    "device": "Vulkan0",
-    "vendor_ids": {
-      "amd": "0x1002",
-      "intel": "0x8086",
-      "nvidia": "0x10de"
-    }
-  },
-  "toolchain": {
-    "uv": {
-      "version": "0.11.28",
-      "install_dir": ".runtime/uv",
-      "archive": {
-        "filename": "uv-x86_64-pc-windows-msvc.zip",
-        "url": "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-pc-windows-msvc.zip",
-        "sha256": "0a23463216d09c6a72ff80ef5dc5a795f07dc1575cb84d24596c2f124a441b7b",
-        "size_bytes": 25568726
-      }
-    },
-    "python": {
-      "main_version": "3.13.14",
-      "ocr_version": "3.12.13"
-    }
-  },
-  "llama_cpp": {
-    "build": "b11457",
-    "install_dir": ".runtime/llama.cpp-b11457-vulkan",
-    "executable": "llama-server.exe",
-    "archive": {
-      "filename": "llama-b11457-bin-win-vulkan-x64.zip",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11457/llama-b11457-bin-win-vulkan-x64.zip",
-      "sha256": "d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6",
-      "size_bytes": 33377746
-    },
-    "server": {
-      "gpu_layers": 99,
-      "context_size": 2048,
-      "parallel_slots": 1,
-      "startup_timeout_seconds": 300,
-      "request_timeout_seconds": 300,
-      "device_probe_timeout_seconds": 20,
-      "idle_timeout_seconds": 600,
-      "batch_size": 2048,
-      "ubatch_size": 2048,
-      "flash_attention": "off",
-      "vulkan_disable_f16": true
-    }
   },
   "model": {
     "id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
@@ -99,5 +49,107 @@
     "file_count": 5,
     "max_bytes_per_file": 2097152
   },
-  "shutdown_grace_seconds": 10
+  "shutdown_grace_seconds": 10,
+  "targets": {
+    "windows-x86_64": {
+      "platform": {
+        "os": "windows",
+        "architecture": "x86_64",
+        "device": "Vulkan0",
+        "vendor_ids": {
+          "amd": "0x1002",
+          "intel": "0x8086",
+          "nvidia": "0x10de"
+        }
+      },
+      "toolchain": {
+        "uv": {
+          "version": "0.11.28",
+          "install_dir": ".runtime/uv",
+          "archive": {
+            "filename": "uv-x86_64-pc-windows-msvc.zip",
+            "url": "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-pc-windows-msvc.zip",
+            "sha256": "0a23463216d09c6a72ff80ef5dc5a795f07dc1575cb84d24596c2f124a441b7b",
+            "size_bytes": 25568726
+          }
+        },
+        "python": {
+          "main_version": "3.13.14",
+          "ocr_version": "3.12.13"
+        }
+      },
+      "llama_cpp": {
+        "build": "b11457",
+        "install_dir": ".runtime/llama.cpp-b11457-vulkan",
+        "executable": "llama-server.exe",
+        "archive": {
+          "filename": "llama-b11457-bin-win-vulkan-x64.zip",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11457/llama-b11457-bin-win-vulkan-x64.zip",
+          "sha256": "d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6",
+          "size_bytes": 33377746
+        },
+        "server": {
+          "gpu_layers": 99,
+          "context_size": 2048,
+          "parallel_slots": 1,
+          "startup_timeout_seconds": 300,
+          "request_timeout_seconds": 300,
+          "device_probe_timeout_seconds": 20,
+          "idle_timeout_seconds": 600,
+          "batch_size": 2048,
+          "ubatch_size": 2048,
+          "flash_attention": "off",
+          "vulkan_disable_f16": true
+        }
+      }
+    },
+    "macos-arm64": {
+      "platform": {
+        "os": "macos",
+        "architecture": "arm64",
+        "device": "MTL0",
+        "vendor_ids": {}
+      },
+      "toolchain": {
+        "uv": {
+          "version": "0.11.28",
+          "install_dir": ".runtime/uv",
+          "archive": {
+            "filename": "uv-aarch64-apple-darwin.tar.gz",
+            "url": "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-aarch64-apple-darwin.tar.gz",
+            "sha256": "33540eb7c883ab857eff79bd5ac2aa31fe27b595abecb4a9c003a2c998447232",
+            "size_bytes": 22568053
+          }
+        },
+        "python": {
+          "main_version": "3.13.14",
+          "ocr_version": "3.12.13"
+        }
+      },
+      "llama_cpp": {
+        "build": "b11457",
+        "install_dir": ".runtime/llama.cpp-b11457-metal",
+        "executable": "llama-server",
+        "archive": {
+          "filename": "llama-b11457-bin-macos-arm64.tar.gz",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11457/llama-b11457-bin-macos-arm64.tar.gz",
+          "sha256": "e234070cbde0c8b0d30f79fa08ff8246abe22c72acb752619349b8d9c46f7839",
+          "size_bytes": 12007659
+        },
+        "server": {
+          "gpu_layers": 99,
+          "context_size": 2048,
+          "parallel_slots": 1,
+          "startup_timeout_seconds": 300,
+          "request_timeout_seconds": 300,
+          "device_probe_timeout_seconds": 20,
+          "idle_timeout_seconds": 600,
+          "batch_size": 2048,
+          "ubatch_size": 2048,
+          "flash_attention": "off",
+          "vulkan_disable_f16": false
+        }
+      }
+    }
+  }
 }

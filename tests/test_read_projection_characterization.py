@@ -14,6 +14,7 @@ import re
 import sqlite3
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 from pathlib import Path
 from unittest.mock import patch
 
@@ -263,7 +264,7 @@ class StubOcrBackend:
         return
 
 
-class ReadProjectionCharacterizationTests(unittest.TestCase):
+class ReadProjectionCharacterizationTests(WindowsRuntimeTestCase):
     def _write_image(self, path: Path, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         Image.new("RGB", (40, 30), color).save(path, format="PNG")
 

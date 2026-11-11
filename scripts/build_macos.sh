@@ -28,6 +28,7 @@ rm -rf -- "$stage"
 mkdir -p "$stage"
 printf '*\n!.gitignore\n' > "$stage/.gitignore"
 ditto "$repo_root/dist/macos-sidecar/memesort-sidecar-aarch64-apple-darwin" "$stage"
+cp "$repo_root/scripts/setup_macos_runtime.sh" "$stage/setup_macos_runtime.sh"
 /usr/bin/lipo -verify_arch arm64 "$stage/memesort-sidecar-aarch64-apple-darwin"
 (cd desktop && npm run tauri -- build --target aarch64-apple-darwin --bundles app)
 target_root="${CARGO_TARGET_DIR:-$repo_root/desktop/src-tauri/target}"

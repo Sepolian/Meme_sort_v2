@@ -10,6 +10,11 @@ $repoRoot = [IO.Path]::GetFullPath(
 )
 $manifestPath = Join-Path $repoRoot "runtime-manifest.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+if ($manifest.schema_version -ne 2) { throw "Unsupported runtime manifest schema" }
+$target = $manifest.targets.'windows-x86_64'
+$manifest | Add-Member -NotePropertyName platform -NotePropertyValue $target.platform
+$manifest | Add-Member -NotePropertyName toolchain -NotePropertyValue $target.toolchain
+$manifest | Add-Member -NotePropertyName llama_cpp -NotePropertyValue $target.llama_cpp
 
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)

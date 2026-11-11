@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -44,7 +45,7 @@ def _health_result(smoke_test_ok: bool, fingerprint: str | None = None) -> Runti
     )
 
 
-class PinnedRuntimeTests(unittest.TestCase):
+class PinnedRuntimeTests(WindowsRuntimeTestCase):
     def _runtime(self, library_root: Path) -> PinnedRuntime:
         runtime = PinnedRuntime(library_root)
         self.addCleanup(runtime.close)
@@ -183,7 +184,7 @@ class PinnedRuntimeTests(unittest.TestCase):
         self.assertTrue(second.closed)
 
 
-class LocalAppHostRuntimeLifecycleTests(unittest.TestCase):
+class LocalAppHostRuntimeLifecycleTests(WindowsRuntimeTestCase):
     def _config(self, library_root: Path, authorize: bool = False) -> LocalAppHostConfig:
         return LocalAppHostConfig(
             library_root=library_root,

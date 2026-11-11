@@ -1,21 +1,21 @@
 # MemeSort
 
-MemeSort is a local Windows library for image and GIF assets. It keeps a managed library copy of imported media, creates semantic embeddings and OCR locally, and supports text search, image search, similar-asset retrieval, and duplicate review.
+MemeSort is a local Windows and Apple Silicon Mac library for image and GIF assets. It keeps a managed library copy of imported media, creates semantic embeddings and OCR locally, and supports text search, image search, similar-asset retrieval, and duplicate review.
 
-Semantic inference has one supported runtime: the pinned `llama.cpp` Vulkan build and pinned EmbeddingGemma 2 Q8_0 GGUF bundle declared by [runtime-manifest.json](runtime-manifest.json). It always uses `Vulkan0`; there is no CPU, CUDA, Transformers, custom-model, or external-server fallback. PaddleOCR remains an isolated CPU service for OCR.
+Semantic inference has one supported runtime per platform: the pinned `llama.cpp` build and pinned EmbeddingGemma 2 Q8_0 GGUF bundle declared by [runtime-manifest.json](runtime-manifest.json). It explicitly uses `Vulkan0` on Windows or `MTL0` Metal on native macOS arm64; there is no CPU, CUDA, Transformers, custom-model, or external-server fallback. PaddleOCR remains an isolated CPU service for OCR.
 
 ## Supported environment
 
-- Windows 10/11 x64
+- Windows 10/11 x64, or native Apple Silicon macOS (personal app milestone)
 - A Vulkan-capable AMD (`0x1002`), Intel (`0x8086`), or NVIDIA (`0x10de`) GPU selected as `Vulkan0`
 - Python 3.13.14 for the application and Python 3.12.13 for isolated OCR
-- llama.cpp `b11457` Windows Vulkan build
+- llama.cpp `b11457` Windows Vulkan or macOS arm64 Metal build
 - EmbeddingGemma 2 `Q8_0` GGUF with its matching `Q8_0` multimodal projector
 - PaddlePaddle 3.2.2 CPU with PaddleOCR 3.6.0 / PP-OCRv5 mobile
 
 The runtime health check validates the manifest activation, verifies the pinned artifacts, admits one of the supported GPU vendors at `Vulkan0`, and requires 768-dimensional text and image embeddings. The Runtime Descriptor and health diagnostics identify EmbeddingGemma 2 and b11457. Windows real-device setup and inference acceptance for this bundle remains a release gate; the historical Qwen Radeon 780M smoke test does not qualify it.
 
-The managed server uses mean pooling, L2 normalization, float32 vectors, 2048-token context/batch/physical microbatch sizes, one parallel slot, 99 GPU layers, Flash Attention off, and `GGML_VK_DISABLE_F16=1` in the child environment. It retains the model's default visual budget. Text inputs are `task: search result | query: ` followed directly by the query, including the trailing space; image and GIF-frame inputs contain only media, with no text instruction.
+The managed server uses mean pooling, L2 normalization, float32 vectors, 2048-token context/batch/physical microbatch sizes, one parallel slot, 99 GPU layers, Flash Attention off, and `GGML_VK_DISABLE_F16=1` in the Windows child environment (unset on Metal). It retains the model's default visual budget. Text inputs are `task: search result | query: ` followed directly by the query, including the trailing space; image and GIF-frame inputs contain only media, with no text instruction.
 
 ## Setup
 
@@ -45,6 +45,20 @@ See the [Mac packaging instructions](desktop/README.md#apple-silicon-mac-package
 for prerequisites, output paths, the Application Support data layout, and the
 package smoke check. The Library opens before semantic/OCR setup; installing and
 validating those runtimes is separate from packaging the application.
+
+After moving the app to Applications, install the semantic runtime with:
+
+```bash
+bash "/Applications/MemeSort.app/Contents/Resources/sidecar/setup_macos_runtime.sh"
+```
+
+Adjust the path if the app has another name or location. The launcher uses the bundled frozen sidecar and requires no developer Python, Node, or Rust. It installs verified uv, the complete b11457 arm64 runtime (including dylib symlinks), and the existing Q8 model/projector beneath `~/Library/Application Support/MemeSort`. Bundled resources remain read-only. `--data-root "/path/with spaces/中文"` uses the same AppPaths override as the app.
+
+Close MemeSort before setup. Downloads are checked by size and SHA256 before extraction, staged on the data volume, and activated after native Mach-O and exact `MTL0: Apple …` inventory checks. Rerun the same command to verify and repair. `--offline` uses the verified `runtime/downloads` cache; `--downloads "/path/to/cache"` reuses already downloaded artifacts. A missing or tampered offline download fails without replacing the installed runtime. An interrupted promotion leaves activation absent and reports setup is required; rerunning setup recovers the saved runtime directories and completes verification before reactivation.
+
+**Semantic setup is separate from full setup until the ticket05 OCR extension is included.** `macos_setup.run_setup()` is the single installer extension point for stable-location CPU OCR provisioning with verified uv. Semantic activation does not claim OCR readiness. Library browsing/import work before setup; semantic work requires a successful current-session text/image health check, including after an offline relaunch. Metal and Windows have different Active Index Recipes; copying embeddings across platforms is unsupported. Windows target values, recipe identity, and activation records are preserved.
+
+The Mac archive is `llama-b11457-bin-macos-arm64.tar.gz`, 12,007,659 bytes, SHA256 `e234070cbde0c8b0d30f79fa08ff8246abe22c72acb752619349b8d9c46f7839`. The uv 0.11.28 arm64 archive is 22,568,053 bytes, SHA256 `33540eb7c883ab857eff79bd5ac2aa31fe27b595abecb4a9c003a2c998447232`. Shared model artifacts and inference settings remain unchanged. Runtime startup/offload errors and startup time are retained in bounded rotating runtime logs. Metal inventory working-set figures are GPU budget/allocation, not process RSS or physical VRAM.
 
 ## Portable desktop package
 
@@ -114,7 +128,7 @@ Still Assets keep 480px preprocessing. GIFs keep up to four sampled frames and a
 
 ## OCR
 
-Semantic embeddings use Vulkan. OCR intentionally uses CPU in `.venv-ocr` for the repository workflow and `MemeSortData\runtime\ocr-venv` in the portable package, so it remains independent of the GPU vendor and the Vulkan inference path.
+Semantic embeddings use Vulkan on Windows and Metal on macOS. OCR intentionally uses CPU in `.venv-ocr` for the repository workflow and `MemeSortData\runtime\ocr-venv` in the portable package, so it remains independent of the semantic GPU path.
 
 The default OCR stack is fixed to PaddleOCR PP-OCRv5 mobile (`PP-OCRv5_mobile_det` and `PP-OCRv5_mobile_rec`) on CPU, with document orientation, unwarping, and text-line orientation disabled. A missing environment is an explicit setup error, never a debug OCR fallback. Its cache is `.models\paddleocr` in the repository workflow and `MemeSortData\models\paddleocr` in a portable package; the worker protocol is UTF-8 on Windows.
 
@@ -195,5 +209,5 @@ If `Vulkan0` is absent or its vendor is not AMD, Intel, or NVIDIA, update the di
 - `scripts/setup_windows_llama.ps1`: manifest-driven Windows runtime setup
 - `scripts/evaluate_*.py`: still-image, GIF, and OCR evaluation tools
 - `tests/`: Vulkan runtime, worker, OCR, and UI regression tests
-- `CONTEXT.md`: domain terminology and architecture boundaries
+- `GLOSSARY.md`: domain terminology and architecture boundaries
 - `.models/`, `.runtime/`, and `.venv*`: repository-local artifacts excluded from Git

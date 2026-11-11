@@ -4,6 +4,7 @@ import copy
 import json
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 from dataclasses import replace
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from memesort_worker.runtime_manifest import (
 )
 
 
-class RuntimeManifestTests(unittest.TestCase):
+class RuntimeManifestTests(WindowsRuntimeTestCase):
     def _raw_manifest(self) -> dict[str, object]:
         return json.loads(default_manifest_path().read_text(encoding="utf-8"))
 
@@ -27,7 +28,7 @@ class RuntimeManifestTests(unittest.TestCase):
     def test_checked_in_manifest_is_valid_and_resolves_project_paths(self) -> None:
         manifest = load_runtime_manifest()
 
-        self.assertEqual(1, manifest.schema_version)
+        self.assertEqual(2, manifest.schema_version)
         self.assertEqual("Vulkan0", manifest.platform.device)
         self.assertEqual(768, manifest.model.output_dimension)
         self.assertEqual("float32", manifest.embedding.storage_dtype)
@@ -105,7 +106,7 @@ class RuntimeManifestTests(unittest.TestCase):
     def test_runtime_only_changes_do_not_change_recipe_fingerprint(self) -> None:
         raw = self._raw_manifest()
         modified = copy.deepcopy(raw)
-        llama_cpp = modified["llama_cpp"]
+        llama_cpp = modified["targets"]["windows-x86_64"]["llama_cpp"]
         assert isinstance(llama_cpp, dict)
         server = llama_cpp["server"]
         assert isinstance(server, dict)
@@ -123,7 +124,7 @@ class RuntimeManifestTests(unittest.TestCase):
     def test_pinned_artifact_change_changes_runtime_fingerprint(self) -> None:
         raw = self._raw_manifest()
         modified = copy.deepcopy(raw)
-        llama_cpp = modified["llama_cpp"]
+        llama_cpp = modified["targets"]["windows-x86_64"]["llama_cpp"]
         assert isinstance(llama_cpp, dict)
         llama_cpp["build"] = "b9999"
 
@@ -169,7 +170,7 @@ class RuntimeManifestTests(unittest.TestCase):
     def test_new_server_fields_are_validated_at_the_manifest_boundary(self) -> None:
         for field, value in (("batch_size", 0), ("ubatch_size", True), ("flash_attention", "on"), ("vulkan_disable_f16", "1")):
             raw = self._raw_manifest()
-            raw["llama_cpp"]["server"][field] = value
+            raw["targets"]["windows-x86_64"]["llama_cpp"]["server"][field] = value
             with self.subTest(field=field), self.assertRaisesRegex(RuntimeManifestError, field):
                 self._load_raw(raw)
 

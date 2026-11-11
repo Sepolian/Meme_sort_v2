@@ -91,6 +91,7 @@ def check_session(app: Path, data: Path, cwd: Path, source: Path | None) -> None
 def main() -> None:
     app = Path(sys.argv[1]).resolve()
     assert app.is_dir(), f"Missing app bundle: {app}"
+    assert (app / "Contents/Resources/sidecar/setup_macos_runtime.sh").is_file(), "Missing bundled Mac runtime setup launcher"
     subprocess.run(["/usr/bin/lipo", "-verify_arch", "arm64", str(app / "Contents/MacOS/memesort-desktop")], check=True)
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     with tempfile.TemporaryDirectory(prefix="MemeSort package 中文 ") as temporary:

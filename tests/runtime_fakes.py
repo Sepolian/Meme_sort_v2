@@ -7,6 +7,7 @@ and can model authorization failure, embedding failure, and cancellation.
 
 from __future__ import annotations
 
+import unittest
 from pathlib import Path
 
 import numpy as np
@@ -102,3 +103,16 @@ class FakeIndexingRuntime:
 
     def cancel_search(self, request_id: str) -> bool:
         return self.scheduler.cancel(request_id)
+
+
+class WindowsRuntimeTestCase(unittest.TestCase):
+    """Keep legacy Windows fixtures explicit and their recipe cache isolated."""
+
+    def setUp(self):
+        from unittest.mock import patch
+        from memesort_worker.recipe_provider import default_provider
+        default_provider.cache_clear()
+        self.addCleanup(default_provider.cache_clear)
+        target = patch("memesort_worker.runtime_manifest.resolve_runtime_target", return_value="windows-x86_64")
+        target.start()
+        self.addCleanup(target.stop)

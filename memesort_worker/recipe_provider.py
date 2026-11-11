@@ -14,9 +14,6 @@ from typing import Mapping
 from .runtime_manifest import RuntimeManifest, load_runtime_manifest
 
 
-VULKAN_PROFILE_ID = "vulkan"
-
-
 @dataclass(frozen=True)
 class PreprocessSpec:
     """Immutable preprocessing parameters for one recipe version."""
@@ -76,7 +73,7 @@ def from_manifest(manifest: RuntimeManifest) -> RuntimeRecipeProvider:
         "model_id": manifest.model.id,
         "model_revision": manifest.recipe_fingerprint,
         "output_dimension": manifest.model.output_dimension,
-        "runtime_profile": VULKAN_PROFILE_ID,
+        "runtime_profile": manifest.backend,
         "preprocess_version": manifest.preprocessing.version,
         "instruction_key": manifest.embedding.instruction_id,
         "pooling_key": pooling_key,

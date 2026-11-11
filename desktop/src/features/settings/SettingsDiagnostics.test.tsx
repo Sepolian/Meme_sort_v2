@@ -186,6 +186,9 @@ describe("Settings Runtime and installation (ticket 15)", () => {
     renderApp("/settings", client);
     expect(await screen.findByLabelText("Setup needed")).toHaveTextContent("semantic runtime, OCR environment");
     expect(screen.getByText(/Application Support\/MemeSort/)).toBeInTheDocument();
+    expect(screen.getByText(/bash.*MemeSort.app.*setup_macos_runtime.sh/)).toBeInTheDocument();
+    expect(screen.getByText(/MTL0.*Apple Silicon/)).toBeInTheDocument();
+    expect(screen.getByText(/CPU OCR.*separately/)).toBeInTheDocument();
     expect(screen.queryByText("setup_portable_runtime.bat", { exact: false })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Window controls")).not.toBeInTheDocument();
   });

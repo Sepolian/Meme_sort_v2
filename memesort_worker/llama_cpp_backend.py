@@ -118,7 +118,7 @@ def verify_model_bundle(
         if actual_hash != expected_hash:
             raise LlamaCppBackendError(
                 f"Unexpected SHA256 for {path.name}: {actual_hash}. "
-                "The active Vulkan recipe is pinned by runtime-manifest.json."
+                "The Active Index Recipe is pinned by runtime-manifest.json."
             )
 
 
@@ -128,6 +128,7 @@ class LlamaCppServer:
     def __init__(self, config: LlamaCppServerConfig) -> None:
         self.config = config
         self._process: subprocess.Popen[bytes] | None = None
+        self._stderr_thread: threading.Thread | None = None
         self._base_url: str | None = None
         self._lock = threading.RLock()
         self._idle_timer: threading.Timer | None = None
@@ -159,6 +160,9 @@ class LlamaCppServer:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=self.config.shutdown_grace_seconds)
+            if self._stderr_thread is not None:
+                self._stderr_thread.join(timeout=2)
+                self._stderr_thread = None
             if process is not None:
                 self._logger.info("llama_server_stopped")
 
@@ -188,6 +192,13 @@ class LlamaCppServer:
                 self._logger.warning("embedding_request_failed_restarting_once")
                 self.close()
         raise AssertionError("unreachable")
+
+    def _log_server_stderr(self, stream) -> None:
+        try:
+            for line in stream:
+                self._logger.info("llama_cpp %s", line.decode("utf-8", errors="replace").rstrip())
+        finally:
+            stream.close()
 
     def _ensure_ready(self) -> None:
         if self._process is not None and self._process.poll() is None:
@@ -236,7 +247,6 @@ class LlamaCppServer:
             self.config.flash_attention,
             "--parallel",
             str(self.config.parallel_slots),
-            "--log-disable",
         ]
         env = os.environ.copy()
         for key in ("LLAMA_ARG_IMAGE_MIN_TOKENS", "LLAMA_ARG_IMAGE_MAX_TOKENS"):
@@ -252,15 +262,20 @@ class LlamaCppServer:
                 command,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 env=env,
                 creationflags=creation_flags,
             )
         except OSError as exc:
             raise LlamaCppBackendError(f"Failed to start llama-server: {exc}") from exc
-        self._logger.info("llama_server_started")
+        assert self._process.stderr is not None
+        self._stderr_thread = threading.Thread(target=self._log_server_stderr, args=(self._process.stderr,), daemon=True)
+        self._stderr_thread.start()
+        started = time.monotonic()
+        self._logger.info("llama_server_started device=%s", self.config.device)
         try:
             self._wait_until_healthy()
+            self._logger.info("llama_server_ready startup_seconds=%.3f", time.monotonic() - started)
             self._touch_activity()
         except Exception:
             self.close()
@@ -273,7 +288,7 @@ class LlamaCppServer:
             if self._process is not None and self._process.poll() is not None:
                 raise LlamaCppBackendError(
                     "llama-server exited during startup with code "
-                    f"{self._process.returncode}."
+                    f"{self._process.returncode}. See runtime logs at {self.config.log_dir}."
                 )
             try:
                 response = self._request_json("/health", method="GET", timeout=2.0)
@@ -284,7 +299,7 @@ class LlamaCppServer:
             time.sleep(0.2)
         raise LlamaCppBackendError(
             "llama-server did not become healthy within "
-            f"{self.config.startup_timeout_seconds:g}s: {last_error or 'unknown error'}."
+            f"{self.config.startup_timeout_seconds:g}s: {last_error or 'unknown error'}. See {self.config.log_dir}."
         )
 
     def _touch_activity(self) -> None:

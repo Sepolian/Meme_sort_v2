@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 from dataclasses import replace
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from memesort_worker.runtime_admission import (
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
-class RuntimeAdmissionTests(unittest.TestCase):
+class RuntimeAdmissionTests(WindowsRuntimeTestCase):
     def test_parses_pci_ids_and_name_from_vulkan_properties(self) -> None:
         properties = ctypes.create_string_buffer(4096)
         properties[8:12] = (0x1002).to_bytes(4, "little")

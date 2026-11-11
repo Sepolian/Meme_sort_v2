@@ -13,7 +13,7 @@ interface RuntimeHealthProviderProps {
 function snapshotFromQuery(query: QueryObserverResult<RuntimeHealthResult>): RuntimeHealthSnapshot {
   if (query.isFetching) return { status: "checking", result: query.data ?? null, error: null };
   if (query.isError) {
-    let error = "MemeSort could not run the Vulkan health check.";
+    let error = "MemeSort could not run the runtime health check.";
     try {
       error = tauriErrorDetail(query.error, error);
     } catch {
