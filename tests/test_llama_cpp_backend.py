@@ -6,6 +6,7 @@ import json
 import tempfile
 import time
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -42,7 +43,7 @@ from memesort_worker.runtime_service import (
 )
 
 
-class LlamaCppBackendTests(unittest.TestCase):
+class LlamaCppBackendTests(WindowsRuntimeTestCase):
     def _write_bundle(self, root: Path) -> tuple[Path, Path]:
         main_model = root / "embeddinggemma-2-Q8_0.gguf"
         mmproj = root / "mmproj-Q8_0.gguf"
@@ -229,7 +230,8 @@ class LlamaCppBackendTests(unittest.TestCase):
             self.assertNotIn("--image-min-tokens", command)
             self.assertFalse("LLAMA_ARG_IMAGE_MIN_TOKENS" in popen.call_args.kwargs["env"])
             self.assertFalse("LLAMA_ARG_IMAGE_MAX_TOKENS" in popen.call_args.kwargs["env"])
-            self.assertIn("--log-disable", command)
+            self.assertNotIn("--log-disable", command)
+            self.assertEqual(subprocess.PIPE, popen.call_args.kwargs["stderr"])
             self.assertEqual(
                 subprocess.DEVNULL,
                 popen.call_args.kwargs["stdout"],
@@ -398,7 +400,7 @@ class LlamaCppBackendTests(unittest.TestCase):
                     self.assertEqual("task: search result | query: confused reaction image", inputs[0])
                     self.assertEqual("<__media__>", inputs[1][0]["prompt_string"])
                     self.assertTrue(inputs[1][0]["multimodal_data"][0])
-                    raw["llama_cpp"]["server"]["batch_size"] = 1024
+                    raw["targets"]["windows-x86_64"]["llama_cpp"]["server"]["batch_size"] = 1024
                     manifest_path.write_text(json.dumps(raw))
                     ready, reason = runtime.is_ready_for_indexing()
                     self.assertFalse(ready)

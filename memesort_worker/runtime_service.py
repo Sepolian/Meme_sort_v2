@@ -8,6 +8,8 @@ from . import library
 from .library_store import LibraryStore
 from .runtime_admission import (
     crosscheck_llama_vulkan0,
+    crosscheck_llama_mtl0,
+    validate_macos_arm64,
     probe_vulkan0,
     validate_pinned_runtime_files,
 )
@@ -164,33 +166,23 @@ def _run_llama_cpp_runtime_health_check(
                 "detail": f"{main_model.name} + {mmproj.name}",
             }
         )
-        failure_step = "vulkan-device"
-        vulkan_device = probe_vulkan0(manifest)
-        gpu_vendor = vulkan_device.vendor_name
-        gpu_vendor_id = vulkan_device.vendor_id_hex
-        diagnostic_steps.append(
-            {
-                "step": "vulkan-device",
-                "status": "ok",
-                "detail": (
-                    f"Vulkan0: {vulkan_device.device_name}; "
-                    f"vendor={vulkan_device.vendor_name} "
-                    f"({vulkan_device.vendor_id_hex})"
-                ),
-            }
-        )
-        failure_step = "llama-server"
+        failure_step = "metal-device" if manifest.backend == "metal" else "vulkan-device"
+        if manifest.backend == "metal":
+            validate_macos_arm64(manifest)
+            gpu_vendor = "apple"
+        else:
+            vulkan_device = probe_vulkan0(manifest)
+            gpu_vendor = vulkan_device.vendor_name
+            gpu_vendor_id = vulkan_device.vendor_id_hex
         executable = discover_llama_server()
         server_detail = str(executable)
         device_output = probe_llama_devices(
             executable,
             timeout_seconds=manifest.llama_cpp.server.device_probe_timeout_seconds,
         )
-        gpu_name = crosscheck_llama_vulkan0(
-            vulkan_device,
-            device_output,
-            manifest.platform.device,
-        )
+        gpu_name = (crosscheck_llama_mtl0(device_output) if manifest.backend == "metal" else
+                    crosscheck_llama_vulkan0(vulkan_device, device_output, manifest.platform.device))
+        diagnostic_steps.append({"step": failure_step, "status": "ok", "detail": gpu_name})
         diagnostic_steps.append(
             {
                 "step": "llama-server",

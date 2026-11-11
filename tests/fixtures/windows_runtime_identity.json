@@ -1,0 +1,26 @@
+{
+  "recipe_id": "vulkan-11cdd5f9aa94105d47ae568ae95d544af718ca146ea35fedc4328ab693112d3f",
+  "recipe_fingerprint": "11cdd5f9aa94105d47ae568ae95d544af718ca146ea35fedc4328ab693112d3f",
+  "runtime_fingerprint": "b3143abdeae31b749a2ff1cf59898f725aca722ecbb28115a1fe7301451c76f1",
+  "activation_record": {
+    "schema_version": 1,
+    "runtime_fingerprint": "b3143abdeae31b749a2ff1cf59898f725aca722ecbb28115a1fe7301451c76f1",
+    "llama_cpp": {
+      "build": "b11457",
+      "executable": "llama-server.exe",
+      "archive_sha256": "d01301582c711a69b9747b5984710d6ca99e57d95f680d3d33753cec570b4cb6"
+    },
+    "model": {
+      "main": {
+        "filename": "embeddinggemma-2-Q8_0.gguf",
+        "sha256": "6f1bd4ac6c5df7444f9cca7ca36cafe6cfa34cd6f49fefb1e0b4be8143aed8bc",
+        "size_bytes": 309855520
+      },
+      "projector": {
+        "filename": "mmproj-Q8_0.gguf",
+        "sha256": "90e7b0238009e2954f856f2081dcf7f35af026b64c765e98f4777053e1754460",
+        "size_bytes": 554821120
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import io
 import sqlite3
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -21,7 +22,7 @@ from memesort_worker.runtime_manifest import load_runtime_manifest
 from runtime_fakes import FakeIndexingRuntime
 
 
-class VulkanOnlyRuntimeTests(unittest.TestCase):
+class VulkanOnlyRuntimeTests(WindowsRuntimeTestCase):
     def test_runtime_descriptor_is_derived_from_the_manifest(self) -> None:
         manifest = load_runtime_manifest()
         runtime = get_runtime_descriptor()

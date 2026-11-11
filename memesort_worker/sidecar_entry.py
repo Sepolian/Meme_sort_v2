@@ -82,6 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the verified runtime activation record, then exit.",
     )
+    parser.add_argument("--setup-macos-runtime", action="store_true", help="Install verified Mac semantic runtime; OCR extension is separate.")
+    parser.add_argument("--downloads", type=Path, help="Reuse verified setup downloads from this directory.")
+    parser.add_argument("--offline", action="store_true", help="Use only cached setup artifacts.")
     return parser
 
 
@@ -112,6 +115,16 @@ def main(
         os.environ[ENV_DATA_ROOT] = str(Path(args.data_root).expanduser().resolve())
     try:
         _configure_protocol_encoding(protocol_stdout)
+        if args.setup_macos_runtime:
+            try:
+                from .macos_setup import run_setup
+                result = run_setup(downloads=args.downloads, offline=args.offline)
+                protocol_stdout.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+                protocol_stdout.flush()
+                return 0
+            except Exception as exc:
+                _write_stderr(protocol_stderr, f"Mac runtime setup failed: {exc}")
+                return 1
         if args.write_runtime_activation:
             if not (args.portable_root or args.data_root):
                 _write_stderr(

@@ -46,7 +46,7 @@ class LlamaCppEmbeddingBackend(EmbeddingBackend):
         manifest = load_runtime_manifest()
         self._adapter = LlamaCppEmbeddingAdapter(load_server_config(manifest.source_path))
         super().__init__(
-            backend_id=f"llama.cpp-vulkan::{manifest.recipe_fingerprint}"
+            backend_id=f"llama.cpp-{manifest.backend}::{manifest.recipe_fingerprint}"
         )
 
     def embed_text(

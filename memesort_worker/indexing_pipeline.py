@@ -38,7 +38,7 @@ def run_pending_jobs(
     runtime_ready, runtime_message = runtime.is_ready_for_indexing()
     if not runtime_ready:
         raise RuntimeError(
-            "Vulkan runtime is not authorized for indexing in this app session: "
+            "Pinned Runtime is not authorized for indexing in this app session: "
             f"{runtime_message}"
         )
     init_result = asset_catalog.initialize_library(library_root, provider)

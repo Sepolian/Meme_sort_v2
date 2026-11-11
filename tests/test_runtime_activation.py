@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 from dataclasses import replace
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from memesort_worker.runtime_activation import (
 from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
-class RuntimeActivationTests(unittest.TestCase):
+class RuntimeActivationTests(WindowsRuntimeTestCase):
     def _temporary_manifest(self, root: Path):
         return replace(
             load_runtime_manifest(),

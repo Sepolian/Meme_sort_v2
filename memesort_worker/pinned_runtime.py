@@ -121,7 +121,7 @@ class PinnedRuntime:
         if not result.smoke_test_ok:
             raise RuntimeAuthorizationError(
                 result.error
-                or "Vulkan runtime health check failed; work was not authorized."
+                or "Pinned Runtime health check failed; work was not authorized."
             )
         return result
 
@@ -144,11 +144,11 @@ class PinnedRuntime:
             return False, "Pinned multimodal projector is not installed. Run setup."
 
         if current_health is None:
-            return False, "Vulkan runtime health has not been checked in this app session."
+            return False, "Pinned Runtime health has not been checked in this app session."
         if not runtime_health_matches_manifest(current_health):
             return False, "This session's runtime health check is stale for the active manifest."
         if not current_health.smoke_test_ok:
-            return False, current_health.error or "Vulkan runtime health check failed."
+            return False, current_health.error or "Pinned Runtime health check failed."
         return True, "Runtime is ready for indexing."
 
     def get_embedding_backend(self):

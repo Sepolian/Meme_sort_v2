@@ -1,0 +1,62 @@
+2026-11-11 12:32:35,255 INFO llama_server_started device=MTL0
+2026-11-11 12:32:35,295 INFO llama_cpp 0.00.033.322 I srv  llama_server: initializing ...
+2026-11-11 12:32:35,295 INFO llama_cpp 0.00.033.325 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+2026-11-11 12:32:35,297 INFO llama_cpp 0.00.034.849 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+2026-11-11 12:32:35,299 INFO llama_cpp 0.00.037.126 I srv    load_model: loading model '/private/tmp/MemeSort runtime 中文/models/gguf/embeddinggemma-2-q8_0/embeddinggemma-2-Q8_0.gguf'
+2026-11-11 12:32:35,737 INFO llama_cpp 0.00.475.594 W load: control-looking token:     50 '<|tool_response>' was not control-type; this is probably a bug in the model. its type will be overridden
+2026-11-11 12:32:35,739 INFO llama_cpp 0.00.477.326 W load: control-looking token:    212 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+2026-11-11 12:32:35,743 INFO llama_cpp 0.00.481.279 W load: '</s>' is a normal token here, removing it from EOG list
+2026-11-11 12:32:35,777 INFO llama_cpp 0.00.514.720 I cmn          init: llama threadpool init, n_threads = 2
+2026-11-11 12:32:35,777 INFO llama_cpp 0.00.514.746 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+2026-11-11 12:32:35,789 INFO llama_cpp 0.00.526.618 W srv    load_model: cap image_max_tokens (original=1120) to 1024 (n_ubatch = 2048) because the model processes the prompt in one ubatch
+2026-11-11 12:32:35,789 INFO llama_cpp 0.00.526.619 W srv    load_model: increase n_ubatch (-ub) to increase vision token budget
+2026-11-11 12:32:35,952 INFO llama_cpp 0.00.690.377 W init_audio: audio input is in experimental stage and may have reduced quality:
+2026-11-11 12:32:35,952 INFO llama_cpp     https://github.com/ggml-org/llama.cpp/discussions/13759
+2026-11-11 12:32:35,952 INFO llama_cpp 0.00.690.418 I srv    load_model: loaded multimodal model, '/private/tmp/MemeSort runtime 中文/models/gguf/embeddinggemma-2-q8_0/mmproj-Q8_0.gguf'
+2026-11-11 12:32:35,953 INFO llama_cpp 0.00.690.420 W srv    load_model: speculative decoding not supported by this context
+2026-11-11 12:32:35,953 INFO llama_cpp 0.00.690.421 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 2048, kv_unified = 'false'
+2026-11-11 12:32:35,960 INFO llama_cpp 0.00.698.635 I srv  llama_server: model loaded
+2026-11-11 12:32:35,961 INFO llama_cpp 0.00.698.638 I srv  llama_server: listening on http://127.0.0.1:61526
+2026-11-11 12:32:36,096 INFO llama_server_ready startup_seconds=0.841
+2026-11-11 12:32:36,097 INFO llama_cpp 0.00.835.236 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+2026-11-11 12:32:36,097 INFO llama_cpp 0.00.835.240 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+2026-11-11 12:32:36,110 INFO llama_cpp 0.00.848.087 I slot      release: id  0 | task 0 | stop processing: n_tokens = 12, truncated = 0
+2026-11-11 12:32:36,112 INFO llama_cpp 0.00.850.301 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 83849892849
+2026-11-11 12:32:36,112 INFO llama_cpp 0.00.850.303 I slot launch_slot_: id  0 | task 2 | processing task, is_child = 0
+2026-11-11 12:32:36,195 INFO llama_cpp 0.00.933.672 I slot      release: id  0 | task 2 | stop processing: n_tokens = 85, truncated = 0
+2026-11-11 12:32:36,202 INFO llama_cpp 0.00.940.139 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 83849978434
+2026-11-11 12:32:36,202 INFO llama_cpp 0.00.940.140 I slot launch_slot_: id  0 | task 4 | processing task, is_child = 0
+2026-11-11 12:32:36,206 INFO llama_cpp 0.00.943.921 I slot      release: id  0 | task 4 | stop processing: n_tokens = 12, truncated = 0
+2026-11-11 12:32:36,212 INFO llama_cpp 0.00.949.773 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 83849988682
+2026-11-11 12:32:36,212 INFO llama_cpp 0.00.949.774 I slot launch_slot_: id  0 | task 6 | processing task, is_child = 0
+2026-11-11 12:32:36,272 INFO llama_cpp 0.01.010.562 I slot      release: id  0 | task 6 | stop processing: n_tokens = 85, truncated = 0
+2026-11-11 12:32:36,274 INFO llama_cpp 0.01.012.584 I srv    operator(): operator(): cleaning up before exit...
+2026-11-11 12:32:36,321 INFO llama_server_stopped
+2026-11-11 12:32:36,647 INFO llama_server_started device=MTL0
+2026-11-11 12:32:36,689 INFO llama_cpp 0.00.035.098 I srv  llama_server: initializing ...
+2026-11-11 12:32:36,689 INFO llama_cpp 0.00.035.103 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+2026-11-11 12:32:36,689 INFO llama_cpp 0.00.035.259 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+2026-11-11 12:32:36,690 INFO llama_cpp 0.00.036.878 I srv    load_model: loading model '/private/tmp/MemeSort runtime 中文/models/gguf/embeddinggemma-2-q8_0/embeddinggemma-2-Q8_0.gguf'
+2026-11-11 12:32:37,115 INFO llama_cpp 0.00.461.096 W load: control-looking token:     50 '<|tool_response>' was not control-type; this is probably a bug in the model. its type will be overridden
+2026-11-11 12:32:37,116 INFO llama_cpp 0.00.462.760 W load: control-looking token:    212 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+2026-11-11 12:32:37,121 INFO llama_cpp 0.00.467.195 W load: '</s>' is a normal token here, removing it from EOG list
+2026-11-11 12:32:37,152 INFO llama_cpp 0.00.498.522 I cmn          init: llama threadpool init, n_threads = 2
+2026-11-11 12:32:37,152 INFO llama_cpp 0.00.498.547 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+2026-11-11 12:32:37,162 INFO llama_cpp 0.00.508.412 W srv    load_model: cap image_max_tokens (original=1120) to 1024 (n_ubatch = 2048) because the model processes the prompt in one ubatch
+2026-11-11 12:32:37,162 INFO llama_cpp 0.00.508.413 W srv    load_model: increase n_ubatch (-ub) to increase vision token budget
+2026-11-11 12:32:37,283 INFO llama_cpp 0.00.629.908 W init_audio: audio input is in experimental stage and may have reduced quality:
+2026-11-11 12:32:37,283 INFO llama_cpp     https://github.com/ggml-org/llama.cpp/discussions/13759
+2026-11-11 12:32:37,284 INFO llama_cpp 0.00.629.950 I srv    load_model: loaded multimodal model, '/private/tmp/MemeSort runtime 中文/models/gguf/embeddinggemma-2-q8_0/mmproj-Q8_0.gguf'
+2026-11-11 12:32:37,284 INFO llama_cpp 0.00.629.952 W srv    load_model: speculative decoding not supported by this context
+2026-11-11 12:32:37,284 INFO llama_cpp 0.00.629.952 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 2048, kv_unified = 'false'
+2026-11-11 12:32:37,285 INFO llama_cpp 0.00.631.066 I srv  llama_server: model loaded
+2026-11-11 12:32:37,285 INFO llama_cpp 0.00.631.068 I srv  llama_server: listening on http://127.0.0.1:61536
+2026-11-11 12:32:37,486 INFO llama_server_ready startup_seconds=0.839
+2026-11-11 12:32:37,488 INFO llama_cpp 0.00.834.357 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+2026-11-11 12:32:37,488 INFO llama_cpp 0.00.834.364 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+2026-11-11 12:32:37,505 INFO llama_cpp 0.00.851.910 I slot      release: id  0 | task 0 | stop processing: n_tokens = 12, truncated = 0
+2026-11-11 12:32:37,509 INFO llama_cpp 0.00.855.207 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 83851288367
+2026-11-11 12:32:37,509 INFO llama_cpp 0.00.855.212 I slot launch_slot_: id  0 | task 2 | processing task, is_child = 0
+2026-11-11 12:32:37,594 INFO llama_cpp 0.00.940.806 I slot      release: id  0 | task 2 | stop processing: n_tokens = 85, truncated = 0
+2026-11-11 12:32:37,599 INFO llama_cpp 0.00.945.222 I srv    operator(): operator(): cleaning up before exit...
+2026-11-11 12:32:37,678 INFO llama_server_stopped

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
+import sys
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
@@ -13,7 +15,7 @@ from .app_paths import AppPaths, ENV_DATA_ROOT, ENV_PORTABLE_ROOT
 
 
 MANIFEST_FILENAME = "runtime-manifest.json"
-SUPPORTED_SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSION = 2
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _HEX_VENDOR_RE = re.compile(r"^0x[0-9a-f]{4}$")
 
@@ -236,12 +238,16 @@ class RuntimeManifest:
         return hashlib.sha256(payload).hexdigest()
 
     @property
+    def backend(self) -> str:
+        return "metal" if self.platform.os == "macos" else "vulkan"
+
+    @property
     def recipe_id(self) -> str:
-        return f"vulkan-{self.recipe_fingerprint}"
+        return f"{self.backend}-{self.recipe_fingerprint}"
 
     @property
     def recipe_display_id(self) -> str:
-        return f"vulkan-{self.recipe_fingerprint[:8]}"
+        return f"{self.backend}-{self.recipe_fingerprint[:8]}"
 
     @property
     def runtime_payload(self) -> dict[str, Any]:
@@ -295,6 +301,16 @@ class RuntimeManifest:
         return hashlib.sha256(payload).hexdigest()
 
 
+def resolve_runtime_target(system: str | None = None, machine: str | None = None) -> str:
+    system = sys.platform if system is None else system
+    machine = (platform.machine() if machine is None else machine).lower()
+    if system == "win32" and machine in {"amd64", "x86_64"}:
+        return "windows-x86_64"
+    if system == "darwin" and machine == "arm64":
+        return "macos-arm64"
+    raise RuntimeManifestError(f"Unsupported runtime target: {system}/{machine}. Use native Windows x64 or Apple Silicon macOS.")
+
+
 def default_manifest_path() -> Path:
     return AppPaths.discover().manifest_path
 
@@ -303,7 +319,9 @@ def load_runtime_manifest(
     path: Path | str | None = None,
     *,
     portable_data_root: Path | str | None = None,
+    target: str | None = None,
 ) -> RuntimeManifest:
+    selected_target = target or resolve_runtime_target()
     source_path = Path(path or default_manifest_path()).expanduser().resolve()
     try:
         raw = json.loads(source_path.read_text(encoding="utf-8"))
@@ -317,11 +335,11 @@ def load_runtime_manifest(
         raise RuntimeManifestError("Runtime manifest root must be an object")
     if portable_data_root is not None:
         resolved_data_root = Path(portable_data_root).expanduser().resolve()
-    elif os.environ.get(ENV_PORTABLE_ROOT) or os.environ.get(ENV_DATA_ROOT):
+    elif os.environ.get(ENV_PORTABLE_ROOT) or os.environ.get(ENV_DATA_ROOT) or (selected_target == "macos-arm64"):
         resolved_data_root = AppPaths.discover().data_root
     else:
         resolved_data_root = None
-    return _parse_manifest(source_path, raw, portable_data_root=resolved_data_root)
+    return _parse_manifest(source_path, raw, target=selected_target, portable_data_root=resolved_data_root)
 
 
 def _parse_manifest(
@@ -329,15 +347,14 @@ def _parse_manifest(
     raw: Mapping[str, Any],
     *,
     portable_data_root: Path | None = None,
+    target: str,
 ) -> RuntimeManifest:
     _expect_keys(
         raw,
         {
             "schema_version",
             "paths",
-            "platform",
-            "toolchain",
-            "llama_cpp",
+            "targets",
             "model",
             "preprocessing",
             "embedding",
@@ -353,6 +370,14 @@ def _parse_manifest(
             f"expected {SUPPORTED_SCHEMA_VERSION}"
         )
 
+    targets = _object(raw["targets"], "targets")
+    _expect_keys(targets, {"windows-x86_64", "macos-arm64"}, "targets")
+    if target not in targets:
+        raise RuntimeManifestError(f"Unsupported runtime target: {target}")
+    selected = _object(targets[target], f"targets.{target}")
+    _expect_keys(selected, {"platform", "toolchain", "llama_cpp"}, f"targets.{target}")
+    raw = {**raw, **selected}
+    is_mac = target == "macos-arm64"
     paths_raw = _object(raw["paths"], "paths")
     _expect_keys(paths_raw, {"download_dir", "activation_record", "log_dir"}, "paths")
     paths = RuntimePaths(
@@ -368,7 +393,7 @@ def _parse_manifest(
         platform_raw, {"os", "architecture", "device", "vendor_ids"}, "platform"
     )
     vendor_ids_raw = _object(platform_raw["vendor_ids"], "platform.vendor_ids")
-    _expect_keys(vendor_ids_raw, {"amd", "intel", "nvidia"}, "platform.vendor_ids")
+    _expect_keys(vendor_ids_raw, set() if is_mac else {"amd", "intel", "nvidia"}, "platform.vendor_ids")
     vendor_ids: dict[str, str] = {}
     for vendor, value in vendor_ids_raw.items():
         vendor_id = _string(value, f"platform.vendor_ids.{vendor}").lower()
@@ -378,11 +403,11 @@ def _parse_manifest(
             )
         vendor_ids[vendor] = vendor_id
     platform = PlatformSpec(
-        os=_literal(platform_raw["os"], "windows", "platform.os"),
+        os=_literal(platform_raw["os"], "macos" if is_mac else "windows", "platform.os"),
         architecture=_literal(
-            platform_raw["architecture"], "x86_64", "platform.architecture"
+            platform_raw["architecture"], "arm64" if is_mac else "x86_64", "platform.architecture"
         ),
-        device=_literal(platform_raw["device"], "Vulkan0", "platform.device"),
+        device=_literal(platform_raw["device"], "MTL0" if is_mac else "Vulkan0", "platform.device"),
         vendor_ids=vendor_ids,
     )
 

@@ -1,6 +1,6 @@
 # MemeSort
 
-MemeSort is a local Windows-first asset library for semantic meme and reaction-media retrieval. This document defines the durable domain language used by the code and documentation.
+MemeSort is a local Windows and Apple Silicon Mac asset library for semantic meme and reaction-media retrieval. This document defines the durable domain language used by the code and documentation.
 
 ## Library
 
@@ -51,7 +51,7 @@ _Avoid_: Ignored duplicate, false positive, duplicate exception
 ## Inference and search
 
 **Pinned Runtime**:
-The one semantic inference environment defined by `runtime-manifest.json`: the Windows x64 llama.cpp Vulkan build, explicit `Vulkan0`, and the pinned GGUF main model plus multimodal projector. It accepts only supported AMD, Intel, or NVIDIA Vulkan0 devices. There is no runtime selection or fallback.
+The semantic inference environment selected by the native host target in `runtime-manifest.json`: Windows x64 llama.cpp with explicit `Vulkan0` on supported AMD, Intel, or NVIDIA GPUs, or native macOS arm64 llama.cpp Metal with explicit `MTL0` on Apple Silicon. It uses the pinned GGUF main model and multimodal projector, with no runtime selection or automatic fallback.
 _Avoid_: Runtime profile, backend option, device setting
 
 **Runtime Descriptor**:
@@ -85,15 +85,15 @@ _Avoid_: Global search cancel, parallel model server
 ## OCR
 
 **OCR Worker**:
-The isolated Python 3.12 CPU process running PaddleOCR PP-OCRv5 mobile. It is deliberately separate from semantic Vulkan inference and can work on any supported semantic GPU vendor.
+The isolated Python 3.12 CPU process running PaddleOCR PP-OCRv5 mobile. It is deliberately separate from semantic GPU inference and can work on any supported semantic GPU vendor.
 _Avoid_: Semantic backend, Vulkan OCR
 
 ## Invariants
 
 - Asset identity is content hash; source records describe origins.
-- Semantic inference is llama.cpp on manifest-pinned `Vulkan0` only.
+- Semantic inference is llama.cpp on manifest-pinned Windows `Vulkan0` or native macOS arm64 `MTL0` only. Target-specific archive hashes remain part of the Active Index Recipe; embeddings are not shared across platforms.
 - The manifest is the single developer upgrade surface for llama.cpp and GGUF artifacts.
-- The setup script is the supported semantic-runtime installer and verifies artifact hashes.
+- The setup script is the supported semantic-runtime installer and verifies artifact sizes/hashes before activation.
 - One llama-server and one serialized inference scheduler serve both indexing and search.
 - Search priority is non-preemptive; batching is not implemented.
 - OCR is CPU-only and isolated from the semantic runtime.
@@ -122,4 +122,4 @@ Domain Expert: "Not in the active recipe. Recipe activation resets incompatible 
 
 Dev: "Can the application fall back to CPU or a different GPU backend?"
 
-Domain Expert: "No. The runtime health check must admit the manifest-pinned Vulkan0 device before indexing starts."
+Domain Expert: "No. The runtime health check must admit the manifest-pinned GPU device before indexing starts."

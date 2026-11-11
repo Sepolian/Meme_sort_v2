@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 import unittest
+from tests.runtime_fakes import WindowsRuntimeTestCase
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, redirect_stdout
@@ -128,7 +129,7 @@ class BlockingSearchBackend(StubEmbeddingBackend):
         return self.scheduler.submit(operation)
 
 
-class LibraryTests(unittest.TestCase):
+class LibraryTests(WindowsRuntimeTestCase):
     def _list_assets(self, library_root: Path):
         with LibraryStore(library_root) as store:
             return store.list_assets_detailed()
