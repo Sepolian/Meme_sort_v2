@@ -135,15 +135,18 @@
     "full OCR provisioning and dataset evaluations",
     "personal installation (skipped)",
     "Windows real-device execution",
-    "main final integrated app build/suite"
+    "full final integrated app build/suite",
+    "Rust validation was not repeated because this integration made no Rust changes; full integration validation was deferred."
   ],
   "automated_checks": {
-    "python": "229 tests OK, 3 skipped",
-    "frontend": "338 passed / 35 files",
+    "python": "230 tests run, OK, 3 skipped after integration merge",
+    "frontend": "343 passed / 35 files after integration merge",
     "frontend_lint": "passed",
     "typescript": "passed",
     "git_diff_check": "passed",
-    "tdd": "target loading, native admission, setup, interrupted recovery, Settings guidance, and managed startup diagnostics observed red before green"
+    "tdd": "target loading, native admission, setup, interrupted recovery, Settings guidance, and managed startup diagnostics observed red before green",
+    "windows_original_target_objects": "exactly equal to 8e44c66",
+    "windows_exact_identity_snapshot": "recipe ID/fingerprint, runtime fingerprint and complete activation record unchanged"
   },
   "frozen_final_code_rerun": {
     "semantic_installed": true,
@@ -157,5 +160,184 @@
     "message": "Semantic runtime installed. CPU OCR provisioning is required; run an application-session health check before indexing."
   },
   "measurement_notes": "Observed timings with filesystem/model caches already warm; RSS sampled at 100 ms, not GPU budget or physical VRAM. No Mac performance guarantee.",
-  "inference_log": "macos-runtime-inference.txt"
+  "inference_log": "macos-runtime-inference.txt",
+  "frozen_app_sessions": [
+    {
+      "session": 1,
+      "handshake_with_startup_authorization_seconds": 5.656,
+      "runtime": {
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "llama_cpp_build": "b11457",
+        "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+        "model_label": "embeddinggemma-2",
+        "output_dimension": 768,
+        "storage_dtype": "float32",
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+        "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+        "still_max_side": 480,
+        "gif_max_side": 480,
+        "gif_frame_count": 4
+      },
+      "missing_setup": [
+        "OCR environment"
+      ],
+      "health": {
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+        "gpu_vendor": "apple",
+        "gpu_vendor_id": null,
+        "text_smoke_vector_dim": 768,
+        "image_smoke_vector_dim": 768,
+        "diagnostic_steps": [
+          {
+            "step": "runtime-manifest",
+            "status": "ok",
+            "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+          },
+          {
+            "step": "resolve-gguf-bundle",
+            "status": "ok",
+            "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+          },
+          {
+            "step": "metal-device",
+            "status": "ok",
+            "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+          },
+          {
+            "step": "llama-server",
+            "status": "ok",
+            "detail": "/private/tmp/MemeSort frozen 中文/runtime/llama.cpp-b11457-metal/llama-server"
+          },
+          {
+            "step": "text-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp text embedding passed at 768d."
+          },
+          {
+            "step": "image-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp image embedding passed at 768d."
+          }
+        ],
+        "smoke_test_ok": true,
+        "error": null
+      },
+      "clean_exit": true
+    },
+    {
+      "session": 2,
+      "handshake_with_startup_authorization_seconds": 1.332,
+      "runtime": {
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "llama_cpp_build": "b11457",
+        "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+        "model_label": "embeddinggemma-2",
+        "output_dimension": 768,
+        "storage_dtype": "float32",
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+        "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+        "still_max_side": 480,
+        "gif_max_side": 480,
+        "gif_frame_count": 4
+      },
+      "missing_setup": [
+        "OCR environment"
+      ],
+      "health": {
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+        "gpu_vendor": "apple",
+        "gpu_vendor_id": null,
+        "text_smoke_vector_dim": 768,
+        "image_smoke_vector_dim": 768,
+        "diagnostic_steps": [
+          {
+            "step": "runtime-manifest",
+            "status": "ok",
+            "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+          },
+          {
+            "step": "resolve-gguf-bundle",
+            "status": "ok",
+            "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+          },
+          {
+            "step": "metal-device",
+            "status": "ok",
+            "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+          },
+          {
+            "step": "llama-server",
+            "status": "ok",
+            "detail": "/private/tmp/MemeSort frozen 中文/runtime/llama.cpp-b11457-metal/llama-server"
+          },
+          {
+            "step": "text-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp text embedding passed at 768d."
+          },
+          {
+            "step": "image-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp image embedding passed at 768d."
+          }
+        ],
+        "smoke_test_ok": true,
+        "error": null
+      },
+      "clean_exit": true
+    }
+  ],
+  "implementation_commit": "99aee92ab7f4e070ed5f39ca92073a06070bd3b6",
+  "integration_merge_commit": "f5b42ae8ac9273e4c03033fae26117ce1cf10b92",
+  "integration_tip": "68fffce",
+  "changed_files": [
+    "GLOSSARY.md",
+    "README.md",
+    "desktop/src-tauri/tauri.macos.conf.json",
+    "desktop/src/features/runtime/RuntimeHealthProvider.tsx",
+    "desktop/src/features/settings/SettingsDiagnostics.test.tsx",
+    "desktop/src/features/settings/SettingsPage.tsx",
+    "desktop/src/features/window/tauri-window-config.test.ts",
+    "docs/validation/macos-runtime-inference.txt",
+    "docs/validation/macos-runtime.json",
+    "memesort_worker/embedding_backend.py",
+    "memesort_worker/indexing_pipeline.py",
+    "memesort_worker/llama_cpp_backend.py",
+    "memesort_worker/macos_setup.py",
+    "memesort_worker/pinned_runtime.py",
+    "memesort_worker/recipe_provider.py",
+    "memesort_worker/runtime_admission.py",
+    "memesort_worker/runtime_manifest.py",
+    "memesort_worker/runtime_service.py",
+    "memesort_worker/sidecar_entry.py",
+    "runtime-manifest.json",
+    "scripts/build_macos.sh",
+    "scripts/retrieval_evaluation.py",
+    "scripts/setup_macos_runtime.sh",
+    "scripts/setup_portable_runtime.ps1",
+    "scripts/setup_windows_llama.ps1",
+    "scripts/test_macos_package.py",
+    "tests/fixtures/windows_runtime_identity.json",
+    "tests/runtime_fakes.py",
+    "tests/test_library.py",
+    "tests/test_llama_cpp_backend.py",
+    "tests/test_macos_runtime.py",
+    "tests/test_macos_setup.py",
+    "tests/test_pinned_runtime.py",
+    "tests/test_read_projection_characterization.py",
+    "tests/test_runtime_activation.py",
+    "tests/test_runtime_admission.py",
+    "tests/test_runtime_manifest.py",
+    "tests/test_vulkan_only_runtime.py"
+  ]
 }
