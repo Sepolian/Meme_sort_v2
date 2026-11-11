@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -14,6 +16,7 @@ from memesort_worker.runtime_manifest import load_runtime_manifest
 
 
 class MacSetupTests(unittest.TestCase):
+    @unittest.skipIf(os.name == 'nt', 'POSIX symlinks and executable installation')
     def test_setup_verifies_before_activation_preserves_links_and_reruns_offline(self):
         from memesort_worker.macos_setup import install_semantic_runtime
         with tempfile.TemporaryDirectory(prefix='Setup 中文 ') as temporary:
@@ -86,3 +89,63 @@ class MacSetupTests(unittest.TestCase):
                 with self.subTest(name=name), self.assertRaises((ValueError, tarfile.FilterError)):
                     extract_archive(path, root / 'stage')
             self.assertFalse((root / 'escape').exists())
+
+
+class CpuOcrSetupTests(unittest.TestCase):
+    def test_setup_uses_final_data_paths_and_exercises_the_cpu_worker(self):
+        from memesort_worker.app_paths import AppPaths
+        from memesort_worker.macos_setup import install_cpu_ocr
+
+        with tempfile.TemporaryDirectory(prefix='OCR 中文 ') as temporary:
+            root = Path(temporary).resolve()
+            paths = AppPaths.discover({'MEMESORT_DATA_ROOT': str(root)})
+            manifest = load_runtime_manifest(target='macos-arm64', portable_data_root=root)
+            for name in ('PP-OCRv5_mobile_det', 'PP-OCRv5_mobile_rec'):
+                model = paths.models_root / 'paddleocr/official_models' / name
+                model.mkdir(parents=True)
+                for filename in ('inference.json', 'inference.pdiparams', 'inference.yml'):
+                    (model / filename).write_text('fixture')
+            identity = {'python': '3.12.13', 'paddlepaddle': '3.2.2', 'paddleocr': '3.6.0',
+                        'base_prefix': str(paths.runtime_root / 'python' / 'cpython-test')}
+            calls = []
+
+            def command(argv, **kwargs):
+                calls.append((argv, kwargs))
+                stdout = ''
+                if '-c' in argv:
+                    stdout = json.dumps(identity)
+                if str(paths.manifest_path.parent / 'scripts/paddle_ocr_worker.py') in argv:
+                    self.assertEqual('cpu', argv[-1])
+                    request = json.loads(kwargs['input'])
+                    self.assertTrue(Path(request['path']).is_file())
+                    stdout = json.dumps({'id': request['id'], 'result': {'text': 'HELLO MEMESORT'}}) + '\n'
+                return subprocess.CompletedProcess(argv, 0, stdout, '')
+
+            with patch.dict(os.environ, {'UV_PYTHON_INSTALL_DIR': '/developer/python', 'UV_CACHE_DIR': '/developer/cache',
+                                         'PADDLE_PDX_CACHE_HOME': '/developer/models', 'PYTHONHOME': '/developer/python',
+                                         'PYTHONPATH': '/developer/modules'}), patch('memesort_worker.macos_setup.subprocess.run', side_effect=command):
+                report = install_cpu_ocr(manifest, paths, offline=True)
+            self.assertTrue(report['ocr_installed'])
+            self.assertEqual(identity, report['ocr_runtime'])
+            uv_commands = [argv for argv, _ in calls if argv[0] == str(manifest.uv_install_dir / 'uv')]
+            self.assertTrue(all('--offline' in argv for argv in uv_commands))
+            self.assertTrue(any('venv' in argv and str(paths.runtime_root / 'ocr-venv') in argv for argv in uv_commands))
+            self.assertTrue(any('paddlepaddle==3.2.2' in argv and str(paths.manifest_path.parent / 'requirements-ocr.txt') in argv for argv in uv_commands))
+            for _, kwargs in calls:
+                self.assertEqual(str(paths.runtime_root / 'python'), kwargs['env']['UV_PYTHON_INSTALL_DIR'])
+                self.assertEqual(str(paths.runtime_root / 'uv-cache'), kwargs['env']['UV_CACHE_DIR'])
+                self.assertEqual(str(paths.models_root / 'paddleocr'), kwargs['env']['PADDLE_PDX_CACHE_HOME'])
+                self.assertNotIn('PYTHONHOME', kwargs['env'])
+                self.assertNotIn('PYTHONPATH', kwargs['env'])
+
+    def test_offline_setup_rejects_missing_models_before_worker_can_download(self):
+        from memesort_worker.app_paths import AppPaths
+        from memesort_worker.macos_setup import install_cpu_ocr
+
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = AppPaths.discover({'MEMESORT_DATA_ROOT': temporary})
+            manifest = load_runtime_manifest(target='macos-arm64', portable_data_root=temporary)
+            with patch('memesort_worker.macos_setup.subprocess.run') as command:
+                with self.assertRaisesRegex(ValueError, 'Offline OCR models are incomplete'):
+                    install_cpu_ocr(manifest, paths, offline=True)
+            command.assert_not_called()

@@ -1,0 +1,3012 @@
+{
+  "backend": "llama.cpp-metal",
+  "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+  "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+  "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+  "llama_cpp_build": "b11457",
+  "device": "MTL0",
+  "preprocess_version": "still-480-gif-480-rgb-white-exif-v1",
+  "still_max_side": 480,
+  "gif_max_side": 480,
+  "query_fields": [
+    "ocr_translation",
+    "people_appearance",
+    "objects",
+    "scene_context",
+    "themes"
+  ],
+  "top_k": 10,
+  "asset_count": 20,
+  "query_count": 20,
+  "recall_at_1": 0.9,
+  "recall_at_5": 1.0,
+  "recall_at_10": 1.0,
+  "import_seconds": 0.334,
+  "indexing_seconds": 16.918,
+  "indexed_assets_per_second": 1.182,
+  "query_seconds_total": 0.394,
+  "query_seconds_avg": 0.02,
+  "wall_seconds": 23.259,
+  "per_query": [
+    {
+      "asset_filename": "meme_001.jpg",
+      "query": "Money laundering doesn't mean the money disappears, you just change it into a form you like...\nOne person's plan is short-sighted, two people's plan is long-sighted.\nBuy early, enjoy early; buy late, beg on your knees.\nMakes sense.\nBuy it...\nOtherwise, the group leader will sweep it all up...\nSalary will be paid later...\nHave Huabei...\nHave credit card...\nWhat are you thinking about...\nI'll pay for you first...\nVegeta (Dragon Ball character), Super Saiyan, yellow spiky hair, blue battle suit, cartoon sheep-like creature, white fluffy character\ncredit cards, Huabei cards, display pedestal\nA multi-panel comic strip. On the left, Vegeta stands on a pedestal. On the right, two cartoon sheep-like characters interact, one holding cards and the other encouraging spending.\nconsumerism, impulse buying, peer pressure, financial temptation, credit spending, buy now pay later, meme culture, sarcasm, humor",
+      "expected_asset_id": "c69231db-d3f5-4f98-869d-2226142732d6",
+      "hit_rank": 1,
+      "query_seconds": 0.106,
+      "top_results": [
+        {
+          "asset_id": "c69231db-d3f5-4f98-869d-2226142732d6",
+          "score": 0.01639344262295082,
+          "library_path": "originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "library_url": "/media/originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "thumbnail_url": "/media/thumbnails/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "b4abe4e5f74aab3d05ecddf61f576e12bf6fce94195106b2f93393a0752946c9",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8145129680633545
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.016129032258064516,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6537760496139526
+        },
+        {
+          "asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+          "score": 0.015873015873015872,
+          "library_path": "originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "library_url": "/media/originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "thumbnail_url": "/media/thumbnails/298f9b97-6170-4577-9333-44569092ff31.jpg",
+          "media_type": "image/png",
+          "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6484010219573975
+        },
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.015625,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6332962512969971
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6050264835357666
+        },
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.015151515151515152,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6023591160774231
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6012036204338074
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5986558794975281
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014492753623188406,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5981680154800415
+        },
+        {
+          "asset_id": "77d81163-3119-49ed-b50c-b701a75371de",
+          "score": 0.014285714285714285,
+          "library_path": "originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "library_url": "/media/originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "thumbnail_url": "/media/thumbnails/77d81163-3119-49ed-b50c-b701a75371de.jpg",
+          "media_type": "image/png",
+          "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5968829393386841
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_002.png",
+      "query": "Did you ask?\nanime style male, dark spiky hair, side profile\nchat bubble, avatar icon\nchat interface screenshot with an avatar and a message bubble\ndismissive, sarcastic, unsolicited opinion, rhetorical question",
+      "expected_asset_id": "77d81163-3119-49ed-b50c-b701a75371de",
+      "hit_rank": 1,
+      "query_seconds": 0.037,
+      "top_results": [
+        {
+          "asset_id": "77d81163-3119-49ed-b50c-b701a75371de",
+          "score": 0.01639344262295082,
+          "library_path": "originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "library_url": "/media/originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "thumbnail_url": "/media/thumbnails/77d81163-3119-49ed-b50c-b701a75371de.jpg",
+          "media_type": "image/png",
+          "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8085609674453735
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.016129032258064516,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.673914909362793
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.015873015873015872,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6732035875320435
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.015625,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6725394129753113
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6554362177848816
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.015151515151515152,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6510188579559326
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014925373134328358,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6449042558670044
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.014705882352941176,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6418104767799377
+        },
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.014492753623188406,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6412573456764221
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.014285714285714285,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6372085809707642
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_003.png",
+      "query": "Hello, I am Captain Amuro of the Earth Federation Forces Londo Bell unit. I am currently searching the entire universe for a guy who makes lolis call him 'mom'. Have you seen this person?\nWanted: Lolicon\nAmuro Ray, young man, short brown hair, serious expression, white turtleneck, blue and red jacket, military uniform, Char Aznable, adult man, blonde hair, stern expression, red and gold uniform\nwanted poster\nAmuro Ray presenting a wanted poster for Char Aznable, who is labeled as a 'lolicon', against a light background.\nanime meme, Gundam meme, Amuro Ray, Char Aznable, lolicon joke, wanted poster, humor, irony",
+      "expected_asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+      "hit_rank": 1,
+      "query_seconds": 0.016,
+      "top_results": [
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.01639344262295082,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7534810304641724
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.016129032258064516,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7265654802322388
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015873015873015872,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7051420211791992
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015625,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6996536254882812
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.015384615384615385,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6942673325538635
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.015151515151515152,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6942075490951538
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.014925373134328358,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.692503809928894
+        },
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.014705882352941176,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6910455226898193
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6784955263137817
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014285714285714285,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6776632070541382
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_004.png",
+      "query": "anime man, brown hair, sunglasses, suit, vest, tie, formal attire\nsunglasses, suit jacket, vest, tie\nindoor setting, possibly a formal room\nserious, formal, mysterious, anime style",
+      "expected_asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+      "hit_rank": 1,
+      "query_seconds": 0.036,
+      "top_results": [
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.01639344262295082,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8040428757667542
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7369843125343323
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015873015873015872,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7333142757415771
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.015625,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6909754276275635
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.015384615384615385,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6884207725524902
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6787867546081543
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014925373134328358,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6762488484382629
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014705882352941176,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6607177257537842
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.014492753623188406,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6509823799133301
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6506985425949097
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_005.png",
+      "query": "young man, brown curly hair, blue suit, red sweater, white shirt, red tie, tied to chair, distressed, screaming, man, dark blue hair, military uniform, white shirt, black and red accents, gold emblem, aggressive, holding taser\nchair, rope, taser, sink, mirror, wooden table\ndimly lit interrogation room or prison cell with concrete walls and tiled floor\ninterrogation, torture, distress, fear, aggression, power imbalance, anime style",
+      "expected_asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+      "hit_rank": 1,
+      "query_seconds": 0.013,
+      "top_results": [
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.01639344262295082,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7870720624923706
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.016129032258064516,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6834312677383423
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015873015873015872,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6588170528411865
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.015625,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6567014455795288
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.015384615384615385,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6474677324295044
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6457545757293701
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6454554796218872
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6433298587799072
+        },
+        {
+          "asset_id": "77d81163-3119-49ed-b50c-b701a75371de",
+          "score": 0.014492753623188406,
+          "library_path": "originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "library_url": "/media/originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "thumbnail_url": "/media/thumbnails/77d81163-3119-49ed-b50c-b701a75371de.jpg",
+          "media_type": "image/png",
+          "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6429336667060852
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.014285714285714285,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.636881947517395
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_006.jpeg",
+      "query": "Optimist Pessimist Me Human wisdom will surely overcome all this. The Earth cannot accommodate human selfishness. What's up? What's happening? Nobody told me what's going on!\ncartoon character with red hair and blue jacket, cartoon character with black hair and grey jacket, cartoon character with red hair and grey/yellow jacket, simple drawing style, open mouths\nspeech bubbles, text boxes\nThree cartoon characters standing side-by-side, each expressing a different viewpoint in speech bubbles, labeled as 'Optimist', 'Pessimist', and 'Me'.\noptimism, pessimism, ignorance, different perspectives, discussion, relatability, humor",
+      "expected_asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+      "hit_rank": 1,
+      "query_seconds": 0.014,
+      "top_results": [
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.01639344262295082,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7417985200881958
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.016129032258064516,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6515570878982544
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6301233768463135
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015625,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6295980215072632
+        },
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.015384615384615385,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6293763518333435
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6180674433708191
+        },
+        {
+          "asset_id": "c69231db-d3f5-4f98-869d-2226142732d6",
+          "score": 0.014925373134328358,
+          "library_path": "originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "library_url": "/media/originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "thumbnail_url": "/media/thumbnails/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "b4abe4e5f74aab3d05ecddf61f576e12bf6fce94195106b2f93393a0752946c9",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6178438067436218
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.014705882352941176,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6096799373626709
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6022822856903076
+        },
+        {
+          "asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+          "score": 0.014285714285714285,
+          "library_path": "originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "library_url": "/media/originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "thumbnail_url": "/media/thumbnails/298f9b97-6170-4577-9333-44569092ff31.jpg",
+          "media_type": "image/png",
+          "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6022746562957764
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_007.png",
+      "query": "You already have 100 Gundams!\nIt's different!\nIt's different!\nstick figure happy, stick figure distressed, one person holding another\nGundam models, robot figures, mecha toys\nTwo stick figures on a white background, surrounded by numerous Gundam model kits.\ncollecting hobby, consumerism, denial, justifying purchases, addiction, Gundam fan, different models",
+      "expected_asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+      "hit_rank": 1,
+      "query_seconds": 0.012,
+      "top_results": [
+        {
+          "asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+          "score": 0.01639344262295082,
+          "library_path": "originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "library_url": "/media/originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "thumbnail_url": "/media/thumbnails/298f9b97-6170-4577-9333-44569092ff31.jpg",
+          "media_type": "image/png",
+          "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.792214572429657
+        },
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.016129032258064516,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6923753619194031
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6215572953224182
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.015625,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6198928356170654
+        },
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.015384615384615385,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6190739870071411
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6152052283287048
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.614098310470581
+        },
+        {
+          "asset_id": "c69231db-d3f5-4f98-869d-2226142732d6",
+          "score": 0.014705882352941176,
+          "library_path": "originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "library_url": "/media/originals/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "thumbnail_url": "/media/thumbnails/c69231db-d3f5-4f98-869d-2226142732d6.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "b4abe4e5f74aab3d05ecddf61f576e12bf6fce94195106b2f93393a0752946c9",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6075363159179688
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014492753623188406,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6054083108901978
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014285714285714285,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6014699935913086
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_008.jpg",
+      "query": "Amuro, I am now doing something greedy and shameless.\nanime male, brown hair, sunglasses, suit, tie, smug expression\nsunglasses, suit, tie\nindoor, plain background, close-up of character\nshamelessness, greed, confession, smug, anime meme",
+      "expected_asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+      "hit_rank": 2,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.01639344262295082,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7522616386413574
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7494101524353027
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015873015873015872,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7152575254440308
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015625,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6941429972648621
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.015384615384615385,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6778441667556763
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015151515151515152,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6758533120155334
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.014925373134328358,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6742178797721863
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6713597774505615
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014492753623188406,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6646208763122559
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6595861911773682
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_009.png",
+      "query": "Indeed, this is the quality that genuine products should have.\nchibi Gundam, RX-78-2 Gundam, large detailed Gundam leg, robot, mecha\nGundam model, robot toy\nA small, chibi-style Gundam looks up admiringly at the leg of a large, detailed Gundam, implying superior quality.\nquality, authenticity, genuine product, admiration, comparison, Gundam, mecha, anime",
+      "expected_asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+      "hit_rank": 1,
+      "query_seconds": 0.012,
+      "top_results": [
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.01639344262295082,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7895004749298096
+        },
+        {
+          "asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+          "score": 0.016129032258064516,
+          "library_path": "originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "library_url": "/media/originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "thumbnail_url": "/media/thumbnails/298f9b97-6170-4577-9333-44569092ff31.jpg",
+          "media_type": "image/png",
+          "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6602188348770142
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6447523832321167
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015625,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6304298043251038
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6205699443817139
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6200202703475952
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6170774698257446
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014705882352941176,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6130774617195129
+        },
+        {
+          "asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+          "score": 0.014492753623188406,
+          "library_path": "originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "library_url": "/media/originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "thumbnail_url": "/media/thumbnails/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.jpg",
+          "media_type": "image/png",
+          "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6059798002243042
+        },
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.014285714285714285,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5951041579246521
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_010.jpg",
+      "query": "Legendary predecessors, please guide me.\nTrust the wisdom of future generations. Beyond saving, ran away.\nLoli mom, so fragrant.\nWhere is Magnum?\nHuge stars are twinkling......\nanime man in blue suit and red sweater, anime man in red jacket, anime man in blue and white jacket, anime man in purple jacket, anime woman with teal hair in uniform, anime man with white hair in red and gold uniform\nA young man in a suit stands in a desolate, grey landscape, looking at a collection of floating anime character heads with various text bubbles.\nanime meme, guidance, past vs future, confusion, internet culture, humor",
+      "expected_asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+      "hit_rank": 1,
+      "query_seconds": 0.014,
+      "top_results": [
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.01639344262295082,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7235817909240723
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.016129032258064516,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6972897052764893
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015873015873015872,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.684335470199585
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015625,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6830156445503235
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.015384615384615385,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6807141304016113
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015151515151515152,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6724886894226074
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014925373134328358,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6664959192276001
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6663933992385864
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.014492753623188406,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6607034802436829
+        },
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.014285714285714285,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6584179997444153
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_011.png",
+      "query": "Humanity is almost beyond saving\nanime male, short dark curly hair, light skin, light grey collared shirt, concerned expression\nindoor, simple light-colored background\ndespair, hopelessness, concern, shock, serious, dramatic, anime",
+      "expected_asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+      "hit_rank": 1,
+      "query_seconds": 0.013,
+      "top_results": [
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.01639344262295082,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8134974241256714
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.016129032258064516,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7202606797218323
+        },
+        {
+          "asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+          "score": 0.015873015873015872,
+          "library_path": "originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "library_url": "/media/originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "thumbnail_url": "/media/thumbnails/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.jpg",
+          "media_type": "image/png",
+          "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6688727140426636
+        },
+        {
+          "asset_id": "77d81163-3119-49ed-b50c-b701a75371de",
+          "score": 0.015625,
+          "library_path": "originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "library_url": "/media/originals/77d81163-3119-49ed-b50c-b701a75371de.png",
+          "thumbnail_url": "/media/thumbnails/77d81163-3119-49ed-b50c-b701a75371de.jpg",
+          "media_type": "image/png",
+          "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6626096367835999
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6622861623764038
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015151515151515152,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6607255935668945
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6601420640945435
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014705882352941176,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.654367983341217
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.014492753623188406,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6534128189086914
+        },
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.014285714285714285,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6349531412124634
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_012.png",
+      "query": "anime character, brown hair, blue jacket, young man, displeased expression, anime character, blonde hair, red military uniform, serious expression, anime character, brown hair, blue jacket, young man, smiling, pointing, anime character, blonde hair, red and black uniform, sunglasses, serious expression\nsunglasses\nFour-panel anime meme featuring two different male characters, one with brown hair and one with blonde hair, showing various expressions and poses against yellow and white backgrounds.\ndisapproval, approval, rejection, preference, comparison, anime meme, Gundam, Amuro Ray, Char Aznable, cool vs uncool",
+      "expected_asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+      "hit_rank": 1,
+      "query_seconds": 0.014,
+      "top_results": [
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.01639344262295082,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8091223835945129
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.016129032258064516,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.735914945602417
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015873015873015872,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7267289757728577
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.015625,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7003302574157715
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6833093166351318
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6814360618591309
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014925373134328358,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6814058423042297
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014705882352941176,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6788583397865295
+        },
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.014492753623188406,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6787316203117371
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6706594824790955
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_013.png",
+      "query": "anime man with blonde hair and sunglasses, anime man with dark brown curly hair and sunglasses, anime man with reddish-brown hair and sunglasses, three men, serious expression, wearing suits/jackets\nsunglasses\nthree anime men with sunglasses side-by-side against a plain background\nanime, cartoon, comparison, similar characters, cool, serious, meme format",
+      "expected_asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.01639344262295082,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8301936984062195
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.016129032258064516,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7562817931175232
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7469483613967896
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.015625,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7388955950737
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.015384615384615385,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7074669599533081
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.015151515151515152,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6936975121498108
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014925373134328358,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6843693256378174
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6737993955612183
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014492753623188406,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6700869798660278
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6690643429756165
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_014.png",
+      "query": "bilibili I am Hakigao\nanime man dark blue hair teal uniform, anime girl brown hair sad expression, anime man blonde hair sunglasses red top muscular, anime girl blonde hair green eyes curious expression\ntwo anime men holding two anime girls in a spaceship or control room\nprotection, comfort, contrasting emotions, meme template, anime crossover",
+      "expected_asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.01639344262295082,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8021513223648071
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.016129032258064516,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7350628972053528
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.015873015873015872,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7261000871658325
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015625,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7198503017425537
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015384615384615385,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7130940556526184
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015151515151515152,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7125474214553833
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014925373134328358,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7074893116950989
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014705882352941176,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.701688826084137
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.014492753623188406,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6973195672035217
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.014285714285714285,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6942532062530518
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_015.jpg",
+      "query": "Legendary predecessors, please guide me\nTrust the wisdom of future generations No hope, ran away\nLoli mom, so fragrant\nWhere is Magnum?\nHuge stars are twinkling...\nMafty!\nLet's show them\nanime character, young man, brown hair, suit, red vest, tie, red jacket, blue uniform, purple jacket, teal hair woman, blonde hair man, red/gold uniform\nanime characters\nAnime characters superimposed on a barren, cloudy background, with one character seeking guidance from others who offer various comments.\nseeking advice, conflicting opinions, humor, anime meme, reaction image, disappointment, irony",
+      "expected_asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+      "hit_rank": 3,
+      "query_seconds": 0.015,
+      "top_results": [
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.01639344262295082,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7160515189170837
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.016129032258064516,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6948465704917908
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6929104328155518
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015625,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6913909316062927
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.015384615384615385,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6702930331230164
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.015151515151515152,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6651439070701599
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014925373134328358,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6628257632255554
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.014705882352941176,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6611493825912476
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.650885283946991
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.014285714285714285,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6485415697097778
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_016.jpg",
+      "query": "Hathaway's Flash 3.12 Chunibyo Occupational disease Mental illness Sexually transmitted disease\nanime character standee, male, red hair, white uniform, anime character standee, male, dark hair, white uniform, arms crossed, anime character standee, male, dark hair, black jacket, black pants, anime character standee, female, long white hair, red top, black pants\nanime character standees, movie posters\nfour anime character standees on a carpeted floor in an indoor setting, possibly a lobby or convention\nhumor, wordplay, pun, anime, Gundam, Hathaway's Flash, character archetypes, internet slang, illness",
+      "expected_asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+      "hit_rank": 1,
+      "query_seconds": 0.015,
+      "top_results": [
+        {
+          "asset_id": "31249214-ce04-4d02-b152-5df49914e05d",
+          "score": 0.01639344262295082,
+          "library_path": "originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "library_url": "/media/originals/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "thumbnail_url": "/media/thumbnails/31249214-ce04-4d02-b152-5df49914e05d.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7734239101409912
+        },
+        {
+          "asset_id": "18dd4d54-f667-40db-be84-8643c8bce4a5",
+          "score": 0.016129032258064516,
+          "library_path": "originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "library_url": "/media/originals/18dd4d54-f667-40db-be84-8643c8bce4a5.jpeg",
+          "thumbnail_url": "/media/thumbnails/18dd4d54-f667-40db-be84-8643c8bce4a5.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6478184461593628
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.015873015873015872,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6410500407218933
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015625,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6340928077697754
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.015384615384615385,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6334804892539978
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6315149068832397
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.014925373134328358,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.622970461845398
+        },
+        {
+          "asset_id": "298f9b97-6170-4577-9333-44569092ff31",
+          "score": 0.014705882352941176,
+          "library_path": "originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "library_url": "/media/originals/298f9b97-6170-4577-9333-44569092ff31.png",
+          "thumbnail_url": "/media/thumbnails/298f9b97-6170-4577-9333-44569092ff31.jpg",
+          "media_type": "image/png",
+          "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.612243115901947
+        },
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.014492753623188406,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6051191687583923
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6029973030090332
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_017.png",
+      "query": "astronaut, human eye visible through cracked visor, white space suit\nspace helmet, cracked visor, planet, stars\nAn astronaut floating in outer space with a large planet and stars in the background, reaching out with a broken helmet visor.\nspace exploration, vulnerability, danger, isolation, broken, accident, awe",
+      "expected_asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+          "score": 0.01639344262295082,
+          "library_path": "originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "library_url": "/media/originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "thumbnail_url": "/media/thumbnails/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.jpg",
+          "media_type": "image/png",
+          "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7530249953269958
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6047636866569519
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.015873015873015872,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5939825773239136
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.015625,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5880531072616577
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.015384615384615385,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5830748677253723
+        },
+        {
+          "asset_id": "7cc546fc-03f1-42c8-87cd-d19a69118f5f",
+          "score": 0.015151515151515152,
+          "library_path": "originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "library_url": "/media/originals/7cc546fc-03f1-42c8-87cd-d19a69118f5f.png",
+          "thumbnail_url": "/media/thumbnails/7cc546fc-03f1-42c8-87cd-d19a69118f5f.jpg",
+          "media_type": "image/png",
+          "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5797966122627258
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014925373134328358,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5774938464164734
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.575657308101654
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5737062692642212
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.014285714285714285,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5736625790596008
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_018.png",
+      "query": "anime character, male, blonde hair, orange pilot suit, white shirt, santa hat\nsanta hat, cockpit, controls, seatbelt\nAn anime character wearing a Santa hat is sitting in the cockpit of a vehicle, possibly a mech or spacecraft, with a green outdoor background visible.\nchristmas, holiday, anime, pilot, mecha",
+      "expected_asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.01639344262295082,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8347792029380798
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7212127447128296
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.015873015873015872,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.678113579750061
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.015625,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6752277612686157
+        },
+        {
+          "asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+          "score": 0.015384615384615385,
+          "library_path": "originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "library_url": "/media/originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "thumbnail_url": "/media/thumbnails/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.jpg",
+          "media_type": "image/png",
+          "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6710909008979797
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015151515151515152,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6649221777915955
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.014925373134328358,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6538716554641724
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.014705882352941176,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6351086497306824
+        },
+        {
+          "asset_id": "ca3773ec-a597-4557-8122-75c7f138f7b1",
+          "score": 0.014492753623188406,
+          "library_path": "originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "library_url": "/media/originals/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "thumbnail_url": "/media/thumbnails/ca3773ec-a597-4557-8122-75c7f138f7b1.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6347240805625916
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.014285714285714285,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6340272426605225
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_019.png",
+      "query": "anime character, blonde hair, sunglasses, red uniform, white shirt, black vest, muscular\ndoor, sunglasses\nAn anime character with blonde hair and sunglasses, wearing a red uniform, is running quickly past a door in an indoor hallway.\nrunning, speed, urgency, action, anime",
+      "expected_asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.01639344262295082,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8131551742553711
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.016129032258064516,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6913942098617554
+        },
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.015873015873015872,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6844854354858398
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.015625,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6839617490768433
+        },
+        {
+          "asset_id": "af15fc16-75c0-4894-9de0-bbadac99dcf4",
+          "score": 0.015384615384615385,
+          "library_path": "originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "library_url": "/media/originals/af15fc16-75c0-4894-9de0-bbadac99dcf4.png",
+          "thumbnail_url": "/media/thumbnails/af15fc16-75c0-4894-9de0-bbadac99dcf4.jpg",
+          "media_type": "image/png",
+          "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6785089373588562
+        },
+        {
+          "asset_id": "032a7adc-762c-443e-9619-6c1476a8c82c",
+          "score": 0.015151515151515152,
+          "library_path": "originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "library_url": "/media/originals/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "thumbnail_url": "/media/thumbnails/032a7adc-762c-443e-9619-6c1476a8c82c.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6600587368011475
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.014925373134328358,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.656697154045105
+        },
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.014705882352941176,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6488878130912781
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6465088129043579
+        },
+        {
+          "asset_id": "82ad62b3-462d-4f71-b786-937f77941795",
+          "score": 0.014285714285714285,
+          "library_path": "originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "library_url": "/media/originals/82ad62b3-462d-4f71-b786-937f77941795.png",
+          "thumbnail_url": "/media/thumbnails/82ad62b3-462d-4f71-b786-937f77941795.jpg",
+          "media_type": "image/png",
+          "content_hash": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.633171558380127
+        }
+      ]
+    },
+    {
+      "asset_filename": "meme_020.png",
+      "query": "But I don't feel any fear. Instead, I feel very warm. It even makes me feel at ease.\nanime male, blonde hair, fair skin, sweat drops, brown pilot suit, pensive expression\ncockpit chair, pilot uniform\nAn anime character in a cockpit, looking pensive with a space-like background visible through a window.\nintrospection, calmness, unexpected comfort, sci-fi, anime, space",
+      "expected_asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+      "hit_rank": 1,
+      "query_seconds": 0.012,
+      "top_results": [
+        {
+          "asset_id": "a1419604-36b3-47d9-a763-e5112ffbcc0c",
+          "score": 0.01639344262295082,
+          "library_path": "originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "library_url": "/media/originals/a1419604-36b3-47d9-a763-e5112ffbcc0c.png",
+          "thumbnail_url": "/media/thumbnails/a1419604-36b3-47d9-a763-e5112ffbcc0c.jpg",
+          "media_type": "image/png",
+          "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7758788466453552
+        },
+        {
+          "asset_id": "4c068abf-6fb4-4850-96d3-f9ae8ad4885f",
+          "score": 0.016129032258064516,
+          "library_path": "originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "library_url": "/media/originals/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.png",
+          "thumbnail_url": "/media/thumbnails/4c068abf-6fb4-4850-96d3-f9ae8ad4885f.jpg",
+          "media_type": "image/png",
+          "content_hash": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7431074976921082
+        },
+        {
+          "asset_id": "53b663db-8199-409e-ae8d-6bdf68f1b550",
+          "score": 0.015873015873015872,
+          "library_path": "originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "library_url": "/media/originals/53b663db-8199-409e-ae8d-6bdf68f1b550.png",
+          "thumbnail_url": "/media/thumbnails/53b663db-8199-409e-ae8d-6bdf68f1b550.jpg",
+          "media_type": "image/png",
+          "content_hash": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.706872820854187
+        },
+        {
+          "asset_id": "c1bc656a-5fc7-4b03-9454-7f1bf419f0fc",
+          "score": 0.015625,
+          "library_path": "originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "library_url": "/media/originals/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.png",
+          "thumbnail_url": "/media/thumbnails/c1bc656a-5fc7-4b03-9454-7f1bf419f0fc.jpg",
+          "media_type": "image/png",
+          "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6974705457687378
+        },
+        {
+          "asset_id": "a99f56d9-691a-4b7a-be8b-3482e6727b9c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "library_url": "/media/originals/a99f56d9-691a-4b7a-be8b-3482e6727b9c.png",
+          "thumbnail_url": "/media/thumbnails/a99f56d9-691a-4b7a-be8b-3482e6727b9c.jpg",
+          "media_type": "image/png",
+          "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.696435272693634
+        },
+        {
+          "asset_id": "ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78",
+          "score": 0.015151515151515152,
+          "library_path": "originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "library_url": "/media/originals/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.png",
+          "thumbnail_url": "/media/thumbnails/ee9a8ad3-c0f9-4756-9d2e-5d3c36bc6d78.jpg",
+          "media_type": "image/png",
+          "content_hash": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6900701522827148
+        },
+        {
+          "asset_id": "b6f17ec1-c286-4cd3-a2c6-4866cf252e22",
+          "score": 0.014925373134328358,
+          "library_path": "originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "library_url": "/media/originals/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.png",
+          "thumbnail_url": "/media/thumbnails/b6f17ec1-c286-4cd3-a2c6-4866cf252e22.jpg",
+          "media_type": "image/png",
+          "content_hash": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6815119981765747
+        },
+        {
+          "asset_id": "ae7facae-6e58-4eb2-807f-f31984223fb1",
+          "score": 0.014705882352941176,
+          "library_path": "originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "library_url": "/media/originals/ae7facae-6e58-4eb2-807f-f31984223fb1.png",
+          "thumbnail_url": "/media/thumbnails/ae7facae-6e58-4eb2-807f-f31984223fb1.jpg",
+          "media_type": "image/png",
+          "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6732534170150757
+        },
+        {
+          "asset_id": "80c311a9-10a1-46aa-84ea-855f94a4bc6d",
+          "score": 0.014492753623188406,
+          "library_path": "originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "library_url": "/media/originals/80c311a9-10a1-46aa-84ea-855f94a4bc6d.png",
+          "thumbnail_url": "/media/thumbnails/80c311a9-10a1-46aa-84ea-855f94a4bc6d.jpg",
+          "media_type": "image/png",
+          "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6671396493911743
+        },
+        {
+          "asset_id": "896e90d7-790f-425f-af79-1245a9ef0f98",
+          "score": 0.014285714285714285,
+          "library_path": "originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "library_url": "/media/originals/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "thumbnail_url": "/media/thumbnails/896e90d7-790f-425f-af79-1245a9ef0f98.jpg",
+          "media_type": "image/jpeg",
+          "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+          "matched_source_ref": "original",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6653779745101929
+        }
+      ]
+    }
+  ]
+}

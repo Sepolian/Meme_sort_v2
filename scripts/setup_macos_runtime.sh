@@ -1,4 +1,5 @@
 #!/bin/bash
+# One-time semantic runtime and isolated CPU OCR setup; also safe to rerun.
 set -euo pipefail
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
   echo "Run setup natively on an Apple Silicon Mac; Rosetta is unsupported." >&2

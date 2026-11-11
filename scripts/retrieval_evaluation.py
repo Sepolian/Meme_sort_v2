@@ -53,6 +53,7 @@ class QueryEvaluation:
     query: str
     expected_asset_id: str
     hit_rank: int | None
+    query_seconds: float
     top_results: list[dict[str, object]]
 
 
@@ -61,6 +62,8 @@ class EvaluationReport:
     backend: str
     model_id: str
     recipe_fingerprint: str
+    runtime_fingerprint: str
+    llama_cpp_build: str
     device: str
     preprocess_version: str | None = field(default=None, kw_only=True)
     still_max_side: int | None = field(default=None, kw_only=True)
@@ -74,6 +77,7 @@ class EvaluationReport:
     recall_at_10: float
     import_seconds: float
     indexing_seconds: float
+    indexed_assets_per_second: float
     query_seconds_total: float
     query_seconds_avg: float
     wall_seconds: float
@@ -133,6 +137,7 @@ def run_evaluation(
     manifest = load_runtime_manifest()
     temp_root = Path(tempfile.mkdtemp(prefix=temp_prefix))
     library_root = temp_root / "library"
+    runtime = None
 
     try:
         initialize_library(library_root)
@@ -144,8 +149,10 @@ def run_evaluation(
         import_seconds = time.perf_counter() - import_started_at
 
         indexing_started_at = time.perf_counter()
-        run_pending_jobs(library_root, runtime)
+        indexing = run_pending_jobs(library_root, runtime)
         indexing_seconds = time.perf_counter() - indexing_started_at
+        if indexing.failed_jobs:
+            raise RuntimeError(f'Evaluation indexing failed: {asdict(indexing)}')
 
         with LibraryStore(library_root) as store:
             asset_listing = store.list_assets_detailed()
@@ -181,7 +188,8 @@ def run_evaluation(
                 top_k=top_k,
                 runtime=runtime,
             )
-            query_seconds_total += time.perf_counter() - query_started_at
+            query_seconds = time.perf_counter() - query_started_at
+            query_seconds_total += query_seconds
 
             hit_rank = None
             for index, row in enumerate(result.results, start=1):
@@ -196,6 +204,7 @@ def run_evaluation(
                     query=query,
                     expected_asset_id=expected_asset_id,
                     hit_rank=hit_rank,
+                    query_seconds=round(query_seconds, 3),
                     top_results=result.results,
                 )
             )
@@ -204,6 +213,8 @@ def run_evaluation(
             backend=f"llama.cpp-{manifest.backend}",
             model_id=manifest.model.id,
             recipe_fingerprint=manifest.recipe_fingerprint,
+            runtime_fingerprint=manifest.runtime_fingerprint,
+            llama_cpp_build=manifest.llama_cpp.build,
             device=manifest.platform.device,
             preprocess_version=manifest.preprocessing.version if include_preprocess else None,
             still_max_side=manifest.preprocessing.still_max_side if include_preprocess else None,
@@ -217,6 +228,7 @@ def run_evaluation(
             recall_at_10=_recall_at_k(hit_ranks, 10),
             import_seconds=round(import_seconds, 3),
             indexing_seconds=round(indexing_seconds, 3),
+            indexed_assets_per_second=round(len(asset_listing.assets) / indexing_seconds, 3) if indexing_seconds else 0.0,
             query_seconds_total=round(query_seconds_total, 3),
             query_seconds_avg=round(query_seconds_total / len(per_query), 3) if per_query else 0.0,
             wall_seconds=round(time.perf_counter() - wall_started_at, 3),
@@ -229,6 +241,8 @@ def run_evaluation(
             output_path = Path(output).resolve()
             output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     finally:
+        if runtime is not None:
+            runtime.close()
         if keep_library:
             print(json.dumps({"kept_library_root": str(library_root.resolve())}, ensure_ascii=False))
         else:

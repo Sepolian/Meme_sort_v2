@@ -1,0 +1,1519 @@
+{
+  "backend": "llama.cpp-metal",
+  "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+  "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+  "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+  "llama_cpp_build": "b11457",
+  "device": "MTL0",
+  "query_fields": [
+    "ocr_translation",
+    "people_appearance",
+    "objects",
+    "scene_context",
+    "themes"
+  ],
+  "top_k": 10,
+  "asset_count": 10,
+  "query_count": 10,
+  "recall_at_1": 1.0,
+  "recall_at_5": 1.0,
+  "recall_at_10": 1.0,
+  "import_seconds": 0.567,
+  "indexing_seconds": 3.12,
+  "indexed_assets_per_second": 3.205,
+  "query_seconds_total": 0.118,
+  "query_seconds_avg": 0.012,
+  "wall_seconds": 5.079,
+  "per_query": [
+    {
+      "asset_filename": "1af460dcaedbd903f24c930ecf1f7672383188319.gif",
+      "query": "young Black man, large over-ear headphones, dark hoodie, close-up face, black background\nheadphones, hoodie\nA close-up reaction GIF of a young man wearing headphones, moving from a serious or skeptical expression to a small satisfied smile.\nreaction, satisfaction, approval, skeptical to pleased, streamer meme, facial expression",
+      "expected_asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+      "hit_rank": 1,
+      "query_seconds": 0.012,
+      "top_results": [
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.01639344262295082,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:53",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7946564555168152
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:66",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6840758323669434
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015873015873015872,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6706452369689941
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.015625,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:38",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6471868753433228
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.015384615384615385,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6013000011444092
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.015151515151515152,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:89",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5946366786956787
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.014925373134328358,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:23",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5796377658843994
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014705882352941176,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5631552934646606
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014492753623188406,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5434613823890686
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.014285714285714285,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:19",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5412494540214539
+        }
+      ]
+    },
+    {
+      "asset_filename": "8CB8D1E4C145E211AF8B8E745EFF5989.gif",
+      "query": "anime characters, multiple women, hands clasped in prayer, purple hair woman, blonde woman, brown hair girl, penguin mascot, man with glasses, blue sky background\npenguin costume, uniforms, cloudy sky\nA sequence of Evangelion-style anime characters shown one after another, many with hands clasped as if praying or hoping, with a blue sky behind them.\nanime, Evangelion, prayer, hope, anticipation, group reaction, dramatic",
+      "expected_asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+      "hit_rank": 1,
+      "query_seconds": 0.012,
+      "top_results": [
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.01639344262295082,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7036645412445068
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.016129032258064516,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:74",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6398752927780151
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.015873015873015872,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6374117136001587
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015625,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5754066705703735
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.015384615384615385,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.565513014793396
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.015151515151515152,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:35",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5536561012268066
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.014925373134328358,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:334",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5353816151618958
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.014705882352941176,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5301136374473572
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:33",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5259933471679688
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.014285714285714285,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:22",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.525439977645874
+        }
+      ]
+    },
+    {
+      "asset_filename": "917C58D669EEA4BA6BD832772D0B27A6-ezgif.com-gif-maker.gif",
+      "query": "H200\ngrey-haired man, black leather jacket, riding bicycle, street pedestrians, excited onlookers\nbicycle, front basket, NVIDIA H200 box, city street, crosswalk, cars\nA man rides a bicycle through a city street with a large NVIDIA H200 box in the front basket while people on the sidewalk react excitedly.\nAI hardware, GPU meme, NVIDIA H200, tech flex, street reaction, hype, expensive hardware",
+      "expected_asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+      "hit_rank": 1,
+      "query_seconds": 0.017,
+      "top_results": [
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.01639344262295082,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:89",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.823662281036377
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.016129032258064516,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5897324085235596
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015873015873015872,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5812256336212158
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015625,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5744518041610718
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.015384615384615385,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:35",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5706509351730347
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.015151515151515152,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:22",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5632738471031189
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.014925373134328358,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5611316561698914
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.014705882352941176,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:46",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5445348024368286
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014492753623188406,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5315058827400208
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014285714285714285,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:15",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.522832453250885
+        }
+      ]
+    },
+    {
+      "asset_filename": "9CFA313AA0CA5C83048C9C0C2782A595.gif",
+      "query": "blond young man, headset, light blue sweatshirt, streamer setup, dark background, man in sunglasses behind him\nheadset, microphone or streaming gear, dark room\nA streamer-like blond man wearing a headset reacts with a smile, turns away, and covers his mouth as if laughing or embarrassed.\nstreamer reaction, laughing, embarrassment, amused, awkward smile, reaction meme",
+      "expected_asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.01639344262295082,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:334",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7618955373764038
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.016129032258064516,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:53",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.7006372213363647
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.015873015873015872,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:33",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6168978214263916
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.015625,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:74",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6131080389022827
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.015384615384615385,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:23",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6086404323577881
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015151515151515152,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6056623458862305
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.014925373134328358,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5976320505142212
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.014705882352941176,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:134",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5910941958427429
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014492753623188406,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5717551112174988
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.014285714285714285,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:22",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5392687320709229
+        }
+      ]
+    },
+    {
+      "asset_filename": "A04E00FDCF1DC614471ECEE4E50FB2B1.gif",
+      "query": "small anime plush doll, blonde hair, blue eyes, chibi toy, hands holding plush\nplush doll, toy, hands, white tabletop\nA small blonde anime plush doll is held and gently moved by a person's hands on a light background.\nanime plush, cute, toy, chibi, collectible, soft doll",
+      "expected_asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+      "hit_rank": 1,
+      "query_seconds": 0.01,
+      "top_results": [
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.01639344262295082,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.783420205116272
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.016129032258064516,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5989469289779663
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015873015873015872,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:334",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5727823376655579
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015625,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.548385739326477
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.015384615384615385,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5472558736801147
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.015151515151515152,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:53",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5334146022796631
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.014925373134328358,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:89",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.49654823541641235
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.014705882352941176,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:67",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.49282798171043396
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.014492753623188406,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:33",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.4921649396419525
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.014285714285714285,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:25",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.4650936722755432
+        }
+      ]
+    },
+    {
+      "asset_filename": "A2BBAEF08808DEF48EEE4DA6B1FE0EF9.gif",
+      "query": "anime elf girl, long white hair, pointed ears, white and gold cloak, sitting on floor, crying open mouth\nwooden floor, cloak, boots\nA white-haired elf anime girl sits on the floor crying loudly and rocking slightly in distress.\nanime, Frieren, crying, sadness, tantrum, distress, cute reaction",
+      "expected_asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.01639344262295082,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8421193957328796
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.016129032258064516,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:25",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6616137027740479
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015873015873015872,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:334",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5870423913002014
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.015625,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:67",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5814091563224792
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015384615384615385,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:6",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5403902530670166
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.015151515151515152,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:25",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5361019968986511
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.014925373134328358,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5312879085540771
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.014705882352941176,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:35",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5264837145805359
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.014492753623188406,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:89",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5100781917572021
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.014285714285714285,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:99",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5054446458816528
+        }
+      ]
+    },
+    {
+      "asset_filename": "ADAB5CB1E72E01A944BDFAB9AEC3CD77.gif",
+      "query": "man in black coat, dark clothing, standing in snow, snow falling, outdoor winter scene\nsnow, steps or horizontal lines, black coat\nA man stands or shifts slightly in heavy falling snow in a cold outdoor scene.\nwinter, snowfall, dramatic, lonely, cold, movie scene",
+      "expected_asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.01639344262295082,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8169273138046265
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.016129032258064516,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6235513091087341
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.015873015873015872,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.607478141784668
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.015625,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5953277945518494
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.015384615384615385,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5927493572235107
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015151515151515152,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5820327997207642
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.014925373134328358,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:69",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5744863748550415
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.014705882352941176,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5507895946502686
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014492753623188406,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5463062524795532
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014285714285714285,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:25",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5116198062896729
+        }
+      ]
+    },
+    {
+      "asset_filename": "FDE521D657ABB45DBEE1F9635BE5EDB3.gif",
+      "query": "bald Black man, thin mustache, intense eye contact, orange shirt, police officer, man in blue shirt\ncar interior, steering wheel, police uniform\nA bald man in a car gives an intense suspicious stare toward the camera, with earlier frames showing police nearby.\nsuspicious look, side eye, intimidating stare, reaction meme, cop scene, judgment",
+      "expected_asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.01639344262295082,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:66",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.792749285697937
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.016129032258064516,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:35",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6533272862434387
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.015873015873015872,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:134",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5887897610664368
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.015625,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:23",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5864800214767456
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.015384615384615385,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:38",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5853045582771301
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015151515151515152,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5841460824012756
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.014925373134328358,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5828521847724915
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.014705882352941176,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:22",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5634738206863403
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014492753623188406,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:74",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5535930395126343
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014285714285714285,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5389859676361084
+        }
+      ]
+    },
+    {
+      "asset_filename": "Q_VageenaPOPGOZ_GundamBDrip05x264_FLAC1492x1080A41B4D76.mkv_20240501_213840-ezgif.com-optimize.gif",
+      "query": "anime blond man, sunglasses, red sleeveless outfit, red gloves, muscular arms, running pose\ncorridor, door, red uniform, sunglasses\nA blond anime man in red clothing and sunglasses runs through an indoor corridor.\nGundam, Char Aznable, anime running, action, dramatic entrance, red comet",
+      "expected_asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+      "hit_rank": 1,
+      "query_seconds": 0.01,
+      "top_results": [
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.01639344262295082,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:6",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8117623925209045
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.016129032258064516,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:46",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6343069076538086
+        },
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.015873015873015872,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6195094585418701
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.015625,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5817875266075134
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015384615384615385,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:111",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5720032453536987
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.015151515151515152,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:33",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5673922896385193
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.014925373134328358,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:22",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5625640749931335
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.014705882352941176,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:53",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5530152320861816
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014492753623188406,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:0",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5484070777893066
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.014285714285714285,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5452887415885925
+        }
+      ]
+    },
+    {
+      "asset_filename": "tenor-ezgif.com-optimize.gif",
+      "query": "The Weeknd, Black male singer, red blazer, black shirt, sparkling sunglasses, smiling upward\nsunglasses, city lights, red jacket\nThe Weeknd smiles and laughs while looking upward, wearing sparkling sunglasses with warm city lights reflected around him.\nhappy reaction, laughing, glamorous, music video, The Weeknd, delighted, meme reaction",
+      "expected_asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+      "hit_rank": 1,
+      "query_seconds": 0.011,
+      "top_results": [
+        {
+          "asset_id": "4f679f11-db30-404e-b47d-4a09518e4ca6",
+          "score": 0.01639344262295082,
+          "library_path": "originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "library_url": "/media/originals/4f679f11-db30-404e-b47d-4a09518e4ca6.gif",
+          "thumbnail_url": "/media/thumbnails/4f679f11-db30-404e-b47d-4a09518e4ca6.jpg",
+          "media_type": "image/gif",
+          "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.8501642942428589
+        },
+        {
+          "asset_id": "6159cff0-5377-4f56-b859-85881d50c8d4",
+          "score": 0.016129032258064516,
+          "library_path": "originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "library_url": "/media/originals/6159cff0-5377-4f56-b859-85881d50c8d4.gif",
+          "thumbnail_url": "/media/thumbnails/6159cff0-5377-4f56-b859-85881d50c8d4.jpg",
+          "media_type": "image/gif",
+          "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+          "matched_source_ref": "frame:53",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6448889374732971
+        },
+        {
+          "asset_id": "532e576d-3613-4f4c-85cd-da36c818be38",
+          "score": 0.015873015873015872,
+          "library_path": "originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "library_url": "/media/originals/532e576d-3613-4f4c-85cd-da36c818be38.gif",
+          "thumbnail_url": "/media/thumbnails/532e576d-3613-4f4c-85cd-da36c818be38.jpg",
+          "media_type": "image/gif",
+          "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+          "matched_source_ref": "frame:45",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6414274573326111
+        },
+        {
+          "asset_id": "e8bcb477-b184-44ab-8077-c86eb2f7bc6c",
+          "score": 0.015625,
+          "library_path": "originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "library_url": "/media/originals/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.gif",
+          "thumbnail_url": "/media/thumbnails/e8bcb477-b184-44ab-8077-c86eb2f7bc6c.jpg",
+          "media_type": "image/gif",
+          "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+          "matched_source_ref": "frame:66",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6246857643127441
+        },
+        {
+          "asset_id": "256af256-77ae-4f2e-b977-0a695ec1a9e9",
+          "score": 0.015384615384615385,
+          "library_path": "originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "library_url": "/media/originals/256af256-77ae-4f2e-b977-0a695ec1a9e9.gif",
+          "thumbnail_url": "/media/thumbnails/256af256-77ae-4f2e-b977-0a695ec1a9e9.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+          "matched_source_ref": "frame:13",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6231269836425781
+        },
+        {
+          "asset_id": "3990a84c-d151-47aa-b54c-5ce756088278",
+          "score": 0.015151515151515152,
+          "library_path": "originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "library_url": "/media/originals/3990a84c-d151-47aa-b54c-5ce756088278.gif",
+          "thumbnail_url": "/media/thumbnails/3990a84c-d151-47aa-b54c-5ce756088278.jpg",
+          "media_type": "image/gif",
+          "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+          "matched_source_ref": "frame:223",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.6010295748710632
+        },
+        {
+          "asset_id": "1b5bcae8-82f1-4f86-b9f9-b888584e82f3",
+          "score": 0.014925373134328358,
+          "library_path": "originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "library_url": "/media/originals/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.gif",
+          "thumbnail_url": "/media/thumbnails/1b5bcae8-82f1-4f86-b9f9-b888584e82f3.jpg",
+          "media_type": "image/gif",
+          "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+          "matched_source_ref": "frame:46",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5783780813217163
+        },
+        {
+          "asset_id": "842bc0e9-dc55-44ca-bc2d-06016c0dc1bf",
+          "score": 0.014705882352941176,
+          "library_path": "originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "library_url": "/media/originals/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.gif",
+          "thumbnail_url": "/media/thumbnails/842bc0e9-dc55-44ca-bc2d-06016c0dc1bf.jpg",
+          "media_type": "image/gif",
+          "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+          "matched_source_ref": "frame:134",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5735406875610352
+        },
+        {
+          "asset_id": "20eefeb8-d397-4410-80a6-3e0db37f1e40",
+          "score": 0.014492753623188406,
+          "library_path": "originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "library_url": "/media/originals/20eefeb8-d397-4410-80a6-3e0db37f1e40.gif",
+          "thumbnail_url": "/media/thumbnails/20eefeb8-d397-4410-80a6-3e0db37f1e40.jpg",
+          "media_type": "image/gif",
+          "content_hash": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+          "matched_source_ref": "frame:30",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.5214633345603943
+        },
+        {
+          "asset_id": "4613d715-1949-4e3a-b33f-46ceaad729ab",
+          "score": 0.014285714285714285,
+          "library_path": "originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "library_url": "/media/originals/4613d715-1949-4e3a-b33f-46ceaad729ab.gif",
+          "thumbnail_url": "/media/thumbnails/4613d715-1949-4e3a-b33f-46ceaad729ab.jpg",
+          "media_type": "image/gif",
+          "content_hash": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+          "matched_source_ref": "frame:74",
+          "match_sources": [
+            "visual"
+          ],
+          "visual_score": 0.51474928855896
+        }
+      ]
+    }
+  ]
+}

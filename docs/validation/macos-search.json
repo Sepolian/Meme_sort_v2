@@ -1,0 +1,1049 @@
+{
+  "scope": "CPU OCR, indexing and search",
+  "date": "2026-11-11",
+  "base_integration": "9acdb1e67a1b63c23e01bdd415d703b5534908df",
+  "host": {
+    "architecture": "arm64",
+    "cpu": "Apple M6",
+    "memory_bytes": 17179869184,
+    "macos": "27.2.1",
+    "build": "26B131"
+  },
+  "data_root": "/private/tmp/MemeSort OCR data 中文",
+  "setup": {
+    "fresh_frozen": {
+      "semantic_installed": true,
+      "ocr_installed": true,
+      "device": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+      "native_architecture": "arm64",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "activation": "/private/tmp/MemeSort OCR data 中文/runtime/active-runtime.json",
+      "setup_seconds": 753.457,
+      "message": "Semantic runtime and CPU OCR installed. Run an application-session health check before indexing.",
+      "ocr_runtime": {
+        "python": "3.12.13",
+        "base_prefix": "/private/tmp/MemeSort OCR data 中文/runtime/python/cpython-3.12.13-macos-aarch64-none",
+        "paddlepaddle": "3.2.2",
+        "paddleocr": "3.6.0"
+      },
+      "ocr_smoke": {
+        "engine": "paddleocr-worker",
+        "texts": [
+          "HELLO MEMESORT"
+        ],
+        "scores": [
+          0.969304084777832
+        ],
+        "boxes": [
+          [
+            16,
+            31,
+            441,
+            73
+          ]
+        ],
+        "text": "HELLO MEMESORT",
+        "seconds": 0.107
+      },
+      "ocr_setup_seconds": 742.025
+    },
+    "offline_bundled_launcher": {
+      "semantic_installed": true,
+      "ocr_installed": true,
+      "device": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+      "native_architecture": "arm64",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "activation": "/private/tmp/MemeSort OCR data 中文/runtime/active-runtime.json",
+      "setup_seconds": 6.56,
+      "message": "Semantic runtime and CPU OCR installed. Run an application-session health check before indexing.",
+      "ocr_runtime": {
+        "python": "3.12.13",
+        "base_prefix": "/private/tmp/MemeSort OCR data 中文/runtime/python/cpython-3.12.13-macos-aarch64-none",
+        "paddlepaddle": "3.2.2",
+        "paddleocr": "3.6.0"
+      },
+      "ocr_smoke": {
+        "engine": "paddleocr-worker",
+        "texts": [
+          "HELLO MEMESORT"
+        ],
+        "scores": [
+          0.969304084777832
+        ],
+        "boxes": [
+          [
+            16,
+            31,
+            441,
+            73
+          ]
+        ],
+        "text": "HELLO MEMESORT",
+        "seconds": 0.099
+      },
+      "ocr_setup_seconds": 1.32
+    },
+    "concurrent_setup_rejected": "Mac runtime setup failed: Another runtime setup is running.",
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "fresh_HOME": "/private/tmp",
+      "offline_HOME": "/private/tmp/memesort-offline-home",
+      "offline_network_policy": "(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip \"localhost:*\"))"
+    },
+    "ocr_identity": {
+      "python": "3.12.13",
+      "architecture": "arm64",
+      "executable": "/private/tmp/MemeSort OCR data 中文/runtime/ocr-venv/bin/python",
+      "base_prefix": "/private/tmp/MemeSort OCR data 中文/runtime/python/cpython-3.12.13-macos-aarch64-none",
+      "packages": {
+        "ruamel.yaml": "0.19.1",
+        "setuptools": "84.2.1",
+        "imagesize": "2.0.1",
+        "colorlog": "6.12.0",
+        "pandas": "3.1.1",
+        "packaging": "26.3",
+        "pypdfium2": "5.15.2",
+        "networkx": "3.7",
+        "protobuf": "7.36.2",
+        "opencv-contrib-python": "4.10.0.84",
+        "requests": "2.34.2",
+        "bce-python-sdk": "0.9.79",
+        "certifi": "2026.10.23",
+        "yarl": "1.25.1",
+        "modelscope": "1.40.3",
+        "chardet": "7.7.0",
+        "wcwidth": "0.9.4",
+        "pydantic": "2.14.3",
+        "pycryptodome": "4.4.0",
+        "click": "8.5.1",
+        "paddleocr": "3.6.0",
+        "future": "1.0.0",
+        "propcache": "0.5.4",
+        "numpy": "2.3.5",
+        "httpcore": "1.0.9",
+        "aiohappyeyeballs": "2.7.1",
+        "cryptography": "50.0.2",
+        "pycparser": "3.12",
+        "pydantic_core": "2.50.4",
+        "pillow": "13.0.0",
+        "crc32c": "2.9.post0",
+        "safetensors": "0.8.0",
+        "typing-inspection": "0.4.5",
+        "tqdm": "4.70.1",
+        "urllib3": "2.8.0",
+        "aistudio_sdk": "0.3.9",
+        "h11": "0.16.0",
+        "modelscope-hub": "0.7.1",
+        "ujson": "6.1.0",
+        "httpcore2": "2.16.0",
+        "fsspec": "2026.9.0",
+        "truststore": "0.10.5",
+        "frozenlist": "1.8.0",
+        "cffi": "2.1.1",
+        "httpx2": "2.16.0",
+        "aiosignal": "1.4.0",
+        "shapely": "2.2.0",
+        "paddlepaddle": "3.2.2",
+        "annotated-types": "0.8.0",
+        "tzdata": "2026.6",
+        "pyclipper": "1.4.0",
+        "opt-einsum": "3.3.0",
+        "anyio": "4.16.0",
+        "aiohttp": "3.14.5",
+        "attrs": "26.1.0",
+        "multidict": "7.2.1",
+        "py-cpuinfo": "9.0.0",
+        "PyYAML": "6.0.2",
+        "httpx": "0.28.1",
+        "typing_extensions": "4.16.0",
+        "filelock": "4.2.10",
+        "paddlex": "3.6.1",
+        "prettytable": "3.18.0",
+        "hf-xet": "1.8.0",
+        "python-dateutil": "4.0.0",
+        "psutil": "7.2.2",
+        "huggingface_hub": "2.4.0",
+        "charset-normalizer": "3.5.2",
+        "python-bidi": "0.6.12",
+        "six": "1.17.0",
+        "idna": "3.20"
+      },
+      "models": {
+        "PP-OCRv5_mobile_rec/config.json": {
+          "size_bytes": 352253,
+          "sha256": "6df1587ae056f0b987125fc894b17f62ae3a12644fa2488d108f19377da9c1a8"
+        },
+        "PP-OCRv5_mobile_rec/README.md": {
+          "size_bytes": 16075,
+          "sha256": "b02727443cef4904a9ee12accdfaf66fcbada7b93a1a05c40dde7582291ba28c"
+        },
+        "PP-OCRv5_mobile_rec/inference.json": {
+          "size_bytes": 217724,
+          "sha256": "24587345250c7332d0fc6f9a44e794d078cdaeb64c302fef906f325619de2569"
+        },
+        "PP-OCRv5_mobile_rec/.gitattributes": {
+          "size_bytes": 1575,
+          "sha256": "a3a43406012ee8c7b9b38dfab1b11610f33e8245cd864a9a9302d042616a859e"
+        },
+        "PP-OCRv5_mobile_rec/inference.pdiparams": {
+          "size_bytes": 16458665,
+          "sha256": "2460da90875937c94db97eba74ae3d9e5d4c4c57c42f1f41531c09a26bcc771a"
+        },
+        "PP-OCRv5_mobile_rec/inference.yml": {
+          "size_bytes": 148345,
+          "sha256": "5dfeb2777f6d0db8177d8128a8acfcf6e6276dc4ac73ea3bf0dc06d6a5e85d8e"
+        },
+        "PP-OCRv5_mobile_det/config.json": {
+          "size_bytes": 2871,
+          "sha256": "7ac1c33f377ba58561f4b89d3180b6add2b7c5c60a4edac90fa4e0ceccdc6665"
+        },
+        "PP-OCRv5_mobile_det/README.md": {
+          "size_bytes": 16243,
+          "sha256": "4cc20ad6d41af86b3ce9885ffb0956e152574a2eb14179aeb07fd2d3956161ca"
+        },
+        "PP-OCRv5_mobile_det/inference.json": {
+          "size_bytes": 229777,
+          "sha256": "05feef1acb00aa4cd7362b15f7f501fc4f99d7b1fa73c1c871e0c7b1504b0f5c"
+        },
+        "PP-OCRv5_mobile_det/.gitattributes": {
+          "size_bytes": 1575,
+          "sha256": "a3a43406012ee8c7b9b38dfab1b11610f33e8245cd864a9a9302d042616a859e"
+        },
+        "PP-OCRv5_mobile_det/inference.pdiparams": {
+          "size_bytes": 4692937,
+          "sha256": "afa1820cb16c1fd0dad589d0f8b389139061c1ef6d68019685fd07be997dda5b"
+        },
+        "PP-OCRv5_mobile_det/inference.yml": {
+          "size_bytes": 903,
+          "sha256": "98069072e1b6b37d727fd9d9f11725faa46d6ea0de012f2ed26caea011c37699"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/CACHEDIR.TAG": {
+          "size_bytes": 191,
+          "sha256": "f6572428f6d5e1575e73a1502895a8731f10757dfbb634909c6e154b849af91d"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/.gitignore": {
+          "size_bytes": 1,
+          "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/trees/0d63e78e2b680928f6b1747d76a08db6e645efb7.json": {
+          "size_bytes": 838,
+          "sha256": "06d662d7ab252c2b91c0401e38068322a530ca90677788b7f0d70f885988af1f"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/.gitattributes.metadata": {
+          "size_bytes": 100,
+          "sha256": "50fad9bebd4f46141936a014c30adafb0326a859eb4f8becb714d981b34cdb03"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.pdiparams.metadata": {
+          "size_bytes": 124,
+          "sha256": "a0188f9bf32181764b12e8d35b83359d12e30d4caa314830d1b5fb44e63c8214"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.yml.metadata": {
+          "size_bytes": 101,
+          "sha256": "7f516a79153789a720384fdc2fbf74f67f6dcc075a1416c9588b487b2d5947cf"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/config.json.metadata": {
+          "size_bytes": 101,
+          "sha256": "8b0479cad4cefa7378218534c7f12d3fb75374bd4b9b47a01db4e58a4eb77a0d"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/config.json.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.json.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/.gitattributes.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/README.md.metadata": {
+          "size_bytes": 100,
+          "sha256": "bb866dfc9557b773ec4b09b52abe90c9629df5f074fe461542c3d7975f354477"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.json.metadata": {
+          "size_bytes": 98,
+          "sha256": "fa70132b00bd3114066fb320684f2ecf3441cd188d3960e97e0d50818dbf929c"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/README.md.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.pdiparams.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_det/.cache/huggingface/download/inference.yml.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/CACHEDIR.TAG": {
+          "size_bytes": 191,
+          "sha256": "f6572428f6d5e1575e73a1502895a8731f10757dfbb634909c6e154b849af91d"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/.gitignore": {
+          "size_bytes": 1,
+          "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/trees/682f20538d8c086cb2128e5cfac775e6c4904e85.json": {
+          "size_bytes": 845,
+          "sha256": "6c4d8f0ba4e1a3784f3e9332c93b74ee6c29eeb7b4d83f4d8b89519076d59059"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/.gitattributes.metadata": {
+          "size_bytes": 100,
+          "sha256": "99e1234ea91a7f1bfa21027b8a3c28a20e4839ba441da8265e1796ed78fb415e"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.pdiparams.metadata": {
+          "size_bytes": 124,
+          "sha256": "96c6079724f56109b0300ac10802e91035eb1c71b3313f9a3982270447d38885"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.yml.metadata": {
+          "size_bytes": 99,
+          "sha256": "7e98a9b2ca85ab1a9c51edb9e7729c291b8bdd3bc9d5bbbd0a14705eff720dbe"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/config.json.metadata": {
+          "size_bytes": 98,
+          "sha256": "96f2b3d2f9296bc904ef0fd0407e70ecda6df01f3cf384ea0b2800e8d31149db"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/config.json.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.json.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/.gitattributes.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/README.md.metadata": {
+          "size_bytes": 101,
+          "sha256": "21757d4fdf5e4a678bca618781cdaec9339381d9537d4e5766436bb2bfb12491"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.json.metadata": {
+          "size_bytes": 101,
+          "sha256": "30f29d08200a6fe018019d71b5ea2854d0116fb33c8eae5c9b27c745eefb2e1c"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/README.md.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.pdiparams.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PP-OCRv5_mobile_rec/.cache/huggingface/download/inference.yml.lock": {
+          "size_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  },
+  "frozen_app": {
+    "path": "/private/tmp/MemeSort OCR app 中文/MemeSort.app",
+    "method": "Fresh PyInstaller sidecar/resources were placed in a copy of the tested macOS app shell and ad-hoc signed. No Rust/frontend rebuild was performed; this report covers frozen app and API validation.",
+    "arm64_check": "lipo -verify_arch arm64 passed for frozen sidecar",
+    "signature_check": "codesign --verify --deep --strict passed",
+    "bundled_resources_match_checkout_sha256": {
+      "runtime-manifest.json": "32eeb41a162102203d2f1c03966fa65c1fb24e2f47456aa24d0243d8c10b1d46",
+      "requirements-ocr.txt": "5d7bf82e94e3e8b3996fe981b223cb10605e51efd9129d48e4bee2dba6623758",
+      "scripts/paddle_ocr_worker.py": "9f1ad920ed352e8d295321a1293c99c940c9ba58cca09080989bb03906c0dd48"
+    },
+    "bundled_launcher_matches_checkout": true
+  },
+  "evaluations": {
+    "still": {
+      "backend": "llama.cpp-metal",
+      "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "llama_cpp_build": "b11457",
+      "device": "MTL0",
+      "preprocess_version": "still-480-gif-480-rgb-white-exif-v1",
+      "still_max_side": 480,
+      "gif_max_side": 480,
+      "query_fields": [
+        "ocr_translation",
+        "people_appearance",
+        "objects",
+        "scene_context",
+        "themes"
+      ],
+      "top_k": 10,
+      "asset_count": 20,
+      "query_count": 20,
+      "recall_at_1": 0.9,
+      "recall_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "import_seconds": 0.334,
+      "indexing_seconds": 16.918,
+      "indexed_assets_per_second": 1.182,
+      "query_seconds_total": 0.394,
+      "query_seconds_avg": 0.02,
+      "wall_seconds": 23.259
+    },
+    "gif": {
+      "backend": "llama.cpp-metal",
+      "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+      "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+      "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+      "llama_cpp_build": "b11457",
+      "device": "MTL0",
+      "query_fields": [
+        "ocr_translation",
+        "people_appearance",
+        "objects",
+        "scene_context",
+        "themes"
+      ],
+      "top_k": 10,
+      "asset_count": 10,
+      "query_count": 10,
+      "recall_at_1": 1.0,
+      "recall_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "import_seconds": 0.567,
+      "indexing_seconds": 3.12,
+      "indexed_assets_per_second": 3.205,
+      "query_seconds_total": 0.118,
+      "query_seconds_avg": 0.012,
+      "wall_seconds": 5.079
+    }
+  },
+  "libraries": {
+    "still": "/private/tmp/memesort_eval_1pspn2na/library",
+    "gif": "/private/tmp/memesort_gif_eval_verlxttz/library"
+  },
+  "public_api": {
+    "library": "/private/tmp/MemeSort OCR data 中文/api-library",
+    "network_policy": "(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip \"localhost:*\"))",
+    "sessions": [
+      {
+        "startup_authorization_seconds": 1.347,
+        "clean_exit": true,
+        "final_status": {
+          "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+          "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+          "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+          "asset_counts": {
+            "indexed": 30
+          },
+          "job_counts": {
+            "completed": 80
+          },
+          "total_assets": 30,
+          "total_jobs": 80,
+          "recent_jobs": [
+            {
+              "job_id": "3277ede8-816a-4205-bc51-62730a7cb2c3",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:58+00:00",
+              "updated_at": "2026-11-11T05:08:27+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "1bede519-b721-4c83-9c93-ac37aa9a0ad2",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:58+00:00",
+              "updated_at": "2026-11-11T05:08:27+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "ffb68414-ebed-4a49-9573-f623698be3b4",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "f7844453-9f1f-4e2d-850c-c3a966bab73d",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "738746a2-765a-4006-9c83-9d288eedca8f",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "efabed71-d36e-49e3-9368-5d92acc64474",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "ebf44cd2-2949-484f-ba1f-6a170c361a01",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "4a1a4110-c34a-4efd-90bd-69bfef9b337a",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e93dd6a6-7c2b-4022-867b-f7fbf29dcf5b",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e8afa00e-560c-481a-ac18-3e55d875a581",
+              "type": "ocr_asset",
+              "status": "completed",
+              "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e6a852ce-1c17-485b-88b4-ad603d8d0a84",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "dac5d834-0e79-4f8e-9fdd-8f05a8d048c1",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "da3b8ae1-2cfe-4f67-ad62-194e1d8250ef",
+              "type": "ocr_asset",
+              "status": "completed",
+              "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d908d333-62f7-43f8-8612-275dda303368",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d381660c-39e4-4768-9399-a288b1b78f0a",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d246666e-c41a-4e80-9767-b64a75024737",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "2d19b479-56a3-44f6-bd0a-4f7a88a3b45e",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d11d7f21-b2ca-4696-a3c5-57964aa0d1b0",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "cb32ed33-fbfb-4809-b708-3e682fbe9659",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c9ee2e1b-e568-4e4e-8c38-8863c651c2fa",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "0ef6e0e8-8384-4b7a-bdbe-707f408b5233",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c895c7c4-96cc-429c-a7aa-8bc1bc732b02",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "e4b14d78-f8a8-4d02-aadd-84af7c2b83ad",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c7bfe1ad-a4ce-4c47-bd35-1248d4a02c5e",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c4b89d94-6f24-4105-823e-640a4587fefa",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            }
+          ]
+        }
+      },
+      {
+        "startup_authorization_seconds": 1.126,
+        "clean_exit": true,
+        "final_status": {
+          "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+          "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+          "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+          "asset_counts": {
+            "indexed": 30
+          },
+          "job_counts": {
+            "completed": 80
+          },
+          "total_assets": 30,
+          "total_jobs": 80,
+          "recent_jobs": [
+            {
+              "job_id": "3277ede8-816a-4205-bc51-62730a7cb2c3",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:58+00:00",
+              "updated_at": "2026-11-11T05:08:27+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "1bede519-b721-4c83-9c93-ac37aa9a0ad2",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:58+00:00",
+              "updated_at": "2026-11-11T05:08:27+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "ffb68414-ebed-4a49-9573-f623698be3b4",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "f7844453-9f1f-4e2d-850c-c3a966bab73d",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "738746a2-765a-4006-9c83-9d288eedca8f",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "efabed71-d36e-49e3-9368-5d92acc64474",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "ebf44cd2-2949-484f-ba1f-6a170c361a01",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "4a1a4110-c34a-4efd-90bd-69bfef9b337a",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e93dd6a6-7c2b-4022-867b-f7fbf29dcf5b",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e8afa00e-560c-481a-ac18-3e55d875a581",
+              "type": "ocr_asset",
+              "status": "completed",
+              "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:26+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "e6a852ce-1c17-485b-88b4-ad603d8d0a84",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "dac5d834-0e79-4f8e-9fdd-8f05a8d048c1",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "da3b8ae1-2cfe-4f67-ad62-194e1d8250ef",
+              "type": "ocr_asset",
+              "status": "completed",
+              "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:25+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d908d333-62f7-43f8-8612-275dda303368",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d381660c-39e4-4768-9399-a288b1b78f0a",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d246666e-c41a-4e80-9767-b64a75024737",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "2d19b479-56a3-44f6-bd0a-4f7a88a3b45e",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:23+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "d11d7f21-b2ca-4696-a3c5-57964aa0d1b0",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "cb32ed33-fbfb-4809-b708-3e682fbe9659",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c9ee2e1b-e568-4e4e-8c38-8863c651c2fa",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "0ef6e0e8-8384-4b7a-bdbe-707f408b5233",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c895c7c4-96cc-429c-a7aa-8bc1bc732b02",
+              "type": "generate_thumbnail",
+              "status": "completed",
+              "asset_id": "e4b14d78-f8a8-4d02-aadd-84af7c2b83ad",
+              "recipe_id": null,
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c7bfe1ad-a4ce-4c47-bd35-1248d4a02c5e",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "job_id": "c4b89d94-6f24-4105-823e-640a4587fefa",
+              "type": "embed_asset",
+              "status": "completed",
+              "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+              "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+              "attempt_count": 1,
+              "created_at": "2026-11-11T05:07:57+00:00",
+              "updated_at": "2026-11-11T05:08:22+00:00",
+              "error_code": null,
+              "error_detail": null
+            }
+          ]
+        }
+      }
+    ],
+    "mixed_30_asset_indexing_seconds": 29.136,
+    "verified": [
+      "30 Pending Assets before indexing; 30 Indexed Assets and 80 completed jobs afterwards",
+      "20 real still OCR results; no GIF OCR results",
+      "Chinese OCR text search for intact label 问了吗; real English CPU OCR",
+      "still and GIF image search via /api/search-image; self matches first",
+      "GIF result remains an Asset with matched_source_ref=frame:<index>",
+      "Find Similar excludes query Asset and has unique Asset IDs",
+      "equal-content import creates a second Source Record without a second Asset",
+      "managed file SHA256 after Source Path deletion; source-record removal; generated-Asset deletion",
+      "2 duplicate candidates at threshold 0.92; accepting one suppresses it; clearing restores it",
+      "valid inactive UUID-scoped cancellation request",
+      "fresh session health, text/image search and Find Similar after offline relaunch",
+      "orderly shutdown in both successful sessions; no owned llama/OCR processes left"
+    ],
+    "raw_report": "macos-search-api.json",
+    "harness": "/private/tmp/memesort-api-probe.py",
+    "harness_note": "Initial harness used a non-UUID cancellation ID and was correctly rejected with HTTP 400. Corrected run used a fresh isolated Library."
+  },
+  "ocr_label_check": {
+    "source": "Unchanged labels/labels.json ocr_text fields",
+    "text_bearing_stills": 13,
+    "exact_after_whitespace_removal": 4,
+    "raw_report": "macos-search-ocr-label-check.json",
+    "quality_target": null,
+    "separate_unreliable_ocr_draft_used": false
+  },
+  "supplied_data_integrity": {
+    "count": 36,
+    "all_unchanged": true,
+    "sha256": {
+      "example/meme_019.png": "919170f41098bb6b5a6f23a9575252264930ce995691dd4f47a6d0aaef6e8a3e",
+      "example/meme_018.png": "a9cdfaf181e2ad9eca1b0408e9cb8427f765d2838fa2f4f3da9b06d8057007f0",
+      "example/meme_008.jpg": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+      "example/meme_020.png": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+      "example/meme_009.png": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+      "example/meme_006.jpeg": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+      "example/meme_007.png": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+      "example/meme_013.png": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+      "example/meme_012.png": "d541e45019cf425aa8248bf78b852c69cdb037524327c8e2640265961edf585e",
+      "example/meme_010.jpg": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+      "example/meme_004.png": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+      "example/meme_005.png": "9c890dad96b32e4729a8bdc5ddad92182ecf52fd00c52e3d1c0c35341a154317",
+      "example/meme_011.png": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+      "example/meme_001.jpg": "b4abe4e5f74aab3d05ecddf61f576e12bf6fce94195106b2f93393a0752946c9",
+      "example/meme_015.jpg": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+      "example/meme_014.png": "f9673f99a6c71a49a66dcd504d286c404baa925277381423e9e671e49680028f",
+      "example/meme_016.jpg": "9329244ce996eedbfee31ee9fd3fda3a76760fa66399a2fbee66998674bd71c6",
+      "example/meme_002.png": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+      "example/meme_017.png": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+      "example/meme_003.png": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+      "gif_example/FDE521D657ABB45DBEE1F9635BE5EDB3.gif": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+      "gif_example/9CFA313AA0CA5C83048C9C0C2782A595.gif": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+      "gif_example/1af460dcaedbd903f24c930ecf1f7672383188319.gif": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+      "gif_example/Q_VageenaPOPGOZ_GundamBDrip05x264_FLAC1492x1080A41B4D76.mkv_20240501_213840-ezgif.com-optimize.gif": "4a260289b7dbf18e2034c4d19cfeee83e49d02f384674a4aa6840af917535c7c",
+      "gif_example/A2BBAEF08808DEF48EEE4DA6B1FE0EF9.gif": "4902459419c9e8dc1182b11f716e529925a424349529bbe99bf77552eec56385",
+      "gif_example/tenor-ezgif.com-optimize.gif": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+      "gif_example/ADAB5CB1E72E01A944BDFAB9AEC3CD77.gif": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+      "gif_example/8CB8D1E4C145E211AF8B8E745EFF5989.gif": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+      "gif_example/A04E00FDCF1DC614471ECEE4E50FB2B1.gif": "89c9e4110cc6d92165be9ac80daae8451c26fde68f4c95252358b103a7884b4e",
+      "gif_example/917C58D669EEA4BA6BD832772D0B27A6-ezgif.com-gif-maker.gif": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+      "labels/labels.json": "7b28643a755d4ac45fafe7024ab7af20438cbae07ea5425e1bf78c1e50fd545c",
+      "labels/paddle_ocr_generated_labels_gpu_still.json": "28ecb00c0fd70ae4c40a88fb6754ce6751758b3d92e155bf64a7103b62ceb13b",
+      "labels/paddle_ocr_generated_labels.json": "25882e6f10bd7298abef05bab8dfb234a7f729fb627959c7bf4fab6b0d3e196c",
+      "labels/gif_labels.json": "18ffec2cc00cfcb73795725b4b8371c596a03854f05edee26544eee429e14fdc",
+      "labels/ocr_ground_truth_draft.json": "d5ab2b7bf7f01827f3d9d20ad61e7caa6e08f7ba7ff72b7dfa90728a1427f283",
+      "labels/ocr_keyword_labels.json": "f576704c366df47fdf66255c2210ade3f019db6f5b86aeeeed805c4196c80a19"
+    }
+  },
+  "checks": {
+    "focused_python": "93 tests, OK (5.500 s); runtime/OCR/indexing/retrieval/duplicate management/AppPaths/sidecar seams",
+    "windows_portability": "macos_setup import, CPU setup tests and Windows identity test passed with sys.modules[fcntl]=None; only POSIX installation test is skipped on Windows.",
+    "windows_runtime_identity": "Exact checked-in Windows recipe/runtime fingerprints and activation record unchanged.",
+    "tdd": "Observed red before green for final-path OCR setup, missing offline models, evaluator runtime shutdown, and failed OCR job reporting.",
+    "git_diff_check": "passed"
+  },
+  "measurement_notes": [
+    "One observed run per labeled dataset; setup and filesystem/model caches were already warm for evaluations. No quality or performance target imposed.",
+    "indexing_seconds includes the existing pipeline and real still CPU OCR; GIFs retain sampled semantic frames and skip OCR.",
+    "per-query CSV contains binary Recall@1/5/10 for each single-target query; raw JSON retains queries and top results.",
+    "evaluator wall_seconds ends before finally closes its owned runtime; external time output also includes orderly teardown.",
+    "Raw macOS /usr/bin/time -l memory output is retained; no combined concurrent process/GPU memory claim is derived from it.",
+    "OCR transitive packages are resolved from PyPI during setup and recorded here; they are not a complete dependency lock."
+  ],
+  "not_verified": [
+    "GUI, native image picker interaction, Finder paste/window behavior (CUA not retried)",
+    "personal installation acceptance (skipped)",
+    "final integrated full suite/build/review (not included in this report)",
+    "actual Windows device/CI execution; preserved behavior and identity checked by focused tests"
+  ],
+  "changed_files": [
+    "README.md",
+    "memesort_worker/macos_setup.py",
+    "memesort_worker/sidecar_entry.py",
+    "scripts/retrieval_evaluation.py",
+    "scripts/setup_macos_runtime.sh",
+    "tests/test_macos_setup.py",
+    "tests/test_retrieval_evaluation_cli.py",
+    "docs/validation/macos-search-api.json",
+    "docs/validation/macos-search-evaluation-time.txt",
+    "docs/validation/macos-search-gif.json",
+    "docs/validation/macos-search-ocr-label-check.json",
+    "docs/validation/macos-search-per-query.csv",
+    "docs/validation/macos-search-still.json",
+    "docs/validation/macos-search.json"
+  ]
+}

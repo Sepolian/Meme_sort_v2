@@ -82,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the verified runtime activation record, then exit.",
     )
-    parser.add_argument("--setup-macos-runtime", action="store_true", help="Install verified Mac semantic runtime; OCR extension is separate.")
+    parser.add_argument("--setup-macos-runtime", action="store_true", help="Install verified Mac semantic runtime and isolated CPU OCR.")
     parser.add_argument("--downloads", type=Path, help="Reuse verified setup downloads from this directory.")
     parser.add_argument("--offline", action="store_true", help="Use only cached setup artifacts.")
     return parser

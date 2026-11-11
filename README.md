@@ -46,19 +46,23 @@ for prerequisites, output paths, the Application Support data layout, and the
 package smoke check. The Library opens before semantic/OCR setup; installing and
 validating those runtimes is separate from packaging the application.
 
-After moving the app to Applications, install the semantic runtime with:
+After moving the app to Applications, install the semantic runtime and CPU OCR with:
 
 ```bash
 bash "/Applications/MemeSort.app/Contents/Resources/sidecar/setup_macos_runtime.sh"
 ```
 
-Adjust the path if the app has another name or location. The launcher uses the bundled frozen sidecar and requires no developer Python, Node, or Rust. It installs verified uv, the complete b11457 arm64 runtime (including dylib symlinks), and the existing Q8 model/projector beneath `~/Library/Application Support/MemeSort`. Bundled resources remain read-only. `--data-root "/path/with spaces/中文"` uses the same AppPaths override as the app.
+Adjust the path if the app has another name or location. The launcher uses the bundled frozen sidecar and requires no developer Python, Node, or Rust. It installs verified uv, the complete b11457 arm64 runtime (including dylib symlinks), the existing Q8 model/projector, and isolated CPU OCR beneath `~/Library/Application Support/MemeSort`. Bundled resources remain read-only. `--data-root "/path/with spaces/中文"` uses the same AppPaths override as the app.
 
 Close MemeSort before setup. Downloads are checked by size and SHA256 before extraction, staged on the data volume, and activated after native Mach-O and exact `MTL0: Apple …` inventory checks. Rerun the same command to verify and repair. `--offline` uses the verified `runtime/downloads` cache; `--downloads "/path/to/cache"` reuses already downloaded artifacts. A missing or tampered offline download fails without replacing the installed runtime. An interrupted promotion leaves activation absent and reports setup is required; rerunning setup recovers the saved runtime directories and completes verification before reactivation.
 
-**Semantic setup is separate from full setup until the ticket05 OCR extension is included.** `macos_setup.run_setup()` is the single installer extension point for stable-location CPU OCR provisioning with verified uv. Semantic activation does not claim OCR readiness. Library browsing/import work before setup; semantic work requires a successful current-session text/image health check, including after an offline relaunch. Metal and Windows have different Active Index Recipes; copying embeddings across platforms is unsupported. Windows target values, recipe identity, and activation records are preserved.
+The same setup installs Python 3.12.13 under `runtime/python`, creates `runtime/ocr-venv` at its final path, installs CPU PaddlePaddle 3.2.2 and PaddleOCR 3.6.0 from PyPI, and loads both PP-OCRv5 mobile models into `models/paddleocr`. Setup performs an actual CPU OCR request before reporting success. The base Python and uv package cache (`runtime/uv-cache`) stay under the data root; normal offline use does not depend on developer caches. OCR transitive packages are resolved during setup, rather than fully locked. Keep the Python, venv, and model directories together at their installed paths. An interrupted OCR installation reports failure; rerun the same setup command to repair it. An offline setup rerun also needs the installed Python, cached packages, and complete OCR models; a fresh installation needs network access.
+
+Library browsing/import work before setup; semantic work requires a successful current-session text/image health check, including after an offline relaunch. Metal and Windows have different Active Index Recipes; copying embeddings across platforms is unsupported. Windows target values, recipe identity, and activation records are preserved. GIFs keep sampled-frame semantic indexing; OCR applies to still Assets.
 
 The Mac archive is `llama-b11457-bin-macos-arm64.tar.gz`, 12,007,659 bytes, SHA256 `e234070cbde0c8b0d30f79fa08ff8246abe22c72acb752619349b8d9c46f7839`. The uv 0.11.28 arm64 archive is 22,568,053 bytes, SHA256 `33540eb7c883ab857eff79bd5ac2aa31fe27b595abecb4a9c003a2c998447232`. Shared model artifacts and inference settings remain unchanged. Runtime startup/offload errors and startup time are retained in bounded rotating runtime logs. Metal inventory working-set figures are GPU budget/allocation, not process RSS or physical VRAM.
+
+[Mac OCR/search validation](docs/validation/macos-search.json) records the real setup, offline frozen-app API sessions, supplied 20-still/10-GIF retrieval metrics, per-query reports, and OCR limitations on the tested Mac. GUI and personal-install acceptance are not claimed by those backend checks.
 
 ## Portable desktop package
 

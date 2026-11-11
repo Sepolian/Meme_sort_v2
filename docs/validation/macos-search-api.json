@@ -1,0 +1,5325 @@
+{
+  "gui_verified": false,
+  "network_policy": "(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip \"localhost:*\"))",
+  "sessions": [
+    {
+      "startup_authorization_seconds": 1.347,
+      "runtime": {
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "llama_cpp_build": "b11457",
+        "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+        "model_label": "embeddinggemma-2",
+        "output_dimension": 768,
+        "storage_dtype": "float32",
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+        "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+        "still_max_side": 480,
+        "gif_max_side": 480,
+        "gif_frame_count": 4
+      },
+      "health": {
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+        "gpu_vendor": "apple",
+        "gpu_vendor_id": null,
+        "text_smoke_vector_dim": 768,
+        "image_smoke_vector_dim": 768,
+        "diagnostic_steps": [
+          {
+            "step": "runtime-manifest",
+            "status": "ok",
+            "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+          },
+          {
+            "step": "resolve-gguf-bundle",
+            "status": "ok",
+            "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+          },
+          {
+            "step": "metal-device",
+            "status": "ok",
+            "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+          },
+          {
+            "step": "llama-server",
+            "status": "ok",
+            "detail": "/private/tmp/MemeSort OCR data 中文/runtime/llama.cpp-b11457-metal/llama-server"
+          },
+          {
+            "step": "text-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp text embedding passed at 768d."
+          },
+          {
+            "step": "image-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp image embedding passed at 768d."
+          }
+        ],
+        "smoke_test_ok": true,
+        "error": null
+      },
+      "import": {
+        "batch_id": "286ef07b-8380-4c8e-bd03-5fc7612469c4",
+        "status": "completed",
+        "running": false,
+        "paused": false,
+        "pause_requested": false,
+        "source_folder": "/Users/sepolian/Documents/Meme_sort_v2/example",
+        "selected_sources": 2,
+        "effective_sources": 2,
+        "discovered_files": 30,
+        "supported_files": 30,
+        "unsupported_files": 0,
+        "reparse_points_skipped": 0,
+        "scan_failures": 0,
+        "processed_files": 30,
+        "succeeded_files": 30,
+        "failed_files": 0,
+        "new_assets": 30,
+        "duplicate_assets": 0,
+        "source_records_added": 30,
+        "source_records_refreshed": 0,
+        "jobs_created": 80,
+        "current_source_name": "tenor-ezgif.com-optimize.gif",
+        "started_at": 1794373677.186209,
+        "finished_at": 1794373678.049473,
+        "result": {
+          "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+          "selected_sources": 2,
+          "effective_sources": 2,
+          "discovered_files": 30,
+          "supported_files": 30,
+          "unsupported_files": 0,
+          "reparse_points_skipped": 0,
+          "scan_failures": 0,
+          "processed_files": 30,
+          "succeeded_files": 30,
+          "failed_files": 0,
+          "new_assets": 30,
+          "duplicate_assets": 0,
+          "source_records_added": 30,
+          "source_records_refreshed": 0,
+          "jobs_created": 80,
+          "failure_count": 0,
+          "failure_details": [],
+          "failures_truncated": false,
+          "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a"
+        },
+        "partial_result": null,
+        "error": null
+      },
+      "pending_assets": 30,
+      "indexing_seconds": 29.136,
+      "library_status": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "asset_counts": {
+          "indexed": 30
+        },
+        "job_counts": {
+          "completed": 80
+        },
+        "total_assets": 30,
+        "total_jobs": 80,
+        "recent_jobs": [
+          {
+            "job_id": "3277ede8-816a-4205-bc51-62730a7cb2c3",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "1bede519-b721-4c83-9c93-ac37aa9a0ad2",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ffb68414-ebed-4a49-9573-f623698be3b4",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "f7844453-9f1f-4e2d-850c-c3a966bab73d",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "738746a2-765a-4006-9c83-9d288eedca8f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "efabed71-d36e-49e3-9368-5d92acc64474",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ebf44cd2-2949-484f-ba1f-6a170c361a01",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "4a1a4110-c34a-4efd-90bd-69bfef9b337a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e93dd6a6-7c2b-4022-867b-f7fbf29dcf5b",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e8afa00e-560c-481a-ac18-3e55d875a581",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e6a852ce-1c17-485b-88b4-ad603d8d0a84",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "dac5d834-0e79-4f8e-9fdd-8f05a8d048c1",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "da3b8ae1-2cfe-4f67-ad62-194e1d8250ef",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d908d333-62f7-43f8-8612-275dda303368",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d381660c-39e4-4768-9399-a288b1b78f0a",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d246666e-c41a-4e80-9767-b64a75024737",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "2d19b479-56a3-44f6-bd0a-4f7a88a3b45e",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d11d7f21-b2ca-4696-a3c5-57964aa0d1b0",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "cb32ed33-fbfb-4809-b708-3e682fbe9659",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c9ee2e1b-e568-4e4e-8c38-8863c651c2fa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "0ef6e0e8-8384-4b7a-bdbe-707f408b5233",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c895c7c4-96cc-429c-a7aa-8bc1bc732b02",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "e4b14d78-f8a8-4d02-aadd-84af7c2b83ad",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c7bfe1ad-a4ce-4c47-bd35-1248d4a02c5e",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c4b89d94-6f24-4105-823e-640a4587fefa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          }
+        ]
+      },
+      "ocr_by_source": {
+        "meme_015.jpg": [
+          {
+            "result_id": "2bd0f340-91bb-48d9-a097-e8251956eaea",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里?\n巨大的星星在闪烁...\n马夫蒂!\n做给他们看吧",
+            "searchable_text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里?\n巨大的星星在闪烁...\n马夫蒂!\n做给他们看吧",
+            "confidence": 0.9704956337809563,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  240,
+                  559,
+                  586,
+                  590
+                ],
+                "confidence": 0.9902824759483337,
+                "text": "传奇的前人啊，请指引我吧"
+              },
+              {
+                "bbox": [
+                  23,
+                  783,
+                  230,
+                  821
+                ],
+                "confidence": 0.9982299208641052,
+                "text": "相信后人的智慧"
+              },
+              {
+                "bbox": [
+                  218,
+                  785,
+                  400,
+                  892
+                ],
+                "confidence": 0.992827832698822,
+                "text": "没救，跑路了"
+              },
+              {
+                "bbox": [
+                  583,
+                  783,
+                  787,
+                  819
+                ],
+                "confidence": 0.9922513365745544,
+                "text": "萝莉妈妈，好香"
+              },
+              {
+                "bbox": [
+                  218,
+                  925,
+                  380,
+                  953
+                ],
+                "confidence": 0.9384292960166931,
+                "text": "马格南在哪里?"
+              },
+              {
+                "bbox": [
+                  372,
+                  1025,
+                  590,
+                  1052
+                ],
+                "confidence": 0.8570308685302734,
+                "text": "巨大的星星在闪烁..."
+              },
+              {
+                "bbox": [
+                  94,
+                  1240,
+                  223,
+                  1280
+                ],
+                "confidence": 0.9953692555427551,
+                "text": "马夫蒂!"
+              },
+              {
+                "bbox": [
+                  594,
+                  1238,
+                  824,
+                  1280
+                ],
+                "confidence": 0.999544084072113,
+                "text": "做给他们看吧"
+              }
+            ],
+            "bbox_json": [
+              [
+                240,
+                559,
+                586,
+                590
+              ],
+              [
+                23,
+                783,
+                230,
+                821
+              ],
+              [
+                218,
+                785,
+                400,
+                892
+              ],
+              [
+                583,
+                783,
+                787,
+                819
+              ],
+              [
+                218,
+                925,
+                380,
+                953
+              ],
+              [
+                372,
+                1025,
+                590,
+                1052
+              ],
+              [
+                94,
+                1240,
+                223,
+                1280
+              ],
+              [
+                594,
+                1238,
+                824,
+                1280
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ],
+        "meme_001.jpg": [
+          {
+            "result_id": "3d1c83d5-1081-47ad-821d-13fa68679882",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "洗錢唔使驚銀紙唔見，\n你都祗係將但變成你鐘意樣啫\n一人計短，二人計長\n早买早享受\n買啦.\n唔係就俾群主掃隱.\n晚买跪着求\n買啦....\n遲响出糧\n有道理\n買啦..\n買啦..\n有花唄..\n諡阔咩.\n有信用..\n買啦...\n我幫你出住先...",
+            "searchable_text": "洗錢唔使驚銀紙唔見，\n你都祗係將但變成你鐘意樣啫\n一人計短，二人計長\n早买早享受\n買啦.\n唔係就俾群主掃隱.\n晚买跪着求\n買啦....\n遲响出糧\n有道理\n買啦..\n有花唄..\n有信用..\n買啦...\n我幫你出住先...",
+            "confidence": 0.8459639005801257,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  18,
+                  76,
+                  569,
+                  158
+                ],
+                "confidence": 0.9452966451644897,
+                "text": "洗錢唔使驚銀紙唔見，"
+              },
+              {
+                "bbox": [
+                  37,
+                  152,
+                  846,
+                  229
+                ],
+                "confidence": 0.9058948755264282,
+                "text": "你都祗係將但變成你鐘意樣啫"
+              },
+              {
+                "bbox": [
+                  142,
+                  254,
+                  901,
+                  377
+                ],
+                "confidence": 0.9522098898887634,
+                "text": "一人計短，二人計長"
+              },
+              {
+                "bbox": [
+                  107,
+                  374,
+                  364,
+                  436
+                ],
+                "confidence": 0.9985000491142273,
+                "text": "早买早享受"
+              },
+              {
+                "bbox": [
+                  787,
+                  372,
+                  871,
+                  412
+                ],
+                "confidence": 0.8999021053314209,
+                "text": "買啦."
+              },
+              {
+                "bbox": [
+                  789,
+                  406,
+                  1024,
+                  442
+                ],
+                "confidence": 0.8311890363693237,
+                "text": "唔係就俾群主掃隱."
+              },
+              {
+                "bbox": [
+                  109,
+                  432,
+                  364,
+                  495
+                ],
+                "confidence": 0.9973937273025513,
+                "text": "晚买跪着求"
+              },
+              {
+                "bbox": [
+                  677,
+                  427,
+                  774,
+                  466
+                ],
+                "confidence": 0.7306087613105774,
+                "text": "買啦...."
+              },
+              {
+                "bbox": [
+                  674,
+                  458,
+                  868,
+                  506
+                ],
+                "confidence": 0.8063331246376038,
+                "text": "遲响出糧"
+              },
+              {
+                "bbox": [
+                  413,
+                  488,
+                  474,
+                  641
+                ],
+                "confidence": 0.9997254014015198,
+                "text": "有道理"
+              },
+              {
+                "bbox": [
+                  879,
+                  477,
+                  1007,
+                  540
+                ],
+                "confidence": 0.8686296939849854,
+                "text": "買啦.."
+              },
+              {
+                "bbox": [
+                  587,
+                  492,
+                  672,
+                  531
+                ],
+                "confidence": 0.775846540927887,
+                "text": "買啦.."
+              },
+              {
+                "bbox": [
+                  587,
+                  525,
+                  699,
+                  560
+                ],
+                "confidence": 0.7983818650245667,
+                "text": "有花唄.."
+              },
+              {
+                "bbox": [
+                  878,
+                  528,
+                  1058,
+                  593
+                ],
+                "confidence": 0.3819637596607208,
+                "text": "諡阔咩."
+              },
+              {
+                "bbox": [
+                  586,
+                  556,
+                  724,
+                  594
+                ],
+                "confidence": 0.884779155254364,
+                "text": "有信用.."
+              },
+              {
+                "bbox": [
+                  879,
+                  908,
+                  968,
+                  952
+                ],
+                "confidence": 0.7488713264465332,
+                "text": "買啦..."
+              },
+              {
+                "bbox": [
+                  881,
+                  946,
+                  1070,
+                  981
+                ],
+                "confidence": 0.8558603525161743,
+                "text": "我幫你出住先..."
+              }
+            ],
+            "bbox_json": [
+              [
+                18,
+                76,
+                569,
+                158
+              ],
+              [
+                37,
+                152,
+                846,
+                229
+              ],
+              [
+                142,
+                254,
+                901,
+                377
+              ],
+              [
+                107,
+                374,
+                364,
+                436
+              ],
+              [
+                787,
+                372,
+                871,
+                412
+              ],
+              [
+                789,
+                406,
+                1024,
+                442
+              ],
+              [
+                109,
+                432,
+                364,
+                495
+              ],
+              [
+                677,
+                427,
+                774,
+                466
+              ],
+              [
+                674,
+                458,
+                868,
+                506
+              ],
+              [
+                413,
+                488,
+                474,
+                641
+              ],
+              [
+                879,
+                477,
+                1007,
+                540
+              ],
+              [
+                587,
+                492,
+                672,
+                531
+              ],
+              [
+                587,
+                525,
+                699,
+                560
+              ],
+              [
+                878,
+                528,
+                1058,
+                593
+              ],
+              [
+                586,
+                556,
+                724,
+                594
+              ],
+              [
+                879,
+                908,
+                968,
+                952
+              ],
+              [
+                881,
+                946,
+                1070,
+                981
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:01+00:00"
+          }
+        ],
+        "meme_020.png": [
+          {
+            "result_id": "a56dbe16-45dd-4721-8a99-209779f771cf",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "可是 却感受不到恐怖\nなのに恐怖は感じない\n倒不如说很温暖\nむしろ暖かくて\n居然甚至让人感到安心\n安心を感じるとは",
+            "searchable_text": "可是 却感受不到恐怖\nなのに恐怖は感じない\n倒不如说很温暖\nむしろ暖かくて\n居然甚至让人感到安心\n安心を感じるとは",
+            "confidence": 0.9854374627272288,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  576,
+                  733,
+                  937,
+                  784
+                ],
+                "confidence": 0.9525993466377258,
+                "text": "可是 却感受不到恐怖"
+              },
+              {
+                "bbox": [
+                  642,
+                  787,
+                  871,
+                  814
+                ],
+                "confidence": 0.9997206926345825,
+                "text": "なのに恐怖は感じない"
+              },
+              {
+                "bbox": [
+                  618,
+                  827,
+                  895,
+                  875
+                ],
+                "confidence": 0.9781224131584167,
+                "text": "倒不如说很温暖"
+              },
+              {
+                "bbox": [
+                  677,
+                  878,
+                  835,
+                  906
+                ],
+                "confidence": 0.99992436170578,
+                "text": "むしろ暖かくて"
+              },
+              {
+                "bbox": [
+                  562,
+                  913,
+                  951,
+                  961
+                ],
+                "confidence": 0.9823049306869507,
+                "text": "居然甚至让人感到安心"
+              },
+              {
+                "bbox": [
+                  666,
+                  967,
+                  844,
+                  990
+                ],
+                "confidence": 0.999953031539917,
+                "text": "安心を感じるとは"
+              }
+            ],
+            "bbox_json": [
+              [
+                576,
+                733,
+                937,
+                784
+              ],
+              [
+                642,
+                787,
+                871,
+                814
+              ],
+              [
+                618,
+                827,
+                895,
+                875
+              ],
+              [
+                677,
+                878,
+                835,
+                906
+              ],
+              [
+                562,
+                913,
+                951,
+                961
+              ],
+              [
+                666,
+                967,
+                844,
+                990
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:16+00:00"
+          }
+        ],
+        "meme_010.jpg": [
+          {
+            "result_id": "6e86dc32-9fca-42f1-ad5e-ff05f136de50",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里？\n巨的星星在闪烁..",
+            "searchable_text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里？\n巨的星星在闪烁..",
+            "confidence": 0.9651501079400381,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  240,
+                  559,
+                  585,
+                  590
+                ],
+                "confidence": 0.9907428622245789,
+                "text": "传奇的前人啊，请指引我吧"
+              },
+              {
+                "bbox": [
+                  22,
+                  781,
+                  230,
+                  821
+                ],
+                "confidence": 0.9975103139877319,
+                "text": "相信后人的智慧"
+              },
+              {
+                "bbox": [
+                  216,
+                  783,
+                  400,
+                  896
+                ],
+                "confidence": 0.9859811663627625,
+                "text": "没救，跑路了"
+              },
+              {
+                "bbox": [
+                  584,
+                  784,
+                  788,
+                  818
+                ],
+                "confidence": 0.9926387667655945,
+                "text": "萝莉妈妈，好香"
+              },
+              {
+                "bbox": [
+                  217,
+                  924,
+                  380,
+                  952
+                ],
+                "confidence": 0.9403327107429504,
+                "text": "马格南在哪里？"
+              },
+              {
+                "bbox": [
+                  372,
+                  1024,
+                  591,
+                  1053
+                ],
+                "confidence": 0.8836948275566101,
+                "text": "巨的星星在闪烁.."
+              }
+            ],
+            "bbox_json": [
+              [
+                240,
+                559,
+                585,
+                590
+              ],
+              [
+                22,
+                781,
+                230,
+                821
+              ],
+              [
+                216,
+                783,
+                400,
+                896
+              ],
+              [
+                584,
+                784,
+                788,
+                818
+              ],
+              [
+                217,
+                924,
+                380,
+                952
+              ],
+              [
+                372,
+                1024,
+                591,
+                1053
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:25+00:00"
+          }
+        ],
+        "meme_005.png": [
+          {
+            "result_id": "a162d98b-d18b-45b1-9b96-a414633c2207",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:10+00:00"
+          }
+        ],
+        "meme_004.png": [
+          {
+            "result_id": "da148b1a-bdfe-40ee-9aae-7d8e2afcf206",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ],
+        "meme_007.png": [
+          {
+            "result_id": "c723a257-eba4-4ed2-b02b-c95cb1d29923",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "你已经有100只高达了!\n不一样啦！\n不一样啦！",
+            "searchable_text": "你已经有100只高达了!\n不一样啦！",
+            "confidence": 0.9586688876152039,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  2,
+                  6,
+                  258,
+                  35
+                ],
+                "confidence": 0.9605488777160645,
+                "text": "你已经有100只高达了!"
+              },
+              {
+                "bbox": [
+                  222,
+                  35,
+                  338,
+                  67
+                ],
+                "confidence": 0.9549654722213745,
+                "text": "不一样啦！"
+              },
+              {
+                "bbox": [
+                  261,
+                  65,
+                  378,
+                  99
+                ],
+                "confidence": 0.9604923129081726,
+                "text": "不一样啦！"
+              }
+            ],
+            "bbox_json": [
+              [
+                2,
+                6,
+                258,
+                35
+              ],
+              [
+                222,
+                35,
+                338,
+                67
+              ],
+              [
+                261,
+                65,
+                378,
+                99
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_008.jpg": [
+          {
+            "result_id": "c821907b-e176-4934-b6f7-b3c877c09261",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "阿姆罗我现正于着贪得无厌的事",
+            "searchable_text": "阿姆罗我现正于着贪得无厌的事",
+            "confidence": 0.96676105260849,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  131,
+                  606,
+                  784,
+                  658
+                ],
+                "confidence": 0.96676105260849,
+                "text": "阿姆罗我现正于着贪得无厌的事"
+              }
+            ],
+            "bbox_json": [
+              [
+                131,
+                606,
+                784,
+                658
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:07+00:00"
+          }
+        ],
+        "meme_012.png": [
+          {
+            "result_id": "7644dcae-d6b3-49f5-8b5a-10d0450e233e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_017.png": [
+          {
+            "result_id": "b8219974-1832-41ca-88e9-9fb7a3907bc0",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:10+00:00"
+          }
+        ],
+        "meme_011.png": [
+          {
+            "result_id": "02c6d4c3-7da1-422f-a6be-e7f9cc94f42d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "人类快没救了",
+            "searchable_text": "人类快没救了",
+            "confidence": 0.988408088684082,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  1022,
+                  1316,
+                  1636,
+                  1463
+                ],
+                "confidence": 0.988408088684082,
+                "text": "人类快没救了"
+              }
+            ],
+            "bbox_json": [
+              [
+                1022,
+                1316,
+                1636,
+                1463
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_014.png": [
+          {
+            "result_id": "d8fc15a1-6033-406c-862d-2ebee59cfb13",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "bilibii我就是哈基高",
+            "searchable_text": "bilibii我就是哈基高",
+            "confidence": 0.830471396446228,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  689,
+                  631,
+                  890,
+                  662
+                ],
+                "confidence": 0.830471396446228,
+                "text": "bilibii我就是哈基高"
+              }
+            ],
+            "bbox_json": [
+              [
+                689,
+                631,
+                890,
+                662
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_018.png": [
+          {
+            "result_id": "0b2f86e0-d990-44da-8996-d616f028ca3d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "0\n1\nK\n0\n区\n000\n厂",
+            "searchable_text": "000",
+            "confidence": 0.34304322195904596,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  792,
+                  322,
+                  906,
+                  440
+                ],
+                "confidence": 0.4859448969364166,
+                "text": "0"
+              },
+              {
+                "bbox": [
+                  232,
+                  495,
+                  284,
+                  533
+                ],
+                "confidence": 0.10689356178045273,
+                "text": "1"
+              },
+              {
+                "bbox": [
+                  170,
+                  510,
+                  250,
+                  573
+                ],
+                "confidence": 0.22554440796375275,
+                "text": "K"
+              },
+              {
+                "bbox": [
+                  777,
+                  541,
+                  896,
+                  655
+                ],
+                "confidence": 0.35907888412475586,
+                "text": "0"
+              },
+              {
+                "bbox": [
+                  1317,
+                  1101,
+                  1411,
+                  1202
+                ],
+                "confidence": 0.2222585827112198,
+                "text": "区"
+              },
+              {
+                "bbox": [
+                  2088,
+                  1199,
+                  2197,
+                  1290
+                ],
+                "confidence": 0.8944934010505676,
+                "text": "000"
+              },
+              {
+                "bbox": [
+                  2234,
+                  1627,
+                  2338,
+                  1730
+                ],
+                "confidence": 0.10708881914615631,
+                "text": "厂"
+              }
+            ],
+            "bbox_json": [
+              [
+                792,
+                322,
+                906,
+                440
+              ],
+              [
+                232,
+                495,
+                284,
+                533
+              ],
+              [
+                170,
+                510,
+                250,
+                573
+              ],
+              [
+                777,
+                541,
+                896,
+                655
+              ],
+              [
+                1317,
+                1101,
+                1411,
+                1202
+              ],
+              [
+                2088,
+                1199,
+                2197,
+                1290
+              ],
+              [
+                2234,
+                1627,
+                2338,
+                1730
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_003.png": [
+          {
+            "result_id": "902eaa8a-2e6b-4db1-9a39-c9511d30ab7e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "你好，我是地球联邦军隆德·贝尔部队的\n阿姆罗大尉，我正在全宇宙搜捕一个\n会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？\n通缉萝莉控",
+            "searchable_text": "你好，我是地球联邦军隆德·贝尔部队的\n阿姆罗大尉，我正在全宇宙搜捕一个\n会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？\n通缉萝莉控",
+            "confidence": 0.9838945269584656,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  204,
+                  50,
+                  1343,
+                  126
+                ],
+                "confidence": 0.969659686088562,
+                "text": "你好，我是地球联邦军隆德·贝尔部队的"
+              },
+              {
+                "bbox": [
+                  250,
+                  116,
+                  1297,
+                  189
+                ],
+                "confidence": 0.9974399209022522,
+                "text": "阿姆罗大尉，我正在全宇宙搜捕一个"
+              },
+              {
+                "bbox": [
+                  33,
+                  177,
+                  1491,
+                  257
+                ],
+                "confidence": 0.9753619432449341,
+                "text": "会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？"
+              },
+              {
+                "bbox": [
+                  224,
+                  1479,
+                  668,
+                  1561
+                ],
+                "confidence": 0.993116557598114,
+                "text": "通缉萝莉控"
+              }
+            ],
+            "bbox_json": [
+              [
+                204,
+                50,
+                1343,
+                126
+              ],
+              [
+                250,
+                116,
+                1297,
+                189
+              ],
+              [
+                33,
+                177,
+                1491,
+                257
+              ],
+              [
+                224,
+                1479,
+                668,
+                1561
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:26+00:00"
+          }
+        ],
+        "meme_009.png": [
+          {
+            "result_id": "0c14dd19-5e99-4860-9211-1aafbdda8095",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "果然这才是正版商品该有的品质啊",
+            "searchable_text": "果然这才是正版商品该有的品质啊",
+            "confidence": 0.9993237257003784,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  193,
+                  629,
+                  759,
+                  678
+                ],
+                "confidence": 0.9993237257003784,
+                "text": "果然这才是正版商品该有的品质啊"
+              }
+            ],
+            "bbox_json": [
+              [
+                193,
+                629,
+                759,
+                678
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:15+00:00"
+          }
+        ],
+        "meme_013.png": [
+          {
+            "result_id": "cfaff947-3f27-4df1-8a5b-591dad9d530e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_006.jpeg": [
+          {
+            "result_id": "34f15cac-768e-4527-8ca0-003509b43b8d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "回转之舟\n十关注\n26-1-3100:12 来REDMITu.. 已编辑\n发布于广东\n乐观主义者\n悲观主义者\n事儿？啥事儿？\n人类的智慧\n地球无法容纳\n没人告诉我发生了\n一定能跨越\n人类的自私\n什么事儿啊！\n这一切",
+            "searchable_text": "回转之舟\n十关注\n26-1-3100:12 来REDMITu.. 已编辑\n发布于广东\n乐观主义者\n悲观主义者\n事儿？啥事儿？\n人类的智慧\n地球无法容纳\n没人告诉我发生了\n一定能跨越\n人类的自私\n什么事儿啊！\n这一切",
+            "confidence": 0.9102413733800252,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  162,
+                  35,
+                  324,
+                  83
+                ],
+                "confidence": 0.954739511013031,
+                "text": "回转之舟"
+              },
+              {
+                "bbox": [
+                  807,
+                  43,
+                  913,
+                  86
+                ],
+                "confidence": 0.9474309086799622,
+                "text": "十关注"
+              },
+              {
+                "bbox": [
+                  161,
+                  93,
+                  754,
+                  134
+                ],
+                "confidence": 0.9348205327987671,
+                "text": "26-1-3100:12 来REDMITu.. 已编辑"
+              },
+              {
+                "bbox": [
+                  163,
+                  140,
+                  336,
+                  179
+                ],
+                "confidence": 0.9972112774848938,
+                "text": "发布于广东"
+              },
+              {
+                "bbox": [
+                  98,
+                  305,
+                  297,
+                  356
+                ],
+                "confidence": 0.9990628957748413,
+                "text": "乐观主义者"
+              },
+              {
+                "bbox": [
+                  373,
+                  304,
+                  572,
+                  355
+                ],
+                "confidence": 0.9983016848564148,
+                "text": "悲观主义者"
+              },
+              {
+                "bbox": [
+                  608,
+                  432,
+                  870,
+                  477
+                ],
+                "confidence": 0.9357670545578003,
+                "text": "事儿？啥事儿？"
+              },
+              {
+                "bbox": [
+                  73,
+                  453,
+                  248,
+                  494
+                ],
+                "confidence": 0.9927452206611633,
+                "text": "人类的智慧"
+              },
+              {
+                "bbox": [
+                  321,
+                  467,
+                  545,
+                  508
+                ],
+                "confidence": 0.9995279908180237,
+                "text": "地球无法容纳"
+              },
+              {
+                "bbox": [
+                  591,
+                  477,
+                  890,
+                  521
+                ],
+                "confidence": 0.998805046081543,
+                "text": "没人告诉我发生了"
+              },
+              {
+                "bbox": [
+                  72,
+                  495,
+                  248,
+                  537
+                ],
+                "confidence": 0.99200838804245,
+                "text": "一定能跨越"
+              },
+              {
+                "bbox": [
+                  340,
+                  508,
+                  529,
+                  553
+                ],
+                "confidence": 0.917333722114563,
+                "text": "人类的自私"
+              },
+              {
+                "bbox": [
+                  624,
+                  521,
+                  856,
+                  569
+                ],
+                "confidence": 0.9929905533790588,
+                "text": "什么事儿啊！"
+              },
+              {
+                "bbox": [
+                  102,
+                  539,
+                  215,
+                  583
+                ],
+                "confidence": 0.9928758144378662,
+                "text": "这一切"
+              },
+              {
+                "bbox": [
+                  784,
+                  990,
+                  844,
+                  1053
+                ],
+                "confidence": 0.0,
+                "text": ""
+              }
+            ],
+            "bbox_json": [
+              [
+                162,
+                35,
+                324,
+                83
+              ],
+              [
+                807,
+                43,
+                913,
+                86
+              ],
+              [
+                161,
+                93,
+                754,
+                134
+              ],
+              [
+                163,
+                140,
+                336,
+                179
+              ],
+              [
+                98,
+                305,
+                297,
+                356
+              ],
+              [
+                373,
+                304,
+                572,
+                355
+              ],
+              [
+                608,
+                432,
+                870,
+                477
+              ],
+              [
+                73,
+                453,
+                248,
+                494
+              ],
+              [
+                321,
+                467,
+                545,
+                508
+              ],
+              [
+                591,
+                477,
+                890,
+                521
+              ],
+              [
+                72,
+                495,
+                248,
+                537
+              ],
+              [
+                340,
+                508,
+                529,
+                553
+              ],
+              [
+                624,
+                521,
+                856,
+                569
+              ],
+              [
+                102,
+                539,
+                215,
+                583
+              ],
+              [
+                784,
+                990,
+                844,
+                1053
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:03+00:00"
+          }
+        ],
+        "meme_019.png": [
+          {
+            "result_id": "931b4136-9bfc-49ef-ac28-0c5241439474",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:03+00:00"
+          }
+        ],
+        "meme_016.jpg": [
+          {
+            "result_id": "e4e6cfae-2dcc-46e0-8447-f2713823c4b2",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "0上R\n\n性病\n閃光之凯薩衛\n神經病\nEM016A\n職業病\n中二病",
+            "searchable_text": "性病\n閃光之凯薩衛\n神經病\n職業病\n中二病",
+            "confidence": 0.6755502745509148,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  252,
+                  413,
+                  287,
+                  427
+                ],
+                "confidence": 0.41104087233543396,
+                "text": "0上R"
+              },
+              {
+                "bbox": [
+                  287,
+                  455,
+                  321,
+                  465
+                ],
+                "confidence": 0.0,
+                "text": ""
+              },
+              {
+                "bbox": [
+                  604,
+                  447,
+                  699,
+                  504
+                ],
+                "confidence": 0.9999601244926453,
+                "text": "性病"
+              },
+              {
+                "bbox": [
+                  39,
+                  475,
+                  197,
+                  519
+                ],
+                "confidence": 0.621293842792511,
+                "text": "閃光之凯薩衛"
+              },
+              {
+                "bbox": [
+                  438,
+                  483,
+                  574,
+                  534
+                ],
+                "confidence": 0.9985547065734863,
+                "text": "神經病"
+              },
+              {
+                "bbox": [
+                  88,
+                  513,
+                  155,
+                  535
+                ],
+                "confidence": 0.37979426980018616,
+                "text": "EM016A"
+              },
+              {
+                "bbox": [
+                  250,
+                  535,
+                  386,
+                  586
+                ],
+                "confidence": 0.9940087795257568,
+                "text": "職業病"
+              },
+              {
+                "bbox": [
+                  45,
+                  624,
+                  182,
+                  678
+                ],
+                "confidence": 0.9997496008872986,
+                "text": "中二病"
+              }
+            ],
+            "bbox_json": [
+              [
+                252,
+                413,
+                287,
+                427
+              ],
+              [
+                287,
+                455,
+                321,
+                465
+              ],
+              [
+                604,
+                447,
+                699,
+                504
+              ],
+              [
+                39,
+                475,
+                197,
+                519
+              ],
+              [
+                438,
+                483,
+                574,
+                534
+              ],
+              [
+                88,
+                513,
+                155,
+                535
+              ],
+              [
+                250,
+                535,
+                386,
+                586
+              ],
+              [
+                45,
+                624,
+                182,
+                678
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:20+00:00"
+          }
+        ],
+        "meme_002.png": [
+          {
+            "result_id": "8fed62cb-ee53-4511-9709-1af74e5be531",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "问了吗",
+            "searchable_text": "问了吗",
+            "confidence": 0.9997561573982239,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  179,
+                  44,
+                  321,
+                  98
+                ],
+                "confidence": 0.9997561573982239,
+                "text": "问了吗"
+              }
+            ],
+            "bbox_json": [
+              [
+                179,
+                44,
+                321,
+                98
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ]
+      },
+      "chinese_text_search": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "query": "问了吗",
+        "top_k": 10,
+        "results": [
+          {
+            "asset_id": "edb449c0-6d73-4b7d-9354-e80e51a4b4ab",
+            "score": 0.03278688524590164,
+            "library_path": "originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "library_url": "/media/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "thumbnail_url": "/media/thumbnails/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.jpg",
+            "media_type": "image/png",
+            "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual",
+              "ocr"
+            ],
+            "visual_score": 0.819722592830658,
+            "ocr_score": -3.650724330228237,
+            "ocr_confidence": 0.9997561573982239,
+            "ocr_snippet": "问了吗",
+            "ocr_text": "问了吗"
+          },
+          {
+            "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+            "score": 0.016129032258064516,
+            "library_path": "originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+            "library_url": "/media/originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+            "thumbnail_url": "/media/thumbnails/b8fefa1e-5c35-4358-864b-724e99cc484f.jpg",
+            "media_type": "image/png",
+            "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.7028377652168274
+          },
+          {
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "score": 0.015873015873015872,
+            "library_path": "originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+            "library_url": "/media/originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+            "thumbnail_url": "/media/thumbnails/9db660d3-901c-4fed-ad47-f7097754bc56.jpg",
+            "media_type": "image/png",
+            "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6905929446220398
+          },
+          {
+            "asset_id": "01f3449d-b844-4186-8534-1d92ee50a2b6",
+            "score": 0.015625,
+            "library_path": "originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "library_url": "/media/originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "thumbnail_url": "/media/thumbnails/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.683092474937439
+          },
+          {
+            "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+            "score": 0.015384615384615385,
+            "library_path": "originals/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.png",
+            "library_url": "/media/originals/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.png",
+            "thumbnail_url": "/media/thumbnails/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.jpg",
+            "media_type": "image/png",
+            "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6789529323577881
+          },
+          {
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "score": 0.015151515151515152,
+            "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+            "media_type": "image/png",
+            "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6766723394393921
+          },
+          {
+            "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+            "score": 0.014925373134328358,
+            "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.674776554107666
+          },
+          {
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "score": 0.014705882352941176,
+            "library_path": "originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "library_url": "/media/originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "thumbnail_url": "/media/thumbnails/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6736166477203369
+          },
+          {
+            "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+            "score": 0.014492753623188406,
+            "library_path": "originals/1336c32c-89ac-436c-9ad1-151fe17538ee.png",
+            "library_url": "/media/originals/1336c32c-89ac-436c-9ad1-151fe17538ee.png",
+            "thumbnail_url": "/media/thumbnails/1336c32c-89ac-436c-9ad1-151fe17538ee.jpg",
+            "media_type": "image/png",
+            "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6648271083831787
+          },
+          {
+            "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+            "score": 0.014285714285714285,
+            "library_path": "originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+            "library_url": "/media/originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+            "thumbnail_url": "/media/thumbnails/d0e1bd68-1419-412f-a221-efdb1968501a.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6591615080833435
+          }
+        ]
+      },
+      "image_searches": [
+        {
+          "seconds": 0.07,
+          "response": {
+            "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+            "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+            "query_path": "/private/tmp/MemeSort OCR data 中文/api-library/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "query_media_type": "image/png",
+            "top_k": 10,
+            "results": [
+              {
+                "asset_id": "edb449c0-6d73-4b7d-9354-e80e51a4b4ab",
+                "score": 1.0,
+                "library_path": "originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+                "library_url": "/media/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+                "thumbnail_url": "/media/thumbnails/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.jpg",
+                "media_type": "image/png",
+                "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+                "score": 0.7730183005332947,
+                "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+                "media_type": "image/png",
+                "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+                "score": 0.747115969657898,
+                "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+                "score": 0.7443326711654663,
+                "library_path": "originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "library_url": "/media/originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "thumbnail_url": "/media/thumbnails/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+                "score": 0.741570234298706,
+                "library_path": "originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+                "library_url": "/media/originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+                "thumbnail_url": "/media/thumbnails/d0e1bd68-1419-412f-a221-efdb1968501a.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+                "score": 0.7397446036338806,
+                "library_path": "originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+                "library_url": "/media/originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+                "thumbnail_url": "/media/thumbnails/9db660d3-901c-4fed-ad47-f7097754bc56.jpg",
+                "media_type": "image/png",
+                "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "01f3449d-b844-4186-8534-1d92ee50a2b6",
+                "score": 0.7376224398612976,
+                "library_path": "originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "library_url": "/media/originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "thumbnail_url": "/media/thumbnails/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+                "score": 0.7316566705703735,
+                "library_path": "originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+                "library_url": "/media/originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+                "thumbnail_url": "/media/thumbnails/b8fefa1e-5c35-4358-864b-724e99cc484f.jpg",
+                "media_type": "image/png",
+                "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "da33b1a0-d0cb-4587-8406-dc4f8d9be1da",
+                "score": 0.7254719138145447,
+                "library_path": "originals/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.gif",
+                "library_url": "/media/originals/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.gif",
+                "thumbnail_url": "/media/thumbnails/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.jpg",
+                "media_type": "image/gif",
+                "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+                "matched_source_ref": "frame:23"
+              },
+              {
+                "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+                "score": 0.7239457368850708,
+                "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+                "media_type": "image/png",
+                "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+                "matched_source_ref": "original"
+              }
+            ]
+          }
+        },
+        {
+          "seconds": 0.317,
+          "response": {
+            "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+            "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+            "query_path": "/private/tmp/MemeSort OCR data 中文/api-library/originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+            "query_media_type": "image/gif",
+            "top_k": 10,
+            "results": [
+              {
+                "asset_id": "0bd008a1-4017-415f-ae35-f53de6659215",
+                "score": 1.0,
+                "library_path": "originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+                "library_url": "/media/originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+                "thumbnail_url": "/media/thumbnails/0bd008a1-4017-415f-ae35-f53de6659215.jpg",
+                "media_type": "image/gif",
+                "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+                "matched_source_ref": "frame:22"
+              },
+              {
+                "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+                "score": 0.788669228553772,
+                "library_path": "originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+                "library_url": "/media/originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+                "thumbnail_url": "/media/thumbnails/83784c69-686d-46d1-bdb5-cbdcc59d71b7.jpg",
+                "media_type": "image/gif",
+                "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "36924c39-ef41-46cc-aed4-eecad7908d15",
+                "score": 0.7767481207847595,
+                "library_path": "originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+                "library_url": "/media/originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+                "thumbnail_url": "/media/thumbnails/36924c39-ef41-46cc-aed4-eecad7908d15.jpg",
+                "media_type": "image/gif",
+                "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "849dc9c9-370c-4a91-9155-582ea086b1b7",
+                "score": 0.7576718330383301,
+                "library_path": "originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+                "library_url": "/media/originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+                "thumbnail_url": "/media/thumbnails/849dc9c9-370c-4a91-9155-582ea086b1b7.jpg",
+                "media_type": "image/gif",
+                "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+                "matched_source_ref": "frame:134"
+              },
+              {
+                "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+                "score": 0.7463154792785645,
+                "library_path": "originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+                "library_url": "/media/originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+                "thumbnail_url": "/media/thumbnails/32e30047-5dfa-4076-8f24-60ef342437c9.jpg",
+                "media_type": "image/gif",
+                "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0",
+                "score": 0.7321337461471558,
+                "library_path": "originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+                "library_url": "/media/originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+                "thumbnail_url": "/media/thumbnails/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.jpg",
+                "media_type": "image/gif",
+                "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+                "matched_source_ref": "frame:223"
+              },
+              {
+                "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+                "score": 0.7067242860794067,
+                "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+                "media_type": "image/png",
+                "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+                "score": 0.7057316899299622,
+                "library_path": "originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+                "library_url": "/media/originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+                "thumbnail_url": "/media/thumbnails/37a13b88-fb8f-4906-ad46-f37284cf1a60.jpg",
+                "media_type": "image/png",
+                "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+                "score": 0.6965203881263733,
+                "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+                "media_type": "image/png",
+                "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+                "score": 0.693297803401947,
+                "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+                "matched_source_ref": "original"
+              }
+            ]
+          }
+        }
+      ],
+      "find_similar": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "asset_id": "0bd008a1-4017-415f-ae35-f53de6659215",
+        "top_k": 10,
+        "results": [
+          {
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "score": 0.788669228553772,
+            "library_path": "originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+            "library_url": "/media/originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+            "thumbnail_url": "/media/thumbnails/83784c69-686d-46d1-bdb5-cbdcc59d71b7.jpg",
+            "media_type": "image/gif",
+            "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "36924c39-ef41-46cc-aed4-eecad7908d15",
+            "score": 0.7767481207847595,
+            "library_path": "originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+            "library_url": "/media/originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+            "thumbnail_url": "/media/thumbnails/36924c39-ef41-46cc-aed4-eecad7908d15.jpg",
+            "media_type": "image/gif",
+            "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "849dc9c9-370c-4a91-9155-582ea086b1b7",
+            "score": 0.7576718330383301,
+            "library_path": "originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+            "library_url": "/media/originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+            "thumbnail_url": "/media/thumbnails/849dc9c9-370c-4a91-9155-582ea086b1b7.jpg",
+            "media_type": "image/gif",
+            "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+            "matched_source_ref": "frame:134"
+          },
+          {
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "score": 0.7463154792785645,
+            "library_path": "originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+            "library_url": "/media/originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+            "thumbnail_url": "/media/thumbnails/32e30047-5dfa-4076-8f24-60ef342437c9.jpg",
+            "media_type": "image/gif",
+            "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0",
+            "score": 0.7321337461471558,
+            "library_path": "originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+            "library_url": "/media/originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+            "thumbnail_url": "/media/thumbnails/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.jpg",
+            "media_type": "image/gif",
+            "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+            "matched_source_ref": "frame:223"
+          },
+          {
+            "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+            "score": 0.7067242860794067,
+            "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+            "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+            "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+            "media_type": "image/png",
+            "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+            "score": 0.7057316899299622,
+            "library_path": "originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+            "library_url": "/media/originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+            "thumbnail_url": "/media/thumbnails/37a13b88-fb8f-4906-ad46-f37284cf1a60.jpg",
+            "media_type": "image/png",
+            "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "score": 0.6965203881263733,
+            "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+            "media_type": "image/png",
+            "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+            "score": 0.693297803401947,
+            "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+            "score": 0.6929624080657959,
+            "library_path": "originals/c26c1f75-eb58-44db-919d-d8fa6a644aa1.png",
+            "library_url": "/media/originals/c26c1f75-eb58-44db-919d-d8fa6a644aa1.png",
+            "thumbnail_url": "/media/thumbnails/c26c1f75-eb58-44db-919d-d8fa6a644aa1.jpg",
+            "media_type": "image/png",
+            "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+            "matched_source_ref": "original"
+          }
+        ]
+      },
+      "repeat_import": {
+        "batch_id": "82851e3d-9b31-4d5a-bc69-96133ec24fb2",
+        "status": "completed",
+        "running": false,
+        "paused": false,
+        "pause_requested": false,
+        "source_folder": "/private/tmp/memesort-api-work/duplicate 中文.png",
+        "selected_sources": 1,
+        "effective_sources": 1,
+        "discovered_files": 1,
+        "supported_files": 1,
+        "unsupported_files": 0,
+        "reparse_points_skipped": 0,
+        "scan_failures": 0,
+        "processed_files": 1,
+        "succeeded_files": 1,
+        "failed_files": 0,
+        "new_assets": 0,
+        "duplicate_assets": 1,
+        "source_records_added": 1,
+        "source_records_refreshed": 0,
+        "jobs_created": 0,
+        "current_source_name": "duplicate 中文.png",
+        "started_at": 1794373707.673413,
+        "finished_at": 1794373707.675926,
+        "result": {
+          "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+          "selected_sources": 1,
+          "effective_sources": 1,
+          "discovered_files": 1,
+          "supported_files": 1,
+          "unsupported_files": 0,
+          "reparse_points_skipped": 0,
+          "scan_failures": 0,
+          "processed_files": 1,
+          "succeeded_files": 1,
+          "failed_files": 0,
+          "new_assets": 0,
+          "duplicate_assets": 1,
+          "source_records_added": 1,
+          "source_records_refreshed": 0,
+          "jobs_created": 0,
+          "failure_count": 0,
+          "failure_details": [],
+          "failures_truncated": false,
+          "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a"
+        },
+        "partial_result": null,
+        "error": null
+      },
+      "remove_duplicate_source": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "asset_id": "edb449c0-6d73-4b7d-9354-e80e51a4b4ab",
+        "removed_source_path": "/private/tmp/memesort-api-work/duplicate 中文.png",
+        "asset_deleted": false,
+        "removed_source_records": 1,
+        "removed_jobs": 0,
+        "removed_renditions": 0,
+        "removed_embeddings": 0
+      },
+      "duplicate_scan": {
+        "threshold": 0.92,
+        "count": 2,
+        "reviewed_pair": {
+          "score": 0.9698745012283325,
+          "asset_a_id": "01f3449d-b844-4186-8534-1d92ee50a2b6",
+          "asset_b_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+          "asset_a_path": "originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+          "asset_b_path": "originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+          "asset_a_thumbnail_url": "/media/thumbnails/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+          "asset_b_thumbnail_url": "/media/thumbnails/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+          "asset_a_matched_source_ref": "original",
+          "asset_b_matched_source_ref": "original"
+        }
+      },
+      "english_ocr": [
+        {
+          "result_id": "cdadbc5a-8f1e-4c33-a32d-5928f4807422",
+          "engine": "paddleocr-worker",
+          "engine_version": "3.6.0",
+          "model_key": "PP-OCRv5",
+          "text": "HELLO MEMESORT",
+          "searchable_text": "HELLO MEMESORT",
+          "confidence": 0.969304084777832,
+          "language_hint": "ch",
+          "line_json": [
+            {
+              "bbox": [
+                16,
+                31,
+                441,
+                73
+              ],
+              "confidence": 0.969304084777832,
+              "text": "HELLO MEMESORT"
+            }
+          ],
+          "bbox_json": [
+            [
+              16,
+              31,
+              441,
+              73
+            ]
+          ],
+          "preprocess_version": "original-still-v1",
+          "min_confidence": 0.5,
+          "created_at": "2026-11-11T05:08:28+00:00"
+        }
+      ],
+      "source_removed_managed_media_verified": true,
+      "delete_generated_asset": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "asset_id": "38db53d0-f273-4eca-9844-d36c6ef1e026",
+        "removed_source_path": null,
+        "asset_deleted": true,
+        "removed_source_records": 1,
+        "removed_jobs": 3,
+        "removed_renditions": 1,
+        "removed_embeddings": 1
+      },
+      "search_cancel": {
+        "request_id": "123e4567-e89b-42d3-a456-426614174000",
+        "cancelled": true,
+        "was_active": false
+      },
+      "final_status": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "asset_counts": {
+          "indexed": 30
+        },
+        "job_counts": {
+          "completed": 80
+        },
+        "total_assets": 30,
+        "total_jobs": 80,
+        "recent_jobs": [
+          {
+            "job_id": "3277ede8-816a-4205-bc51-62730a7cb2c3",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "1bede519-b721-4c83-9c93-ac37aa9a0ad2",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ffb68414-ebed-4a49-9573-f623698be3b4",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "f7844453-9f1f-4e2d-850c-c3a966bab73d",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "738746a2-765a-4006-9c83-9d288eedca8f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "efabed71-d36e-49e3-9368-5d92acc64474",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ebf44cd2-2949-484f-ba1f-6a170c361a01",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "4a1a4110-c34a-4efd-90bd-69bfef9b337a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e93dd6a6-7c2b-4022-867b-f7fbf29dcf5b",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e8afa00e-560c-481a-ac18-3e55d875a581",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e6a852ce-1c17-485b-88b4-ad603d8d0a84",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "dac5d834-0e79-4f8e-9fdd-8f05a8d048c1",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "da3b8ae1-2cfe-4f67-ad62-194e1d8250ef",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d908d333-62f7-43f8-8612-275dda303368",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d381660c-39e4-4768-9399-a288b1b78f0a",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d246666e-c41a-4e80-9767-b64a75024737",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "2d19b479-56a3-44f6-bd0a-4f7a88a3b45e",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d11d7f21-b2ca-4696-a3c5-57964aa0d1b0",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "cb32ed33-fbfb-4809-b708-3e682fbe9659",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c9ee2e1b-e568-4e4e-8c38-8863c651c2fa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "0ef6e0e8-8384-4b7a-bdbe-707f408b5233",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c895c7c4-96cc-429c-a7aa-8bc1bc732b02",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "e4b14d78-f8a8-4d02-aadd-84af7c2b83ad",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c7bfe1ad-a4ce-4c47-bd35-1248d4a02c5e",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c4b89d94-6f24-4105-823e-640a4587fefa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          }
+        ]
+      },
+      "clean_exit": true
+    },
+    {
+      "startup_authorization_seconds": 1.126,
+      "runtime": {
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "llama_cpp_build": "b11457",
+        "model_id": "unsloth/embeddinggemma-2-GGUF:Q8_0",
+        "model_label": "embeddinggemma-2",
+        "output_dimension": 768,
+        "storage_dtype": "float32",
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "recipe_fingerprint": "ff9042fe00047de0bede72d8016b79299a9e1e9ad6aa2cb8d38b926550d7a0c7",
+        "preprocessing_version": "still-480-gif-480-rgb-white-exif-v1",
+        "still_max_side": 480,
+        "gif_max_side": 480,
+        "gif_frame_count": 4
+      },
+      "health": {
+        "runtime_fingerprint": "f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c",
+        "backend_name": "llama.cpp",
+        "device": "MTL0",
+        "gpu_name": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)",
+        "gpu_vendor": "apple",
+        "gpu_vendor_id": null,
+        "text_smoke_vector_dim": 768,
+        "image_smoke_vector_dim": 768,
+        "diagnostic_steps": [
+          {
+            "step": "runtime-manifest",
+            "status": "ok",
+            "detail": "llama.cpp b11457; unsloth/embeddinggemma-2-GGUF:Q8_0; 768d; runtime=f35568261b00bac3f789b3e1681541cc0810e98dcdc9dc550d6ce06836af4f7c"
+          },
+          {
+            "step": "resolve-gguf-bundle",
+            "status": "ok",
+            "detail": "embeddinggemma-2-Q8_0.gguf + mmproj-Q8_0.gguf"
+          },
+          {
+            "step": "metal-device",
+            "status": "ok",
+            "detail": "MTL0: Apple M6 (12124 MiB, 12123 MiB free)"
+          },
+          {
+            "step": "llama-server",
+            "status": "ok",
+            "detail": "/private/tmp/MemeSort OCR data 中文/runtime/llama.cpp-b11457-metal/llama-server"
+          },
+          {
+            "step": "text-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp text embedding passed at 768d."
+          },
+          {
+            "step": "image-embedding-smoke",
+            "status": "ok",
+            "detail": "llama.cpp image embedding passed at 768d."
+          }
+        ],
+        "smoke_test_ok": true,
+        "error": null
+      },
+      "ocr_by_source": {
+        "meme_015.jpg": [
+          {
+            "result_id": "2bd0f340-91bb-48d9-a097-e8251956eaea",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里?\n巨大的星星在闪烁...\n马夫蒂!\n做给他们看吧",
+            "searchable_text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里?\n巨大的星星在闪烁...\n马夫蒂!\n做给他们看吧",
+            "confidence": 0.9704956337809563,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  240,
+                  559,
+                  586,
+                  590
+                ],
+                "confidence": 0.9902824759483337,
+                "text": "传奇的前人啊，请指引我吧"
+              },
+              {
+                "bbox": [
+                  23,
+                  783,
+                  230,
+                  821
+                ],
+                "confidence": 0.9982299208641052,
+                "text": "相信后人的智慧"
+              },
+              {
+                "bbox": [
+                  218,
+                  785,
+                  400,
+                  892
+                ],
+                "confidence": 0.992827832698822,
+                "text": "没救，跑路了"
+              },
+              {
+                "bbox": [
+                  583,
+                  783,
+                  787,
+                  819
+                ],
+                "confidence": 0.9922513365745544,
+                "text": "萝莉妈妈，好香"
+              },
+              {
+                "bbox": [
+                  218,
+                  925,
+                  380,
+                  953
+                ],
+                "confidence": 0.9384292960166931,
+                "text": "马格南在哪里?"
+              },
+              {
+                "bbox": [
+                  372,
+                  1025,
+                  590,
+                  1052
+                ],
+                "confidence": 0.8570308685302734,
+                "text": "巨大的星星在闪烁..."
+              },
+              {
+                "bbox": [
+                  94,
+                  1240,
+                  223,
+                  1280
+                ],
+                "confidence": 0.9953692555427551,
+                "text": "马夫蒂!"
+              },
+              {
+                "bbox": [
+                  594,
+                  1238,
+                  824,
+                  1280
+                ],
+                "confidence": 0.999544084072113,
+                "text": "做给他们看吧"
+              }
+            ],
+            "bbox_json": [
+              [
+                240,
+                559,
+                586,
+                590
+              ],
+              [
+                23,
+                783,
+                230,
+                821
+              ],
+              [
+                218,
+                785,
+                400,
+                892
+              ],
+              [
+                583,
+                783,
+                787,
+                819
+              ],
+              [
+                218,
+                925,
+                380,
+                953
+              ],
+              [
+                372,
+                1025,
+                590,
+                1052
+              ],
+              [
+                94,
+                1240,
+                223,
+                1280
+              ],
+              [
+                594,
+                1238,
+                824,
+                1280
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ],
+        "meme_001.jpg": [
+          {
+            "result_id": "3d1c83d5-1081-47ad-821d-13fa68679882",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "洗錢唔使驚銀紙唔見，\n你都祗係將但變成你鐘意樣啫\n一人計短，二人計長\n早买早享受\n買啦.\n唔係就俾群主掃隱.\n晚买跪着求\n買啦....\n遲响出糧\n有道理\n買啦..\n買啦..\n有花唄..\n諡阔咩.\n有信用..\n買啦...\n我幫你出住先...",
+            "searchable_text": "洗錢唔使驚銀紙唔見，\n你都祗係將但變成你鐘意樣啫\n一人計短，二人計長\n早买早享受\n買啦.\n唔係就俾群主掃隱.\n晚买跪着求\n買啦....\n遲响出糧\n有道理\n買啦..\n有花唄..\n有信用..\n買啦...\n我幫你出住先...",
+            "confidence": 0.8459639005801257,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  18,
+                  76,
+                  569,
+                  158
+                ],
+                "confidence": 0.9452966451644897,
+                "text": "洗錢唔使驚銀紙唔見，"
+              },
+              {
+                "bbox": [
+                  37,
+                  152,
+                  846,
+                  229
+                ],
+                "confidence": 0.9058948755264282,
+                "text": "你都祗係將但變成你鐘意樣啫"
+              },
+              {
+                "bbox": [
+                  142,
+                  254,
+                  901,
+                  377
+                ],
+                "confidence": 0.9522098898887634,
+                "text": "一人計短，二人計長"
+              },
+              {
+                "bbox": [
+                  107,
+                  374,
+                  364,
+                  436
+                ],
+                "confidence": 0.9985000491142273,
+                "text": "早买早享受"
+              },
+              {
+                "bbox": [
+                  787,
+                  372,
+                  871,
+                  412
+                ],
+                "confidence": 0.8999021053314209,
+                "text": "買啦."
+              },
+              {
+                "bbox": [
+                  789,
+                  406,
+                  1024,
+                  442
+                ],
+                "confidence": 0.8311890363693237,
+                "text": "唔係就俾群主掃隱."
+              },
+              {
+                "bbox": [
+                  109,
+                  432,
+                  364,
+                  495
+                ],
+                "confidence": 0.9973937273025513,
+                "text": "晚买跪着求"
+              },
+              {
+                "bbox": [
+                  677,
+                  427,
+                  774,
+                  466
+                ],
+                "confidence": 0.7306087613105774,
+                "text": "買啦...."
+              },
+              {
+                "bbox": [
+                  674,
+                  458,
+                  868,
+                  506
+                ],
+                "confidence": 0.8063331246376038,
+                "text": "遲响出糧"
+              },
+              {
+                "bbox": [
+                  413,
+                  488,
+                  474,
+                  641
+                ],
+                "confidence": 0.9997254014015198,
+                "text": "有道理"
+              },
+              {
+                "bbox": [
+                  879,
+                  477,
+                  1007,
+                  540
+                ],
+                "confidence": 0.8686296939849854,
+                "text": "買啦.."
+              },
+              {
+                "bbox": [
+                  587,
+                  492,
+                  672,
+                  531
+                ],
+                "confidence": 0.775846540927887,
+                "text": "買啦.."
+              },
+              {
+                "bbox": [
+                  587,
+                  525,
+                  699,
+                  560
+                ],
+                "confidence": 0.7983818650245667,
+                "text": "有花唄.."
+              },
+              {
+                "bbox": [
+                  878,
+                  528,
+                  1058,
+                  593
+                ],
+                "confidence": 0.3819637596607208,
+                "text": "諡阔咩."
+              },
+              {
+                "bbox": [
+                  586,
+                  556,
+                  724,
+                  594
+                ],
+                "confidence": 0.884779155254364,
+                "text": "有信用.."
+              },
+              {
+                "bbox": [
+                  879,
+                  908,
+                  968,
+                  952
+                ],
+                "confidence": 0.7488713264465332,
+                "text": "買啦..."
+              },
+              {
+                "bbox": [
+                  881,
+                  946,
+                  1070,
+                  981
+                ],
+                "confidence": 0.8558603525161743,
+                "text": "我幫你出住先..."
+              }
+            ],
+            "bbox_json": [
+              [
+                18,
+                76,
+                569,
+                158
+              ],
+              [
+                37,
+                152,
+                846,
+                229
+              ],
+              [
+                142,
+                254,
+                901,
+                377
+              ],
+              [
+                107,
+                374,
+                364,
+                436
+              ],
+              [
+                787,
+                372,
+                871,
+                412
+              ],
+              [
+                789,
+                406,
+                1024,
+                442
+              ],
+              [
+                109,
+                432,
+                364,
+                495
+              ],
+              [
+                677,
+                427,
+                774,
+                466
+              ],
+              [
+                674,
+                458,
+                868,
+                506
+              ],
+              [
+                413,
+                488,
+                474,
+                641
+              ],
+              [
+                879,
+                477,
+                1007,
+                540
+              ],
+              [
+                587,
+                492,
+                672,
+                531
+              ],
+              [
+                587,
+                525,
+                699,
+                560
+              ],
+              [
+                878,
+                528,
+                1058,
+                593
+              ],
+              [
+                586,
+                556,
+                724,
+                594
+              ],
+              [
+                879,
+                908,
+                968,
+                952
+              ],
+              [
+                881,
+                946,
+                1070,
+                981
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:01+00:00"
+          }
+        ],
+        "meme_020.png": [
+          {
+            "result_id": "a56dbe16-45dd-4721-8a99-209779f771cf",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "可是 却感受不到恐怖\nなのに恐怖は感じない\n倒不如说很温暖\nむしろ暖かくて\n居然甚至让人感到安心\n安心を感じるとは",
+            "searchable_text": "可是 却感受不到恐怖\nなのに恐怖は感じない\n倒不如说很温暖\nむしろ暖かくて\n居然甚至让人感到安心\n安心を感じるとは",
+            "confidence": 0.9854374627272288,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  576,
+                  733,
+                  937,
+                  784
+                ],
+                "confidence": 0.9525993466377258,
+                "text": "可是 却感受不到恐怖"
+              },
+              {
+                "bbox": [
+                  642,
+                  787,
+                  871,
+                  814
+                ],
+                "confidence": 0.9997206926345825,
+                "text": "なのに恐怖は感じない"
+              },
+              {
+                "bbox": [
+                  618,
+                  827,
+                  895,
+                  875
+                ],
+                "confidence": 0.9781224131584167,
+                "text": "倒不如说很温暖"
+              },
+              {
+                "bbox": [
+                  677,
+                  878,
+                  835,
+                  906
+                ],
+                "confidence": 0.99992436170578,
+                "text": "むしろ暖かくて"
+              },
+              {
+                "bbox": [
+                  562,
+                  913,
+                  951,
+                  961
+                ],
+                "confidence": 0.9823049306869507,
+                "text": "居然甚至让人感到安心"
+              },
+              {
+                "bbox": [
+                  666,
+                  967,
+                  844,
+                  990
+                ],
+                "confidence": 0.999953031539917,
+                "text": "安心を感じるとは"
+              }
+            ],
+            "bbox_json": [
+              [
+                576,
+                733,
+                937,
+                784
+              ],
+              [
+                642,
+                787,
+                871,
+                814
+              ],
+              [
+                618,
+                827,
+                895,
+                875
+              ],
+              [
+                677,
+                878,
+                835,
+                906
+              ],
+              [
+                562,
+                913,
+                951,
+                961
+              ],
+              [
+                666,
+                967,
+                844,
+                990
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:16+00:00"
+          }
+        ],
+        "meme_010.jpg": [
+          {
+            "result_id": "6e86dc32-9fca-42f1-ad5e-ff05f136de50",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里？\n巨的星星在闪烁..",
+            "searchable_text": "传奇的前人啊，请指引我吧\n相信后人的智慧\n没救，跑路了\n萝莉妈妈，好香\n马格南在哪里？\n巨的星星在闪烁..",
+            "confidence": 0.9651501079400381,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  240,
+                  559,
+                  585,
+                  590
+                ],
+                "confidence": 0.9907428622245789,
+                "text": "传奇的前人啊，请指引我吧"
+              },
+              {
+                "bbox": [
+                  22,
+                  781,
+                  230,
+                  821
+                ],
+                "confidence": 0.9975103139877319,
+                "text": "相信后人的智慧"
+              },
+              {
+                "bbox": [
+                  216,
+                  783,
+                  400,
+                  896
+                ],
+                "confidence": 0.9859811663627625,
+                "text": "没救，跑路了"
+              },
+              {
+                "bbox": [
+                  584,
+                  784,
+                  788,
+                  818
+                ],
+                "confidence": 0.9926387667655945,
+                "text": "萝莉妈妈，好香"
+              },
+              {
+                "bbox": [
+                  217,
+                  924,
+                  380,
+                  952
+                ],
+                "confidence": 0.9403327107429504,
+                "text": "马格南在哪里？"
+              },
+              {
+                "bbox": [
+                  372,
+                  1024,
+                  591,
+                  1053
+                ],
+                "confidence": 0.8836948275566101,
+                "text": "巨的星星在闪烁.."
+              }
+            ],
+            "bbox_json": [
+              [
+                240,
+                559,
+                585,
+                590
+              ],
+              [
+                22,
+                781,
+                230,
+                821
+              ],
+              [
+                216,
+                783,
+                400,
+                896
+              ],
+              [
+                584,
+                784,
+                788,
+                818
+              ],
+              [
+                217,
+                924,
+                380,
+                952
+              ],
+              [
+                372,
+                1024,
+                591,
+                1053
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:25+00:00"
+          }
+        ],
+        "meme_005.png": [
+          {
+            "result_id": "a162d98b-d18b-45b1-9b96-a414633c2207",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:10+00:00"
+          }
+        ],
+        "meme_004.png": [
+          {
+            "result_id": "da148b1a-bdfe-40ee-9aae-7d8e2afcf206",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ],
+        "meme_007.png": [
+          {
+            "result_id": "c723a257-eba4-4ed2-b02b-c95cb1d29923",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "你已经有100只高达了!\n不一样啦！\n不一样啦！",
+            "searchable_text": "你已经有100只高达了!\n不一样啦！",
+            "confidence": 0.9586688876152039,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  2,
+                  6,
+                  258,
+                  35
+                ],
+                "confidence": 0.9605488777160645,
+                "text": "你已经有100只高达了!"
+              },
+              {
+                "bbox": [
+                  222,
+                  35,
+                  338,
+                  67
+                ],
+                "confidence": 0.9549654722213745,
+                "text": "不一样啦！"
+              },
+              {
+                "bbox": [
+                  261,
+                  65,
+                  378,
+                  99
+                ],
+                "confidence": 0.9604923129081726,
+                "text": "不一样啦！"
+              }
+            ],
+            "bbox_json": [
+              [
+                2,
+                6,
+                258,
+                35
+              ],
+              [
+                222,
+                35,
+                338,
+                67
+              ],
+              [
+                261,
+                65,
+                378,
+                99
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_008.jpg": [
+          {
+            "result_id": "c821907b-e176-4934-b6f7-b3c877c09261",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "阿姆罗我现正于着贪得无厌的事",
+            "searchable_text": "阿姆罗我现正于着贪得无厌的事",
+            "confidence": 0.96676105260849,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  131,
+                  606,
+                  784,
+                  658
+                ],
+                "confidence": 0.96676105260849,
+                "text": "阿姆罗我现正于着贪得无厌的事"
+              }
+            ],
+            "bbox_json": [
+              [
+                131,
+                606,
+                784,
+                658
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:07+00:00"
+          }
+        ],
+        "meme_012.png": [
+          {
+            "result_id": "7644dcae-d6b3-49f5-8b5a-10d0450e233e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_017.png": [
+          {
+            "result_id": "b8219974-1832-41ca-88e9-9fb7a3907bc0",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:10+00:00"
+          }
+        ],
+        "meme_011.png": [
+          {
+            "result_id": "02c6d4c3-7da1-422f-a6be-e7f9cc94f42d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "人类快没救了",
+            "searchable_text": "人类快没救了",
+            "confidence": 0.988408088684082,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  1022,
+                  1316,
+                  1636,
+                  1463
+                ],
+                "confidence": 0.988408088684082,
+                "text": "人类快没救了"
+              }
+            ],
+            "bbox_json": [
+              [
+                1022,
+                1316,
+                1636,
+                1463
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_014.png": [
+          {
+            "result_id": "d8fc15a1-6033-406c-862d-2ebee59cfb13",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "bilibii我就是哈基高",
+            "searchable_text": "bilibii我就是哈基高",
+            "confidence": 0.830471396446228,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  689,
+                  631,
+                  890,
+                  662
+                ],
+                "confidence": 0.830471396446228,
+                "text": "bilibii我就是哈基高"
+              }
+            ],
+            "bbox_json": [
+              [
+                689,
+                631,
+                890,
+                662
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:18+00:00"
+          }
+        ],
+        "meme_018.png": [
+          {
+            "result_id": "0b2f86e0-d990-44da-8996-d616f028ca3d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "0\n1\nK\n0\n区\n000\n厂",
+            "searchable_text": "000",
+            "confidence": 0.34304322195904596,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  792,
+                  322,
+                  906,
+                  440
+                ],
+                "confidence": 0.4859448969364166,
+                "text": "0"
+              },
+              {
+                "bbox": [
+                  232,
+                  495,
+                  284,
+                  533
+                ],
+                "confidence": 0.10689356178045273,
+                "text": "1"
+              },
+              {
+                "bbox": [
+                  170,
+                  510,
+                  250,
+                  573
+                ],
+                "confidence": 0.22554440796375275,
+                "text": "K"
+              },
+              {
+                "bbox": [
+                  777,
+                  541,
+                  896,
+                  655
+                ],
+                "confidence": 0.35907888412475586,
+                "text": "0"
+              },
+              {
+                "bbox": [
+                  1317,
+                  1101,
+                  1411,
+                  1202
+                ],
+                "confidence": 0.2222585827112198,
+                "text": "区"
+              },
+              {
+                "bbox": [
+                  2088,
+                  1199,
+                  2197,
+                  1290
+                ],
+                "confidence": 0.8944934010505676,
+                "text": "000"
+              },
+              {
+                "bbox": [
+                  2234,
+                  1627,
+                  2338,
+                  1730
+                ],
+                "confidence": 0.10708881914615631,
+                "text": "厂"
+              }
+            ],
+            "bbox_json": [
+              [
+                792,
+                322,
+                906,
+                440
+              ],
+              [
+                232,
+                495,
+                284,
+                533
+              ],
+              [
+                170,
+                510,
+                250,
+                573
+              ],
+              [
+                777,
+                541,
+                896,
+                655
+              ],
+              [
+                1317,
+                1101,
+                1411,
+                1202
+              ],
+              [
+                2088,
+                1199,
+                2197,
+                1290
+              ],
+              [
+                2234,
+                1627,
+                2338,
+                1730
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_003.png": [
+          {
+            "result_id": "902eaa8a-2e6b-4db1-9a39-c9511d30ab7e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "你好，我是地球联邦军隆德·贝尔部队的\n阿姆罗大尉，我正在全宇宙搜捕一个\n会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？\n通缉萝莉控",
+            "searchable_text": "你好，我是地球联邦军隆德·贝尔部队的\n阿姆罗大尉，我正在全宇宙搜捕一个\n会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？\n通缉萝莉控",
+            "confidence": 0.9838945269584656,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  204,
+                  50,
+                  1343,
+                  126
+                ],
+                "confidence": 0.969659686088562,
+                "text": "你好，我是地球联邦军隆德·贝尔部队的"
+              },
+              {
+                "bbox": [
+                  250,
+                  116,
+                  1297,
+                  189
+                ],
+                "confidence": 0.9974399209022522,
+                "text": "阿姆罗大尉，我正在全宇宙搜捕一个"
+              },
+              {
+                "bbox": [
+                  33,
+                  177,
+                  1491,
+                  257
+                ],
+                "confidence": 0.9753619432449341,
+                "text": "会管小萝莉叫妈妈的家伙，请问你有着到这个人吗？"
+              },
+              {
+                "bbox": [
+                  224,
+                  1479,
+                  668,
+                  1561
+                ],
+                "confidence": 0.993116557598114,
+                "text": "通缉萝莉控"
+              }
+            ],
+            "bbox_json": [
+              [
+                204,
+                50,
+                1343,
+                126
+              ],
+              [
+                250,
+                116,
+                1297,
+                189
+              ],
+              [
+                33,
+                177,
+                1491,
+                257
+              ],
+              [
+                224,
+                1479,
+                668,
+                1561
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:26+00:00"
+          }
+        ],
+        "meme_009.png": [
+          {
+            "result_id": "0c14dd19-5e99-4860-9211-1aafbdda8095",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "果然这才是正版商品该有的品质啊",
+            "searchable_text": "果然这才是正版商品该有的品质啊",
+            "confidence": 0.9993237257003784,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  193,
+                  629,
+                  759,
+                  678
+                ],
+                "confidence": 0.9993237257003784,
+                "text": "果然这才是正版商品该有的品质啊"
+              }
+            ],
+            "bbox_json": [
+              [
+                193,
+                629,
+                759,
+                678
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:15+00:00"
+          }
+        ],
+        "meme_013.png": [
+          {
+            "result_id": "cfaff947-3f27-4df1-8a5b-591dad9d530e",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:09+00:00"
+          }
+        ],
+        "meme_006.jpeg": [
+          {
+            "result_id": "34f15cac-768e-4527-8ca0-003509b43b8d",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "回转之舟\n十关注\n26-1-3100:12 来REDMITu.. 已编辑\n发布于广东\n乐观主义者\n悲观主义者\n事儿？啥事儿？\n人类的智慧\n地球无法容纳\n没人告诉我发生了\n一定能跨越\n人类的自私\n什么事儿啊！\n这一切",
+            "searchable_text": "回转之舟\n十关注\n26-1-3100:12 来REDMITu.. 已编辑\n发布于广东\n乐观主义者\n悲观主义者\n事儿？啥事儿？\n人类的智慧\n地球无法容纳\n没人告诉我发生了\n一定能跨越\n人类的自私\n什么事儿啊！\n这一切",
+            "confidence": 0.9102413733800252,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  162,
+                  35,
+                  324,
+                  83
+                ],
+                "confidence": 0.954739511013031,
+                "text": "回转之舟"
+              },
+              {
+                "bbox": [
+                  807,
+                  43,
+                  913,
+                  86
+                ],
+                "confidence": 0.9474309086799622,
+                "text": "十关注"
+              },
+              {
+                "bbox": [
+                  161,
+                  93,
+                  754,
+                  134
+                ],
+                "confidence": 0.9348205327987671,
+                "text": "26-1-3100:12 来REDMITu.. 已编辑"
+              },
+              {
+                "bbox": [
+                  163,
+                  140,
+                  336,
+                  179
+                ],
+                "confidence": 0.9972112774848938,
+                "text": "发布于广东"
+              },
+              {
+                "bbox": [
+                  98,
+                  305,
+                  297,
+                  356
+                ],
+                "confidence": 0.9990628957748413,
+                "text": "乐观主义者"
+              },
+              {
+                "bbox": [
+                  373,
+                  304,
+                  572,
+                  355
+                ],
+                "confidence": 0.9983016848564148,
+                "text": "悲观主义者"
+              },
+              {
+                "bbox": [
+                  608,
+                  432,
+                  870,
+                  477
+                ],
+                "confidence": 0.9357670545578003,
+                "text": "事儿？啥事儿？"
+              },
+              {
+                "bbox": [
+                  73,
+                  453,
+                  248,
+                  494
+                ],
+                "confidence": 0.9927452206611633,
+                "text": "人类的智慧"
+              },
+              {
+                "bbox": [
+                  321,
+                  467,
+                  545,
+                  508
+                ],
+                "confidence": 0.9995279908180237,
+                "text": "地球无法容纳"
+              },
+              {
+                "bbox": [
+                  591,
+                  477,
+                  890,
+                  521
+                ],
+                "confidence": 0.998805046081543,
+                "text": "没人告诉我发生了"
+              },
+              {
+                "bbox": [
+                  72,
+                  495,
+                  248,
+                  537
+                ],
+                "confidence": 0.99200838804245,
+                "text": "一定能跨越"
+              },
+              {
+                "bbox": [
+                  340,
+                  508,
+                  529,
+                  553
+                ],
+                "confidence": 0.917333722114563,
+                "text": "人类的自私"
+              },
+              {
+                "bbox": [
+                  624,
+                  521,
+                  856,
+                  569
+                ],
+                "confidence": 0.9929905533790588,
+                "text": "什么事儿啊！"
+              },
+              {
+                "bbox": [
+                  102,
+                  539,
+                  215,
+                  583
+                ],
+                "confidence": 0.9928758144378662,
+                "text": "这一切"
+              },
+              {
+                "bbox": [
+                  784,
+                  990,
+                  844,
+                  1053
+                ],
+                "confidence": 0.0,
+                "text": ""
+              }
+            ],
+            "bbox_json": [
+              [
+                162,
+                35,
+                324,
+                83
+              ],
+              [
+                807,
+                43,
+                913,
+                86
+              ],
+              [
+                161,
+                93,
+                754,
+                134
+              ],
+              [
+                163,
+                140,
+                336,
+                179
+              ],
+              [
+                98,
+                305,
+                297,
+                356
+              ],
+              [
+                373,
+                304,
+                572,
+                355
+              ],
+              [
+                608,
+                432,
+                870,
+                477
+              ],
+              [
+                73,
+                453,
+                248,
+                494
+              ],
+              [
+                321,
+                467,
+                545,
+                508
+              ],
+              [
+                591,
+                477,
+                890,
+                521
+              ],
+              [
+                72,
+                495,
+                248,
+                537
+              ],
+              [
+                340,
+                508,
+                529,
+                553
+              ],
+              [
+                624,
+                521,
+                856,
+                569
+              ],
+              [
+                102,
+                539,
+                215,
+                583
+              ],
+              [
+                784,
+                990,
+                844,
+                1053
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:03+00:00"
+          }
+        ],
+        "meme_019.png": [
+          {
+            "result_id": "931b4136-9bfc-49ef-ac28-0c5241439474",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "",
+            "searchable_text": "",
+            "confidence": null,
+            "language_hint": "ch",
+            "line_json": [],
+            "bbox_json": [],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:03+00:00"
+          }
+        ],
+        "meme_016.jpg": [
+          {
+            "result_id": "e4e6cfae-2dcc-46e0-8447-f2713823c4b2",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "0上R\n\n性病\n閃光之凯薩衛\n神經病\nEM016A\n職業病\n中二病",
+            "searchable_text": "性病\n閃光之凯薩衛\n神經病\n職業病\n中二病",
+            "confidence": 0.6755502745509148,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  252,
+                  413,
+                  287,
+                  427
+                ],
+                "confidence": 0.41104087233543396,
+                "text": "0上R"
+              },
+              {
+                "bbox": [
+                  287,
+                  455,
+                  321,
+                  465
+                ],
+                "confidence": 0.0,
+                "text": ""
+              },
+              {
+                "bbox": [
+                  604,
+                  447,
+                  699,
+                  504
+                ],
+                "confidence": 0.9999601244926453,
+                "text": "性病"
+              },
+              {
+                "bbox": [
+                  39,
+                  475,
+                  197,
+                  519
+                ],
+                "confidence": 0.621293842792511,
+                "text": "閃光之凯薩衛"
+              },
+              {
+                "bbox": [
+                  438,
+                  483,
+                  574,
+                  534
+                ],
+                "confidence": 0.9985547065734863,
+                "text": "神經病"
+              },
+              {
+                "bbox": [
+                  88,
+                  513,
+                  155,
+                  535
+                ],
+                "confidence": 0.37979426980018616,
+                "text": "EM016A"
+              },
+              {
+                "bbox": [
+                  250,
+                  535,
+                  386,
+                  586
+                ],
+                "confidence": 0.9940087795257568,
+                "text": "職業病"
+              },
+              {
+                "bbox": [
+                  45,
+                  624,
+                  182,
+                  678
+                ],
+                "confidence": 0.9997496008872986,
+                "text": "中二病"
+              }
+            ],
+            "bbox_json": [
+              [
+                252,
+                413,
+                287,
+                427
+              ],
+              [
+                287,
+                455,
+                321,
+                465
+              ],
+              [
+                604,
+                447,
+                699,
+                504
+              ],
+              [
+                39,
+                475,
+                197,
+                519
+              ],
+              [
+                438,
+                483,
+                574,
+                534
+              ],
+              [
+                88,
+                513,
+                155,
+                535
+              ],
+              [
+                250,
+                535,
+                386,
+                586
+              ],
+              [
+                45,
+                624,
+                182,
+                678
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:20+00:00"
+          }
+        ],
+        "meme_002.png": [
+          {
+            "result_id": "8fed62cb-ee53-4511-9709-1af74e5be531",
+            "engine": "paddleocr-worker",
+            "engine_version": "3.6.0",
+            "model_key": "PP-OCRv5",
+            "text": "问了吗",
+            "searchable_text": "问了吗",
+            "confidence": 0.9997561573982239,
+            "language_hint": "ch",
+            "line_json": [
+              {
+                "bbox": [
+                  179,
+                  44,
+                  321,
+                  98
+                ],
+                "confidence": 0.9997561573982239,
+                "text": "问了吗"
+              }
+            ],
+            "bbox_json": [
+              [
+                179,
+                44,
+                321,
+                98
+              ]
+            ],
+            "preprocess_version": "original-still-v1",
+            "min_confidence": 0.5,
+            "created_at": "2026-11-11T05:08:11+00:00"
+          }
+        ]
+      },
+      "chinese_text_search": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "query": "问了吗",
+        "top_k": 10,
+        "results": [
+          {
+            "asset_id": "edb449c0-6d73-4b7d-9354-e80e51a4b4ab",
+            "score": 0.03278688524590164,
+            "library_path": "originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "library_url": "/media/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "thumbnail_url": "/media/thumbnails/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.jpg",
+            "media_type": "image/png",
+            "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual",
+              "ocr"
+            ],
+            "visual_score": 0.819722592830658,
+            "ocr_score": -3.650724330228237,
+            "ocr_confidence": 0.9997561573982239,
+            "ocr_snippet": "问了吗",
+            "ocr_text": "问了吗"
+          },
+          {
+            "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+            "score": 0.016129032258064516,
+            "library_path": "originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+            "library_url": "/media/originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+            "thumbnail_url": "/media/thumbnails/b8fefa1e-5c35-4358-864b-724e99cc484f.jpg",
+            "media_type": "image/png",
+            "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.7028377652168274
+          },
+          {
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "score": 0.015873015873015872,
+            "library_path": "originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+            "library_url": "/media/originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+            "thumbnail_url": "/media/thumbnails/9db660d3-901c-4fed-ad47-f7097754bc56.jpg",
+            "media_type": "image/png",
+            "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6905929446220398
+          },
+          {
+            "asset_id": "01f3449d-b844-4186-8534-1d92ee50a2b6",
+            "score": 0.015625,
+            "library_path": "originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "library_url": "/media/originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "thumbnail_url": "/media/thumbnails/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.683092474937439
+          },
+          {
+            "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+            "score": 0.015384615384615385,
+            "library_path": "originals/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.png",
+            "library_url": "/media/originals/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.png",
+            "thumbnail_url": "/media/thumbnails/4e3bd947-2c79-4c55-8bb4-74deaba1ca58.jpg",
+            "media_type": "image/png",
+            "content_hash": "97f7f90ff10303d3b63cd9ffa533a319bfbf8ec564182bd5f320a3a370844f29",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6789529323577881
+          },
+          {
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "score": 0.015151515151515152,
+            "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+            "media_type": "image/png",
+            "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6766723394393921
+          },
+          {
+            "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+            "score": 0.014925373134328358,
+            "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.674776554107666
+          },
+          {
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "score": 0.014705882352941176,
+            "library_path": "originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "library_url": "/media/originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "thumbnail_url": "/media/thumbnails/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6736166477203369
+          },
+          {
+            "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+            "score": 0.014492753623188406,
+            "library_path": "originals/1336c32c-89ac-436c-9ad1-151fe17538ee.png",
+            "library_url": "/media/originals/1336c32c-89ac-436c-9ad1-151fe17538ee.png",
+            "thumbnail_url": "/media/thumbnails/1336c32c-89ac-436c-9ad1-151fe17538ee.jpg",
+            "media_type": "image/png",
+            "content_hash": "001b93466c8472f6dbe5c5c99bbab14c718bba3ba25c6645c6a71a48be201a80",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6648271083831787
+          },
+          {
+            "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+            "score": 0.014285714285714285,
+            "library_path": "originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+            "library_url": "/media/originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+            "thumbnail_url": "/media/thumbnails/d0e1bd68-1419-412f-a221-efdb1968501a.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+            "matched_source_ref": "original",
+            "match_sources": [
+              "visual"
+            ],
+            "visual_score": 0.6591615080833435
+          }
+        ]
+      },
+      "image_searches": [
+        {
+          "seconds": 0.077,
+          "response": {
+            "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+            "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+            "query_path": "/private/tmp/MemeSort OCR data 中文/api-library/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+            "query_media_type": "image/png",
+            "top_k": 10,
+            "results": [
+              {
+                "asset_id": "edb449c0-6d73-4b7d-9354-e80e51a4b4ab",
+                "score": 1.0,
+                "library_path": "originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+                "library_url": "/media/originals/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.png",
+                "thumbnail_url": "/media/thumbnails/edb449c0-6d73-4b7d-9354-e80e51a4b4ab.jpg",
+                "media_type": "image/png",
+                "content_hash": "07afe969bb98d0b2ab3664f2da9f85b958678945df00c770cfd5a99cf7ca51b4",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+                "score": 0.7730183005332947,
+                "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+                "media_type": "image/png",
+                "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+                "score": 0.747115969657898,
+                "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+                "score": 0.7443326711654663,
+                "library_path": "originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "library_url": "/media/originals/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "thumbnail_url": "/media/thumbnails/1d61d70a-bace-445a-86b4-4082d95cdde2.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "5e0675cffd45da638e7c95dbf6cbfc792ea03ff4997ab939232c9c875c4aeb83",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+                "score": 0.741570234298706,
+                "library_path": "originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+                "library_url": "/media/originals/d0e1bd68-1419-412f-a221-efdb1968501a.jpeg",
+                "thumbnail_url": "/media/thumbnails/d0e1bd68-1419-412f-a221-efdb1968501a.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "19d3d9e101487ff62778ec1222f27ee4d2a9f2b39921c339ae387116e51e8f29",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+                "score": 0.7397446036338806,
+                "library_path": "originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+                "library_url": "/media/originals/9db660d3-901c-4fed-ad47-f7097754bc56.png",
+                "thumbnail_url": "/media/thumbnails/9db660d3-901c-4fed-ad47-f7097754bc56.jpg",
+                "media_type": "image/png",
+                "content_hash": "32cb076c0237ce9f8054b5c24e421907cc6d95fd14738485ee4c2ce4c0ba802a",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "01f3449d-b844-4186-8534-1d92ee50a2b6",
+                "score": 0.7376224398612976,
+                "library_path": "originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "library_url": "/media/originals/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "thumbnail_url": "/media/thumbnails/01f3449d-b844-4186-8534-1d92ee50a2b6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "08e127a7f673719fdfe27640666ed0f4a59790eaf796cca91cc8e4be36615839",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+                "score": 0.7316566705703735,
+                "library_path": "originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+                "library_url": "/media/originals/b8fefa1e-5c35-4358-864b-724e99cc484f.png",
+                "thumbnail_url": "/media/thumbnails/b8fefa1e-5c35-4358-864b-724e99cc484f.jpg",
+                "media_type": "image/png",
+                "content_hash": "e0b3e5e26846f3fc9eb328c30d18eace252802bb87bf89f617ddf46ca037df9b",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "da33b1a0-d0cb-4587-8406-dc4f8d9be1da",
+                "score": 0.7254719138145447,
+                "library_path": "originals/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.gif",
+                "library_url": "/media/originals/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.gif",
+                "thumbnail_url": "/media/thumbnails/da33b1a0-d0cb-4587-8406-dc4f8d9be1da.jpg",
+                "media_type": "image/gif",
+                "content_hash": "e69e66752fdf87444930f07cb79f395033ce9ffc730198847bcc29442dd50a60",
+                "matched_source_ref": "frame:23"
+              },
+              {
+                "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+                "score": 0.7239457368850708,
+                "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+                "media_type": "image/png",
+                "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+                "matched_source_ref": "original"
+              }
+            ]
+          }
+        },
+        {
+          "seconds": 0.32,
+          "response": {
+            "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+            "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+            "query_path": "/private/tmp/MemeSort OCR data 中文/api-library/originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+            "query_media_type": "image/gif",
+            "top_k": 10,
+            "results": [
+              {
+                "asset_id": "0bd008a1-4017-415f-ae35-f53de6659215",
+                "score": 1.0,
+                "library_path": "originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+                "library_url": "/media/originals/0bd008a1-4017-415f-ae35-f53de6659215.gif",
+                "thumbnail_url": "/media/thumbnails/0bd008a1-4017-415f-ae35-f53de6659215.jpg",
+                "media_type": "image/gif",
+                "content_hash": "8e1dbde5a420666639e3bd1e9468080a99a4868ffcd7026fcec97a6a5f2e6992",
+                "matched_source_ref": "frame:22"
+              },
+              {
+                "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+                "score": 0.788669228553772,
+                "library_path": "originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+                "library_url": "/media/originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+                "thumbnail_url": "/media/thumbnails/83784c69-686d-46d1-bdb5-cbdcc59d71b7.jpg",
+                "media_type": "image/gif",
+                "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "36924c39-ef41-46cc-aed4-eecad7908d15",
+                "score": 0.7767481207847595,
+                "library_path": "originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+                "library_url": "/media/originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+                "thumbnail_url": "/media/thumbnails/36924c39-ef41-46cc-aed4-eecad7908d15.jpg",
+                "media_type": "image/gif",
+                "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "849dc9c9-370c-4a91-9155-582ea086b1b7",
+                "score": 0.7576718330383301,
+                "library_path": "originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+                "library_url": "/media/originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+                "thumbnail_url": "/media/thumbnails/849dc9c9-370c-4a91-9155-582ea086b1b7.jpg",
+                "media_type": "image/gif",
+                "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+                "matched_source_ref": "frame:134"
+              },
+              {
+                "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+                "score": 0.7463154792785645,
+                "library_path": "originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+                "library_url": "/media/originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+                "thumbnail_url": "/media/thumbnails/32e30047-5dfa-4076-8f24-60ef342437c9.jpg",
+                "media_type": "image/gif",
+                "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+                "matched_source_ref": "frame:0"
+              },
+              {
+                "asset_id": "3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0",
+                "score": 0.7321337461471558,
+                "library_path": "originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+                "library_url": "/media/originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+                "thumbnail_url": "/media/thumbnails/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.jpg",
+                "media_type": "image/gif",
+                "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+                "matched_source_ref": "frame:223"
+              },
+              {
+                "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+                "score": 0.7067242860794067,
+                "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+                "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+                "media_type": "image/png",
+                "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+                "score": 0.7057316899299622,
+                "library_path": "originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+                "library_url": "/media/originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+                "thumbnail_url": "/media/thumbnails/37a13b88-fb8f-4906-ad46-f37284cf1a60.jpg",
+                "media_type": "image/png",
+                "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+                "score": 0.6965203881263733,
+                "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+                "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+                "media_type": "image/png",
+                "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+                "matched_source_ref": "original"
+              },
+              {
+                "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+                "score": 0.693297803401947,
+                "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+                "media_type": "image/jpeg",
+                "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+                "matched_source_ref": "original"
+              }
+            ]
+          }
+        }
+      ],
+      "find_similar": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "asset_id": "0bd008a1-4017-415f-ae35-f53de6659215",
+        "top_k": 10,
+        "results": [
+          {
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "score": 0.788669228553772,
+            "library_path": "originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+            "library_url": "/media/originals/83784c69-686d-46d1-bdb5-cbdcc59d71b7.gif",
+            "thumbnail_url": "/media/thumbnails/83784c69-686d-46d1-bdb5-cbdcc59d71b7.jpg",
+            "media_type": "image/gif",
+            "content_hash": "d5ebfc03fffc5d17cd52c5ce55fe3ba3d69015f057e7294d653cecf347cd803e",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "36924c39-ef41-46cc-aed4-eecad7908d15",
+            "score": 0.7767481207847595,
+            "library_path": "originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+            "library_url": "/media/originals/36924c39-ef41-46cc-aed4-eecad7908d15.gif",
+            "thumbnail_url": "/media/thumbnails/36924c39-ef41-46cc-aed4-eecad7908d15.jpg",
+            "media_type": "image/gif",
+            "content_hash": "0ecce51f3e52826a6209ea9fb3afcae6cd714add2079f5194869b52c9aa1f62c",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "849dc9c9-370c-4a91-9155-582ea086b1b7",
+            "score": 0.7576718330383301,
+            "library_path": "originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+            "library_url": "/media/originals/849dc9c9-370c-4a91-9155-582ea086b1b7.gif",
+            "thumbnail_url": "/media/thumbnails/849dc9c9-370c-4a91-9155-582ea086b1b7.jpg",
+            "media_type": "image/gif",
+            "content_hash": "c9c80a2adee3a6c279876b32ac8ddea80d51fc403311bc9d3aec7dc629396e22",
+            "matched_source_ref": "frame:134"
+          },
+          {
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "score": 0.7463154792785645,
+            "library_path": "originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+            "library_url": "/media/originals/32e30047-5dfa-4076-8f24-60ef342437c9.gif",
+            "thumbnail_url": "/media/thumbnails/32e30047-5dfa-4076-8f24-60ef342437c9.jpg",
+            "media_type": "image/gif",
+            "content_hash": "f1f845decb913da6dba5d169705dd4400ab38b8572eed311c33cfd4712d900fc",
+            "matched_source_ref": "frame:0"
+          },
+          {
+            "asset_id": "3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0",
+            "score": 0.7321337461471558,
+            "library_path": "originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+            "library_url": "/media/originals/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.gif",
+            "thumbnail_url": "/media/thumbnails/3cbc7324-ebbe-46d4-8e8f-0481f20dd4f0.jpg",
+            "media_type": "image/gif",
+            "content_hash": "3e7495d1873bca9a3e1ca773f368c32b4e1b644e06439401586bc655ecf10a49",
+            "matched_source_ref": "frame:223"
+          },
+          {
+            "asset_id": "8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0",
+            "score": 0.7067242860794067,
+            "library_path": "originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+            "library_url": "/media/originals/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.png",
+            "thumbnail_url": "/media/thumbnails/8b1fb9f9-b14d-4caf-8a4f-cd5cfeb6fee0.jpg",
+            "media_type": "image/png",
+            "content_hash": "56698d7a105f70da59ba08ff8e883a1917c5ce2d06bf78b11a9c7cc4080c3e4c",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+            "score": 0.7057316899299622,
+            "library_path": "originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+            "library_url": "/media/originals/37a13b88-fb8f-4906-ad46-f37284cf1a60.png",
+            "thumbnail_url": "/media/thumbnails/37a13b88-fb8f-4906-ad46-f37284cf1a60.jpg",
+            "media_type": "image/png",
+            "content_hash": "6a2bdb6a66df35285ea80283ce72603e2c84a1a42bb8ad3fcaf74f2531ca1a64",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "score": 0.6965203881263733,
+            "library_path": "originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "library_url": "/media/originals/8dc6a812-7692-4375-8b77-410e0aeb918b.png",
+            "thumbnail_url": "/media/thumbnails/8dc6a812-7692-4375-8b77-410e0aeb918b.jpg",
+            "media_type": "image/png",
+            "content_hash": "acfffc9d8489046e76332e31e1a43b2110acf18fb765abf9e20bfddbfeb7c13d",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6",
+            "score": 0.693297803401947,
+            "library_path": "originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "library_url": "/media/originals/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "thumbnail_url": "/media/thumbnails/6f9cc5f9-a6aa-4fe9-860b-618aab7afaa6.jpg",
+            "media_type": "image/jpeg",
+            "content_hash": "63d9aaf99447db05dc9f2dbd43f679ce51ca6254a2ddb3b376bb38d95486800e",
+            "matched_source_ref": "original"
+          },
+          {
+            "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+            "score": 0.6929624080657959,
+            "library_path": "originals/c26c1f75-eb58-44db-919d-d8fa6a644aa1.png",
+            "library_url": "/media/originals/c26c1f75-eb58-44db-919d-d8fa6a644aa1.png",
+            "thumbnail_url": "/media/thumbnails/c26c1f75-eb58-44db-919d-d8fa6a644aa1.jpg",
+            "media_type": "image/png",
+            "content_hash": "b37f1b64b732e73bc019036c7730f8b9d8a2f33abda45e9b8ae42f730d01f902",
+            "matched_source_ref": "original"
+          }
+        ]
+      },
+      "final_status": {
+        "library_root": "/private/tmp/MemeSort OCR data 中文/api-library",
+        "active_recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+        "active_recipe_label": "embeddinggemma-2-GGUF:Q8_0 / 768d / metal",
+        "asset_counts": {
+          "indexed": 30
+        },
+        "job_counts": {
+          "completed": 80
+        },
+        "total_assets": 30,
+        "total_jobs": 80,
+        "recent_jobs": [
+          {
+            "job_id": "3277ede8-816a-4205-bc51-62730a7cb2c3",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "1bede519-b721-4c83-9c93-ac37aa9a0ad2",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "83784c69-686d-46d1-bdb5-cbdcc59d71b7",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:58+00:00",
+            "updated_at": "2026-11-11T05:08:27+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ffb68414-ebed-4a49-9573-f623698be3b4",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "8dc6a812-7692-4375-8b77-410e0aeb918b",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "f7844453-9f1f-4e2d-850c-c3a966bab73d",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "738746a2-765a-4006-9c83-9d288eedca8f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "efabed71-d36e-49e3-9368-5d92acc64474",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "d0e1bd68-1419-412f-a221-efdb1968501a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "ebf44cd2-2949-484f-ba1f-6a170c361a01",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "4a1a4110-c34a-4efd-90bd-69bfef9b337a",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e93dd6a6-7c2b-4022-867b-f7fbf29dcf5b",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "c26c1f75-eb58-44db-919d-d8fa6a644aa1",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e8afa00e-560c-481a-ac18-3e55d875a581",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:26+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "e6a852ce-1c17-485b-88b4-ad603d8d0a84",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "dac5d834-0e79-4f8e-9fdd-8f05a8d048c1",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "37a13b88-fb8f-4906-ad46-f37284cf1a60",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "da3b8ae1-2cfe-4f67-ad62-194e1d8250ef",
+            "type": "ocr_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:25+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d908d333-62f7-43f8-8612-275dda303368",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "9db660d3-901c-4fed-ad47-f7097754bc56",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d381660c-39e4-4768-9399-a288b1b78f0a",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "b8fefa1e-5c35-4358-864b-724e99cc484f",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d246666e-c41a-4e80-9767-b64a75024737",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "2d19b479-56a3-44f6-bd0a-4f7a88a3b45e",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:23+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "d11d7f21-b2ca-4696-a3c5-57964aa0d1b0",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1d61d70a-bace-445a-86b4-4082d95cdde2",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "cb32ed33-fbfb-4809-b708-3e682fbe9659",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "32e30047-5dfa-4076-8f24-60ef342437c9",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c9ee2e1b-e568-4e4e-8c38-8863c651c2fa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "0ef6e0e8-8384-4b7a-bdbe-707f408b5233",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c895c7c4-96cc-429c-a7aa-8bc1bc732b02",
+            "type": "generate_thumbnail",
+            "status": "completed",
+            "asset_id": "e4b14d78-f8a8-4d02-aadd-84af7c2b83ad",
+            "recipe_id": null,
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c7bfe1ad-a4ce-4c47-bd35-1248d4a02c5e",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "1336c32c-89ac-436c-9ad1-151fe17538ee",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          },
+          {
+            "job_id": "c4b89d94-6f24-4105-823e-640a4587fefa",
+            "type": "embed_asset",
+            "status": "completed",
+            "asset_id": "4e3bd947-2c79-4c55-8bb4-74deaba1ca58",
+            "recipe_id": "3cb50334-567c-4989-afe5-6b7ac5463c3a",
+            "attempt_count": 1,
+            "created_at": "2026-11-11T05:07:57+00:00",
+            "updated_at": "2026-11-11T05:08:22+00:00",
+            "error_code": null,
+            "error_detail": null
+          }
+        ]
+      },
+      "clean_exit": true
+    }
+  ]
+}
