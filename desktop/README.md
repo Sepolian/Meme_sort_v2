@@ -55,8 +55,8 @@ is `desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/MemeSort.
 (or the same target-relative path under `CARGO_TARGET_DIR`). Normal app launch
 uses the bundled Python environment and needs no developer Python, Node, or Rust.
 Models, the semantic runtime, and the separate CPU OCR environment are installed
-by the one-time setup script in the later runtime/setup tickets; they are not
-included in this app bundle. Before setup, the Library opens with **Setup needed**.
+by the bundled one-time `setup_macos_runtime.sh` script; they are not included
+in this app bundle. Before setup, the Library opens with **Setup needed**.
 
 Mac data stays under `~/Library/Application Support/MemeSort`: `library/`,
 `models/`, and `runtime/`; lifecycle and Library logs are in `library/logs/`.

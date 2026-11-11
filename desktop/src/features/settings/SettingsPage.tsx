@@ -45,7 +45,7 @@ function InstallationSection() {
       <p>Install the pinned MTL0 Metal runtime on native Apple Silicon using the bundled script:</p>
       <p className="mono">bash "/Applications/MemeSort.app/Contents/Resources/sidecar/setup_macos_runtime.sh"</p>
       <p>Use the actual app location if you moved or renamed it. The bundled setup needs no developer Python, Node, or Rust.</p>
-      <p>The script verifies uv, llama.cpp, and both GGUF artifacts before activation. CPU OCR is provisioned separately until the OCR setup extension is included.</p>
+      <p>The script downloads and verifies uv, llama.cpp, and both GGUF artifacts before activation. The same script provisions and verifies the isolated CPU OCR environment.</p>
       <p>Your Library, models, runtime, and logs live under ~/Library/Application Support/MemeSort. Moving or replacing the app preserves this data.</p>
       <p>Rerun the script to repair setup. Use --offline with verified downloads in the data root’s runtime/downloads directory; --downloads can point to an existing download cache.</p>
       <p>Library browsing and import remain available before setup. Semantic search and indexing require a successful text and image health check in this app session; saved health or setup activation cannot authorize a new session.</p>
