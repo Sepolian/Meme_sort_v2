@@ -146,7 +146,8 @@
     "git_diff_check": "passed",
     "tdd": "target loading, native admission, setup, interrupted recovery, Settings guidance, and managed startup diagnostics observed red before green",
     "windows_original_target_objects": "exactly equal to 8e44c66",
-    "windows_exact_identity_snapshot": "recipe ID/fingerprint, runtime fingerprint and complete activation record unchanged"
+    "windows_exact_identity_snapshot": "recipe ID/fingerprint, runtime fingerprint and complete activation record unchanged",
+    "final_integration": "Mac-only CSP/config changes were integrated; all four tauri-window-config tests passed. The prior frontend suite had 343 passing tests."
   },
   "frozen_final_code_rerun": {
     "semantic_installed": true,
@@ -298,8 +299,8 @@
     }
   ],
   "implementation_commit": "99aee92ab7f4e070ed5f39ca92073a06070bd3b6",
-  "integration_merge_commit": "f5b42ae8ac9273e4c03033fae26117ce1cf10b92",
-  "integration_tip": "68fffce",
+  "integration_merge_commit": "861b39fdb18cfd86c85c6fcda2d32806d5a7bd48",
+  "integration_tip": "87383d9",
   "changed_files": [
     "GLOSSARY.md",
     "README.md",
