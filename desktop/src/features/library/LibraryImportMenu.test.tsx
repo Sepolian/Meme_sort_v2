@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import type { MemeSortClient } from "../../api/tauri-client";
 import type { ImportTask } from "../../api/types";
@@ -59,4 +59,23 @@ it("shows a backend import conflict when the local batch snapshot is stale", asy
   fireEvent.click(screen.getByRole("menuitem", { name: "Choose Files" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("An Import Batch is already running or paused.");
+});
+
+it.each(["Files", "Folder"])("returns focus after cancelling Choose %s without starting an import", async (kind) => {
+  const client = {
+    chooseLibraryFiles: vi.fn(async () => null),
+    chooseLibraryFolder: vi.fn(async () => null),
+    startLibraryImport: vi.fn(),
+  } as unknown as MemeSortClient;
+  renderMenu(client);
+  const choice = screen.getByRole("menuitem", { name: `Choose ${kind}` });
+  choice.focus();
+  fireEvent.click(choice);
+
+  const trigger = screen.getByRole("button", { name: "Import" });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(client.startLibraryImport).not.toHaveBeenCalled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });

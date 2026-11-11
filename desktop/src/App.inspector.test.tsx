@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import { createUnconfiguredClient } from "./api/test-client";
@@ -191,6 +191,23 @@ function deferred<T>() {
 }
 
 describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reveals Pending Assets and recorded Source Paths with Finder labels on Mac", async () => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+    const client = makeClient();
+    renderApp(`/?asset=${FIRST_ASSET}`, client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reveal in Finder" }));
+    expect(await screen.findByText("Opened the managed Library Copy in Finder.")).toBeInTheDocument();
+    expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "managed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reveal Source" }));
+    expect(await screen.findByText("Opened the recorded Source Path in Finder.")).toBeInTheDocument();
+    expect(client.revealAsset).toHaveBeenCalledWith(FIRST_ASSET, "source", "C:/Source/first.gif");
+    expect(screen.queryByText(/Explorer/)).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();

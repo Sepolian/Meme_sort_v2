@@ -1,3 +1,4 @@
+import { revealLabel } from "../../api/platform";
 import archivePrints from "../../assets/archive-prints.svg?no-inline";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -630,7 +631,7 @@ export function AssetsWorkspace({
       }
     } catch (error) {
       if (isCurrentCopyOperation(operation)) {
-        setCopyNotice({ kind: "error", text: tauriErrorDetail(error, "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.") });
+        setCopyNotice({ kind: "error", text: tauriErrorDetail(error, `Clipboard Copy failed. The Library was not modified. Use ${revealLabel()} to locate the file.`) });
       }
     } finally {
       finishCopyOperation(operation);

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from urllib.parse import urlencode
 from unittest.mock import patch
+
+from PIL import Image
 
 from memesort_worker.app_commands import (
     ImportRequestError,
@@ -310,6 +314,69 @@ class ImportStartEndpointTests(unittest.TestCase):
 
     def _session_headers(self):
         return {"HTTP_COOKIE": f"{SESSION_COOKIE_NAME}={SESSION_TOKEN}"}
+
+    def test_pending_still_and_gif_media_survive_source_removal_and_relaunch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="MemeSort 数据 ") as temp_dir:
+            root = Path(temp_dir)
+            still = root / "静止 image.png"
+            gif = root / "动画 image.gif"
+            Image.new("RGB", (8, 6), "red").save(still)
+            Image.new("RGB", (8, 6), "red").save(
+                gif, save_all=True, append_images=[Image.new("RGB", (8, 6), "blue")],
+                duration=100, loop=0,
+            )
+            expected = {"image/png": still.read_bytes(), "image/gif": gif.read_bytes()}
+            app = self._make_app(temp_dir)
+            try:
+                status, _body = _call(
+                    app, "POST", "/api/import/start", headers=self._session_headers(),
+                    body=json.dumps({
+                        "sources": [str(still), str(gif)], "indexing_policy": "if-ready",
+                    }).encode("utf-8"),
+                )
+                self.assertEqual("202 Accepted", status)
+                deadline = time.monotonic() + 5
+                while True:
+                    status, body = _call(app, "GET", "/api/import", headers=self._session_headers())
+                    snapshot = json.loads(body)
+                    if not snapshot["running"]:
+                        break
+                    self.assertLess(time.monotonic(), deadline, snapshot)
+                    time.sleep(0.01)
+                self.assertEqual("completed", snapshot["status"])
+                self.assertEqual(2, snapshot["succeeded_files"])
+                self.assertEqual(2, snapshot["new_assets"])
+            finally:
+                app.shutdown()
+
+            still.unlink()
+            gif.unlink()
+            app = self._make_app(temp_dir)
+            try:
+                status, body = _call(app, "GET", "/api/assets", headers=self._session_headers())
+                self.assertEqual("200 OK", status)
+                assets = json.loads(body)["assets"]
+                self.assertEqual(2, len(assets))
+                for asset in assets:
+                    self.assertEqual("pending_initial_index", asset["status"])
+                    status, headers, body = wsgi_request.call(
+                        app, "GET", asset["library_url"], headers=self._session_headers(), host=ORIGIN_HOST,
+                    )
+                    self.assertEqual("200 OK", status)
+                    self.assertEqual(asset["media_type"], headers["Content-Type"])
+                    self.assertEqual(expected[asset["media_type"]], body)
+                    self.assertIsNone(asset["thumbnail_url"])
+                    status, _headers, body = wsgi_request.call(
+                        app, "GET", "/api/asset-detail", query=urlencode({"asset_id": asset["asset_id"]}),
+                        headers=self._session_headers(), host=ORIGIN_HOST,
+                    )
+                    self.assertEqual("200 OK", status)
+                    detail = json.loads(body)["asset"]
+                    self.assertEqual(asset["asset_id"], detail["asset_id"])
+                    self.assertEqual(1, len(detail["source_records"]))
+                    self.assertFalse(Path(detail["source_records"][0]["source_path"]).exists())
+            finally:
+                app.shutdown()
 
     def test_canonical_start_route_forwards_sources_and_policy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

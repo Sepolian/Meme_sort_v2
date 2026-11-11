@@ -185,7 +185,7 @@ pub struct LibrarySelectionSummary {
 }
 
 #[tauri::command]
-pub fn choose_search_image(
+pub async fn choose_search_image(
     app: AppHandle,
     request_id: String,
 ) -> Result<NativePathSelection, SidecarError> {
@@ -213,7 +213,7 @@ pub fn choose_search_image(
 }
 
 #[tauri::command]
-pub fn choose_library_files(
+pub async fn choose_library_files(
     app: AppHandle,
 ) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
     let paths = app
@@ -243,7 +243,7 @@ pub fn choose_library_files(
 }
 
 #[tauri::command]
-pub fn choose_library_folder(
+pub async fn choose_library_folder(
     app: AppHandle,
 ) -> Result<Option<LibrarySelectionSummary>, SidecarError> {
     let path = app
