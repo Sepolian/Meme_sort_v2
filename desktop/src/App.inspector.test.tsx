@@ -266,6 +266,26 @@ describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
     expect(close).toHaveFocus();
   });
 
+  it("keeps the wall mounted and scrolled when opening and escaping the inspector", async () => {
+    const { container } = renderApp("/", makeClient());
+    const opener = await screen.findByRole("button", { name: "Open first.gif" });
+    const wall = screen.getByRole("region", { name: "Assets" });
+    const scroller = container.querySelector(".library-content") as HTMLElement;
+    scroller.scrollTop = 260;
+    fireEvent.scroll(scroller);
+    opener.focus({ preventScroll: true });
+    fireEvent.click(opener);
+    await screen.findByRole("button", { name: "Close inspector" });
+    expect(screen.getByRole("region", { name: "Assets" })).toBe(wall);
+    expect(scroller.scrollTop).toBe(260);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Assets" })).toBe(wall);
+    expect(scroller.scrollTop).toBe(260);
+  });
+
   it("returns focus to the Asset trigger after closing the inspector", async () => {
     const client = makeClient();
     renderApp("/", client);

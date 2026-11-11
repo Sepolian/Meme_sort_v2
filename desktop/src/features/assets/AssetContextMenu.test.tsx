@@ -63,6 +63,62 @@ describe("Asset right-click copy menu (ticket 01 follow-up)", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it("navigates card actions with Arrow keys, Home, and End", () => {
+    render(
+      <AssetWaterfall
+        assets={[makeGif(GIF_ID)]}
+        density="comfortable"
+        checkedIds={new Set()}
+        onOpenAsset={() => undefined}
+        onToggleChecked={() => undefined}
+        onCopyImage={() => undefined}
+        onCopyOriginal={() => undefined}
+        columnCount={1}
+      />,
+    );
+    const opener = screen.getByRole("button", { name: `Open ${GIF_ID}.gif` });
+    opener.focus();
+    fireEvent.contextMenu(opener, { button: 0, clientX: 0, clientY: 0 });
+
+    const image = screen.getByRole("menuitem", { name: "Copy image" });
+    const original = screen.getByRole("menuitem", { name: "Copy original file" });
+    expect(image).toHaveFocus();
+    fireEvent.keyDown(image, { key: "ArrowDown" });
+    expect(original).toHaveFocus();
+    fireEvent.keyDown(original, { key: "ArrowDown" });
+    expect(image).toHaveFocus();
+    fireEvent.keyDown(image, { key: "ArrowUp" });
+    expect(original).toHaveFocus();
+    fireEvent.keyDown(original, { key: "Home" });
+    expect(image).toHaveFocus();
+    fireEvent.keyDown(image, { key: "End" });
+    expect(original).toHaveFocus();
+  });
+
+  it("anchors a keyboard-opened menu beside the focused card control", () => {
+    render(
+      <AssetWaterfall
+        assets={[makeGif(GIF_ID)]}
+        density="comfortable"
+        checkedIds={new Set()}
+        onOpenAsset={() => undefined}
+        onToggleChecked={() => undefined}
+        onCopyImage={() => undefined}
+        onCopyOriginal={() => undefined}
+        columnCount={1}
+      />,
+    );
+    const opener = screen.getByRole("button", { name: `Open ${GIF_ID}.gif` });
+    vi.spyOn(opener, "getBoundingClientRect").mockReturnValue({
+      left: 280, bottom: 340,
+    } as DOMRect);
+    opener.focus();
+    fireEvent.contextMenu(opener, { button: 0, clientX: 0, clientY: 0 });
+
+    expect(screen.getByRole("menu")).toHaveStyle({ left: "280px", top: "340px" });
+    expect(screen.getByRole("menuitem", { name: "Copy image" })).toHaveFocus();
+  });
+
   it("suppresses pointer and keyboard context menus while both copy actions are busy", () => {
     const onCopyImage = vi.fn();
     const onCopyOriginal = vi.fn();

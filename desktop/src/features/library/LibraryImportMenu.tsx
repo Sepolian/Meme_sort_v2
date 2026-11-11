@@ -1,7 +1,12 @@
+import { handleMenuKeyDown } from "../../components/menuKeyboard";
 import { Icon } from "../../components/Icon";
 import { useEffect, useRef, useState } from "react";
 import type { MemeSortClient } from "../../api/tauri-client";
-import { useEscapeSurface } from "../../components/useEscapeSurface";
+import {
+  isRestorableFocusTarget,
+  scheduleFocusRestoration,
+  useEscapeSurface,
+} from "../../components/useEscapeSurface";
 import { tauriErrorDetail } from "../../api/tauri-error";
 import { useImportBatch } from "../import/ImportBatchContext";
 import { importBatchBlockedMessage, importWorkIsActive } from "../import/import-status";
@@ -33,6 +38,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
   const [libraryNotice, setLibraryNotice] = useState<LibraryNotice | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const importTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const focusLastRef = useRef(false);
 
   const controlsDisabled = libraryBusy !== null || importBatch.starting || importWorkActive;
 
@@ -43,6 +49,8 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
 
   useEffect(() => {
     if (!menuOpen) return;
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)');
+    items?.[focusLastRef.current ? items.length - 1 : 0]?.focus({ preventScroll: true });
     const closeOnOutsidePointer = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
@@ -88,7 +96,11 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
       });
     } finally {
       setLibraryBusy(null);
-      requestAnimationFrame(() => importTriggerRef.current?.focus({ preventScroll: true }));
+      scheduleFocusRestoration(() => {
+        if (document.activeElement !== document.body) return;
+        const trigger = importTriggerRef.current;
+        if (isRestorableFocusTarget(trigger)) trigger.focus({ preventScroll: true });
+      });
     }
   };
 
@@ -107,7 +119,16 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
         aria-expanded={menuOpen}
         aria-controls="library-import-menu-list"
         disabled={controlsDisabled}
-        onClick={() => setMenuOpen((open) => !open)}
+        onClick={() => {
+          focusLastRef.current = false;
+          setMenuOpen((open) => !open);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          focusLastRef.current = event.key === "ArrowUp";
+          setMenuOpen(true);
+        }}
       >
         <Icon name="plus" /> Import
       </button>
@@ -117,11 +138,13 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
           id="library-import-menu-list"
           role="menu"
           aria-label="Import options"
+          onKeyDown={handleMenuKeyDown}
         >
           <button
             className="button button-secondary library-import-option"
             type="button"
             role="menuitem"
+            tabIndex={-1}
             disabled={controlsDisabled}
             onClick={() => closeAndStartSelection("files")}
           >
@@ -131,6 +154,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
             className="button button-secondary library-import-option"
             type="button"
             role="menuitem"
+            tabIndex={-1}
             disabled={controlsDisabled}
             onClick={() => closeAndStartSelection("folder")}
           >

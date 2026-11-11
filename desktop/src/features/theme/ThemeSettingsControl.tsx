@@ -9,7 +9,7 @@ const OPTIONS: ReadonlyArray<{
   {
     value: "system",
     label: "System",
-    detail: "Follows Windows appearance and updates without reload.",
+    detail: "Follows system appearance and updates without reload.",
   },
   { value: "dark", label: "Dark", detail: "Always use the dark appearance." },
   { value: "light", label: "Light", detail: "Always use the light appearance." },

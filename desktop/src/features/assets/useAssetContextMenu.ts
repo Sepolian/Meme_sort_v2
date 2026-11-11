@@ -29,7 +29,13 @@ export function useAssetContextMenu(disabled = false) {
       (document.activeElement instanceof HTMLElement && document.activeElement !== document.body
         ? document.activeElement
         : null);
-    setAnchor({ x: event.clientX, y: event.clientY, opener });
+    const keyboard = event.button === 0 && event.clientX === 0 && event.clientY === 0;
+    const rect = (event.target instanceof HTMLElement ? event.target : target).getBoundingClientRect();
+    setAnchor({
+      x: keyboard ? rect.left : event.clientX,
+      y: keyboard ? rect.bottom : event.clientY,
+      opener,
+    });
   }, [disabled]);
   const closeMenu = useCallback(() => {
     setAnchor(null);

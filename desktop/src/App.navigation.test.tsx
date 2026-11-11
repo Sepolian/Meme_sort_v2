@@ -73,6 +73,65 @@ describe("application shell navigation", () => {
     expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
   });
 
+  it.each([
+    ["System", "Dark"],
+    ["Dark", "Light"],
+    ["Light", "System"],
+  ])("shares and restores %s / %s appearance choices from both controls", async (sidebarChoice, settingsChoice) => {
+    const first = renderApp("/settings");
+    await screen.findByRole("heading", { name: "Settings" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Theme preference" }), {
+      target: { value: sidebarChoice.toLowerCase() },
+    });
+    expect(screen.getByRole("radio", { name: new RegExp(`^${sidebarChoice}`) })).toBeChecked();
+    first.unmount();
+
+    const second = renderApp("/settings");
+    await screen.findByRole("heading", { name: "Settings" });
+    expect(screen.getByRole("combobox", { name: "Theme preference" })).toHaveValue(sidebarChoice.toLowerCase());
+    expect(screen.getByRole("radio", { name: new RegExp(`^${sidebarChoice}`) })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: new RegExp(`^${settingsChoice}`) }));
+    expect(screen.getByRole("combobox", { name: "Theme preference" })).toHaveValue(settingsChoice.toLowerCase());
+    second.unmount();
+
+    renderApp("/settings");
+    await screen.findByRole("heading", { name: "Settings" });
+    expect(screen.getByRole("combobox", { name: "Theme preference" })).toHaveValue(settingsChoice.toLowerCase());
+    expect(screen.getByRole("radio", { name: new RegExp(`^${settingsChoice}`) })).toBeChecked();
+    expect(screen.getByText("Follows system appearance and updates without reload.")).toBeInTheDocument();
+  });
+
+  it("shows a real empty Library without sample Assets", async () => {
+    const state = await createClient().getAppState();
+    const client = {
+      ...createClient(),
+      getAppState: async () => ({ ...state, library_status: { total_assets: 0, job_counts: { pending: 0 } } }),
+      getAssets: async () => ({
+        library_root: "C:/Library",
+        active_recipe_id: "recipe-1",
+        active_recipe_label: "Test recipe",
+        assets: [],
+      }),
+    };
+    renderApp("/", client);
+    expect(await screen.findByRole("heading", { name: "Drag image files or folders here" })).toBeInTheDocument();
+    expect(screen.getByText("Or use Import above to choose files or a folder.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Open / })).not.toBeInTheDocument();
+  });
+
+  it("keeps a disconnected sidecar distinct from an empty Library and retries", async () => {
+    const state = await createClient().getAppState();
+    const client = {
+      ...createClient(),
+      getAppState: vi.fn().mockRejectedValueOnce(new Error("disconnected")).mockResolvedValue(state),
+    };
+    renderApp("/", client);
+    expect(await screen.findByRole("heading", { name: "MemeSort cannot reach its sidecar" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Drag image files or folders here" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry connection" }));
+    expect(await screen.findByRole("heading", { name: "Your library" })).toBeInTheDocument();
+  });
+
   it("passes only native file and folder selection IDs to Import Batch", async () => {
     const filesClient = {
       ...createClient(),

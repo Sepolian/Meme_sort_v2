@@ -1,3 +1,4 @@
+import { handleMenuKeyDown } from "../../components/menuKeyboard";
 import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -101,6 +102,7 @@ export function AssetContextMenu({
       role="menu"
       aria-label={menuLabel}
       style={{ left, top }}
+      onKeyDown={handleMenuKeyDown}
     >
       {items.map((item, index) => (
         <button
@@ -109,6 +111,7 @@ export function AssetContextMenu({
           className="asset-context-menu-item"
           type="button"
           role="menuitem"
+          tabIndex={-1}
           disabled={item.disabled}
           onClick={() => {
             if (item.disabled) return;
