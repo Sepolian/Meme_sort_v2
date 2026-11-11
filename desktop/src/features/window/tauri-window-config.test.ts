@@ -25,6 +25,15 @@ describe("native window configuration", () => {
     }));
   });
 
+  it("keeps the Windows media CSP and limits the Mac override to its exact native media origin", () => {
+    type Config = { app: { security?: { csp: string } } };
+    const windows = readProjectJson<Config>("../../../src-tauri/tauri.conf.json");
+    const mac = readProjectJson<Config>("../../../src-tauri/tauri.macos.conf.json");
+
+    expect(windows.app.security?.csp).toBe("default-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420; img-src 'self' http://memesort-media.localhost; media-src 'self' http://memesort-media.localhost; style-src 'self' 'unsafe-inline'");
+    expect(mac.app.security?.csp).toBe("default-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420; img-src 'self' memesort-media://localhost; media-src 'self' memesort-media://localhost; style-src 'self' 'unsafe-inline'");
+  });
+
   it("uses normal native decorations for the Mac app", () => {
     const config = readProjectJson<{ app: { windows: Array<{ label: string; decorations: boolean }> }; bundle: { active: boolean; targets: string[]; resources: Record<string, string> } }>("../../../src-tauri/tauri.macos.conf.json");
     expect(config.app.windows).toContainEqual(expect.objectContaining({ label: "main", decorations: true }));
