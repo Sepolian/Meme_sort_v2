@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
-import { fileManagerName, revealLabel } from "../../api/platform";
+import { fileManagerName, isMacOS, revealLabel } from "../../api/platform";
 import { mediaUrl } from "../../api/media-url";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useEscapeSurface } from "../../components/useEscapeSurface";
@@ -132,12 +132,16 @@ export function AssetInspector({
     setCopyState({ kind: "pending" });
     try {
       // ID-only: Rust resolves the managed Library Copy; no WebView paths.
-      await client.copyAssetToClipboard(assetId);
+      if (isMacOS()) {
+        await client.copyOriginalFiles([assetId]);
+      } else {
+        await client.copyAssetToClipboard(assetId);
+      }
       // Success keeps the inspector open and preserves selection (no onClose,
       // no selection mutation here).
       setCopyState({
         kind: "success",
-        message: "Copied to clipboard. Paste into QQ or WeChat.",
+        message: isMacOS() ? "Original file reference copied." : "Copied to clipboard. Paste into QQ or WeChat.",
       });
     } catch (error) {
       setCopyState({
@@ -476,8 +480,8 @@ function InspectorBody({
             opener={previewMenu.anchor.opener}
             menuLabel={`Actions for ${name}`}
             items={[
-              { label: "Copy image", onSelect: onCopy, disabled: copyBusy },
-              { label: "Copy original file", onSelect: onCopyOriginal, disabled: copyBusy },
+              ...(!isMacOS() ? [{ label: "Copy image", onSelect: onCopy, disabled: copyBusy }] : []),
+              { label: "Copy original file", onSelect: isMacOS() ? onCopy : onCopyOriginal, disabled: copyBusy },
             ]}
             onClose={previewMenu.closeMenu}
           />
@@ -489,7 +493,7 @@ function InspectorBody({
             disabled={copyBusy}
             onClick={onCopy}
           >
-            {copyPending ? "Copying…" : "Copy image"}
+            {copyPending ? "Copying…" : isMacOS() ? "Copy original file" : "Copy image"}
           </button>
           <button
             className="button button-secondary"
@@ -668,14 +672,16 @@ function InspectorBody({
         {overflowOpen ? (
           <>
             <div className="inspector-overflow-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                disabled={copyBusy}
-                onClick={onCopyOriginal}
-              >
-                {copyOriginalPending ? "Copying…" : "Copy original file"}
-              </button>
+              {!isMacOS() ? (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  disabled={copyBusy}
+                  onClick={onCopyOriginal}
+                >
+                  {copyOriginalPending ? "Copying…" : "Copy original file"}
+                </button>
+              ) : null}
               <button
                 className="button button-danger"
                 type="button"

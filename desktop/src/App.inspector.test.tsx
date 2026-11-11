@@ -193,6 +193,47 @@ function deferred<T>() {
 describe("Inspector and Clipboard Copy UI (ticket 10)", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it.each([[FIRST_ASSET, "first.gif"], [SECOND_ASSET, "indexed.png"]])(
+    "Mac inspector copies %s as an original file without pixel or chat promises",
+    async (assetId, name) => {
+      vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+      const client = makeClient();
+      renderApp(`/?asset=${assetId}`, client);
+      const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+      const copy = await within(inspector).findByRole("button", { name: "Copy original file" });
+      expect(within(inspector).queryByRole("button", { name: "Copy image" })).not.toBeInTheDocument();
+      fireEvent.click(copy);
+      expect(await within(inspector).findByText("Original file reference copied.")).toBeInTheDocument();
+      expect(client.copyOriginalFiles).toHaveBeenCalledWith([assetId]);
+      expect(client.copyAssetToClipboard).not.toHaveBeenCalled();
+      fireEvent.click(within(inspector).getByRole("button", { name: "More actions" }));
+      expect(within(inspector).getAllByRole("button", { name: "Copy original file" })).toHaveLength(1);
+      fireEvent.contextMenu(within(inspector).getByAltText(`${name} preview`));
+      expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
+      await waitFor(() => expect(client.copyOriginalFiles).toHaveBeenCalledTimes(2));
+      expect(inspector).not.toHaveTextContent(/QQ|WeChat|Copy image/);
+    },
+  );
+
+  it.each([[FIRST_ASSET, "first.gif"], [SECOND_ASSET, "indexed.png"]])(
+    "Mac wall context menu copies %s using only an original-file action",
+    async (assetId, name) => {
+      vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+      const client = makeClient();
+      const { container } = renderApp("/", client);
+      await screen.findByRole("button", { name: `Open ${name}` });
+      const card = container.querySelector(`article[data-asset-id="${assetId}"]`)!;
+      fireEvent.contextMenu(card, { button: 2, clientX: 100, clientY: 100 });
+      expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy original file" }));
+      expect(await screen.findByText("Original file reference copied.")).toBeInTheDocument();
+      expect(client.copyOriginalFiles).toHaveBeenCalledWith([assetId]);
+      expect(client.copyAssetToClipboard).not.toHaveBeenCalled();
+      expect(screen.queryByText(/QQ|WeChat|Copy image/)).not.toBeInTheDocument();
+    },
+  );
+
   it("reveals Pending Assets and recorded Source Paths with Finder labels on Mac", async () => {
     vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
     const client = makeClient();

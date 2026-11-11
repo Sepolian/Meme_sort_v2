@@ -1,10 +1,8 @@
-//! Native Windows Clipboard Copy payloads and adapter.
+//! Native Clipboard Copy payloads and adapters.
 //!
-//! Pure payload construction lives here so it stays deterministic and
-//! unit-testable on any platform. Only [`WindowsClipboardWriter`] touches the
-//! Win32 clipboard, and every caller must finish validation, managed-path
-//! resolution, file reads, decoding, and allocation before invoking it. That
-//! ordering keeps preflight failures from emptying a user's clipboard.
+//! Callers finish validation, managed-path resolution, and file preflight
+//! before invoking a writer. Each writer allocates its platform representations
+//! before opening or clearing the clipboard, preserving it on preflight failure.
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -22,6 +20,7 @@ const BITMAPV5HEADER_SIZE: u32 = 124;
 const BI_BITFIELDS: u32 = 3;
 const LCS_SRGB: u32 = 0x7352_4742;
 const LCS_GM_IMAGES: u32 = 4;
+#[cfg(any(windows, test))]
 const DROPFILES_HEADER_SIZE: u32 = 20;
 
 /// How a managed Library Copy must be published on the clipboard.
@@ -44,17 +43,17 @@ pub(crate) struct StaticImagePayload {
     pub height: u32,
 }
 
-/// A fully allocated clipboard payload. Callers build this before opening the
-/// OS clipboard so failures never mutate clipboard state.
+/// Preflighted image data or managed paths; writers encode file references
+/// before touching clipboard contents.
 pub(crate) enum ClipboardPayload {
     StaticImage(StaticImagePayload),
-    FileDrop { hdrop: Vec<u8> },
+    FileDrop { paths: Vec<PathBuf> },
 }
 
-/// Win32 clipboard access behind a trait so tests can substitute a fake.
+/// Native clipboard access behind a trait so tests can substitute a fake.
 pub(crate) trait ClipboardWriter {
     fn write_static_image(&self, dibv5: &[u8], png: &[u8]) -> Result<(), SidecarError>;
-    fn write_file_drop(&self, hdrop: &[u8]) -> Result<(), SidecarError>;
+    fn write_files(&self, paths: &[PathBuf]) -> Result<(), SidecarError>;
 }
 
 // Both native copy commands share this gate. It covers preflight and
@@ -154,7 +153,7 @@ pub(crate) fn write_payload_via(
 ) -> Result<(), SidecarError> {
     match payload {
         ClipboardPayload::StaticImage(image) => writer.write_static_image(&image.dibv5, &image.png),
-        ClipboardPayload::FileDrop { hdrop } => writer.write_file_drop(hdrop),
+        ClipboardPayload::FileDrop { paths } => writer.write_files(paths),
     }
 }
 
@@ -295,7 +294,7 @@ fn encode_hdrop_path(path: &Path) -> Result<Vec<u16>, SidecarError> {
     Ok(wide)
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), test))]
 fn encode_hdrop_path(path: &Path) -> Result<Vec<u16>, SidecarError> {
     let text = path.to_str().ok_or_else(|| {
         SidecarError::new("Clipboard Copy file paths must be encodable file references.")
@@ -313,6 +312,7 @@ fn encode_hdrop_path(path: &Path) -> Result<Vec<u16>, SidecarError> {
 /// The result is a `DROPFILES` header (`pFiles = 20`, Unicode) followed by
 /// NUL-terminated UTF-16 paths and a final NUL. Callers resolve and validate
 /// every path before calling; this function only encodes.
+#[cfg(any(windows, test))]
 pub(crate) fn build_hdrop_payload(paths: &[PathBuf]) -> Result<Vec<u8>, SidecarError> {
     if paths.is_empty() {
         return Err(SidecarError::new(
@@ -398,7 +398,8 @@ pub(crate) fn parse_hdrop_payload(payload: &[u8]) -> Result<Vec<PathBuf>, Sideca
 /// The real Win32 clipboard. Owns every OS call; all payload bytes arrive
 /// fully allocated so preflight stays outside the clipboard open window.
 #[cfg(windows)]
-pub(crate) struct WindowsClipboardWriter;
+#[derive(Default)]
+pub(crate) struct WindowsClipboardWriter {}
 
 /// Stable Win32 clipboard format identifiers. windows-sys does not export the
 /// `CF_*` constants, so the documented values are pinned here.
@@ -422,8 +423,9 @@ impl ClipboardWriter for WindowsClipboardWriter {
         write_clipboard_formats(&[(CF_DIBV5, dibv5), (png_format, png)])
     }
 
-    fn write_file_drop(&self, hdrop: &[u8]) -> Result<(), SidecarError> {
-        write_clipboard_formats(&[(CF_HDROP, hdrop)])
+    fn write_files(&self, paths: &[PathBuf]) -> Result<(), SidecarError> {
+        let hdrop = build_hdrop_payload(paths)?;
+        write_clipboard_formats(&[(CF_HDROP, &hdrop)])
     }
 }
 
@@ -500,19 +502,83 @@ fn write_clipboard_formats(formats: &[(u32, &[u8])]) -> Result<(), SidecarError>
     }
 }
 
-/// Non-Windows builds compile but refuse at runtime; Clipboard Copy is a
-/// Windows-first contract and the sidecar only ships on Windows.
-#[cfg(not(windows))]
-pub(crate) struct WindowsClipboardWriter;
+/// Unsupported platforms compile but refuse clipboard writes at runtime.
+#[cfg(not(any(windows, target_os = "macos")))]
+#[derive(Default)]
+pub(crate) struct WindowsClipboardWriter {}
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl ClipboardWriter for WindowsClipboardWriter {
     fn write_static_image(&self, _dibv5: &[u8], _png: &[u8]) -> Result<(), SidecarError> {
-        Err(SidecarError::new("Clipboard Copy requires Windows."))
+        Err(SidecarError::new(
+            "Clipboard Copy requires Windows or macOS.",
+        ))
     }
 
-    fn write_file_drop(&self, _hdrop: &[u8]) -> Result<(), SidecarError> {
-        Err(SidecarError::new("Clipboard Copy requires Windows."))
+    fn write_files(&self, _paths: &[PathBuf]) -> Result<(), SidecarError> {
+        Err(SidecarError::new(
+            "Clipboard Copy requires Windows or macOS.",
+        ))
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) struct MacClipboardWriter {
+    pasteboard: objc2::rc::Retained<objc2_app_kit::NSPasteboard>,
+}
+
+#[cfg(target_os = "macos")]
+impl Default for MacClipboardWriter {
+    fn default() -> Self {
+        Self {
+            pasteboard: objc2_app_kit::NSPasteboard::generalPasteboard(),
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl ClipboardWriter for MacClipboardWriter {
+    fn write_static_image(&self, _dibv5: &[u8], _png: &[u8]) -> Result<(), SidecarError> {
+        Err(SidecarError::new(
+            "macOS Clipboard Copy supports original files only.",
+        ))
+    }
+
+    fn write_files(&self, paths: &[PathBuf]) -> Result<(), SidecarError> {
+        use objc2::runtime::ProtocolObject;
+        use objc2_app_kit::NSPasteboardWriting;
+        use objc2_foundation::{NSArray, NSURL};
+
+        objc2::rc::autoreleasepool(|_| {
+            if paths.is_empty() {
+                return Err(SidecarError::new(
+                    "Clipboard Copy requires at least one file.",
+                ));
+            }
+            let urls: Vec<objc2::rc::Retained<ProtocolObject<dyn NSPasteboardWriting>>> = paths
+                .iter()
+                .map(|path| {
+                    if !path.is_absolute() {
+                        return Err(SidecarError::new(
+                            "Clipboard Copy requires absolute file references.",
+                        ));
+                    }
+                    NSURL::from_file_path(path)
+                        .map(ProtocolObject::from_retained)
+                        .ok_or_else(|| {
+                            SidecarError::new("Clipboard Copy could not encode a file reference.")
+                        })
+                })
+                .collect::<Result<_, _>>()?;
+            let objects = NSArray::from_retained_slice(&urls);
+            self.pasteboard.clearContents();
+            if !self.pasteboard.writeObjects(&objects) {
+                return Err(SidecarError::new(
+                    "Clipboard Copy could not publish original file references to the macOS pasteboard. Try copying again.",
+                ));
+            }
+            Ok(())
+        })
     }
 }
 
@@ -559,16 +625,12 @@ impl ClipboardWriter for FakeClipboardWriter {
         Ok(())
     }
 
-    fn write_file_drop(&self, hdrop: &[u8]) -> Result<(), SidecarError> {
-        if hdrop.is_empty() {
-            return Err(SidecarError::new("Clipboard Copy payload is empty."));
-        }
+    fn write_files(&self, paths: &[PathBuf]) -> Result<(), SidecarError> {
+        let hdrop = build_hdrop_payload(paths)?;
         self.writes
             .lock()
             .expect("fake clipboard lock")
-            .push(FakeClipboardWrite::FileDrop {
-                hdrop: hdrop.to_vec(),
-            });
+            .push(FakeClipboardWrite::FileDrop { hdrop });
         Ok(())
     }
 }
@@ -580,6 +642,58 @@ mod tests {
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::sync::{mpsc, Arc};
     use std::thread;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "Requires a logged-in macOS pasteboard service; uses a private pasteboard."]
+    fn native_mac_file_references_round_trip() {
+        use objc2_app_kit::NSPasteboard;
+        use objc2_foundation::{NSString, NSURL};
+
+        objc2::rc::autoreleasepool(|_| {
+            let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+            let writer = MacClipboardWriter {
+                pasteboard: pasteboard.clone(),
+            };
+            let paths = [
+                PathBuf::from("/tmp/Library Copy/原图 #1.png"),
+                PathBuf::from("/tmp/Library Copy/动画 %2.gif"),
+            ];
+            for selection in [&paths[..1], &paths[1..], &paths[..]] {
+                writer
+                    .write_files(selection)
+                    .expect("native file publication should succeed");
+                let items = pasteboard
+                    .pasteboardItems()
+                    .expect("native pasteboard items");
+                let actual: Vec<PathBuf> = items
+                    .iter()
+                    .map(|item| {
+                        let value = item
+                            .stringForType(&NSString::from_str("public.file-url"))
+                            .expect("each item must be a file URL");
+                        let url = NSURL::URLWithString(&value).expect("valid native URL");
+                        assert!(url.isFileURL());
+                        url.to_file_path().expect("native file path")
+                    })
+                    .collect();
+                assert_eq!(actual, selection);
+            }
+            let count = pasteboard.changeCount();
+            for invalid in [
+                vec![],
+                vec![PathBuf::from("relative.png")],
+                vec![paths[0].clone(), PathBuf::from("/tmp/bad\0.png")],
+            ] {
+                assert!(writer.write_files(&invalid).is_err());
+                assert_eq!(
+                    pasteboard.changeCount(),
+                    count,
+                    "all URLs must prepare before clearing"
+                );
+            }
+        });
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum ClipboardEvent {
@@ -609,7 +723,7 @@ mod tests {
             Ok(())
         }
 
-        fn write_file_drop(&self, _hdrop: &[u8]) -> Result<(), SidecarError> {
+        fn write_files(&self, _paths: &[PathBuf]) -> Result<(), SidecarError> {
             self.record(ClipboardEvent::Wrote(self.label));
             Ok(())
         }
@@ -638,7 +752,9 @@ mod tests {
     }
 
     fn test_file_payload() -> ClipboardPayload {
-        ClipboardPayload::FileDrop { hdrop: vec![1] }
+        ClipboardPayload::FileDrop {
+            paths: vec![PathBuf::from("/managed/still.png")],
+        }
     }
 
     fn solid_rgba(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { App } from "./App";
 import { createUnconfiguredClient } from "./api/test-client";
@@ -192,6 +192,7 @@ async function selectByLabel(label: string) {
 }
 
 describe("Selection toolbar and batch actions (ticket 17)", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -216,7 +217,8 @@ describe("Selection toolbar and batch actions (ticket 17)", () => {
     expect(screen.getByText("1 selected")).toBeInTheDocument();
   });
 
-  it("copies multiple selections once with stable visual-order IDs (ID-only, never paths)", async () => {
+  it.each(["Win32", "MacIntel"])("copies multiple selections in visual order using only IDs on %s", async (platform) => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue(platform);
     const client = makeClient();
     renderApp("/", client);
 

@@ -17,9 +17,13 @@ use std::os::windows::process::CommandExt;
 use serde::{Deserialize, Serialize};
 use tauri::{http, AppHandle, Manager};
 
+#[cfg(target_os = "macos")]
+use crate::clipboard::MacClipboardWriter as NativeClipboardWriter;
+#[cfg(not(target_os = "macos"))]
+use crate::clipboard::WindowsClipboardWriter as NativeClipboardWriter;
 use crate::clipboard::{
-    build_hdrop_payload, build_static_image_payload, classify_managed_path, with_clipboard_write,
-    write_payload_via, ClipboardPayload, ClipboardWriter, ManagedCopyKind, WindowsClipboardWriter,
+    build_static_image_payload, classify_managed_path, with_clipboard_write, write_payload_via,
+    ClipboardPayload, ClipboardWriter, ManagedCopyKind,
 };
 use crate::native_selection::{
     validate_library_paths, LibraryImportSelection, SearchImageSelection, SearchImageSelectionEntry,
@@ -524,8 +528,8 @@ impl SidecarSession {
 
     /// Build the primary Clipboard Copy payload for one Asset.
     ///
-    /// Static stills decode to `CF_DIBV5` plus a registered PNG payload. GIFs
-    /// keep their encoded animation via a single-file `CF_HDROP` reference.
+    /// Mac always publishes the original file. Windows stills decode to
+    /// `CF_DIBV5` plus PNG; GIFs retain animation via a file reference.
     /// Every fallible step finishes before the caller touches the OS
     /// clipboard.
     fn prepare_copy_asset_for_connection(
@@ -534,19 +538,22 @@ impl SidecarSession {
         asset_id: &str,
     ) -> Result<ClipboardPayload, SidecarError> {
         let path = Self::resolve_checked_managed_file(origin, session_cookie, asset_id)?;
-        match classify_managed_path(&path)? {
+        let kind = classify_managed_path(&path)?;
+        if cfg!(target_os = "macos") {
+            return Ok(ClipboardPayload::FileDrop { paths: vec![path] });
+        }
+        match kind {
             ManagedCopyKind::StaticImage => {
                 let bytes = fs::read(&path).map_err(|error| {
                     SidecarError::new(format!("Could not read the Asset Library Copy: {error}"))
                 })?;
                 build_static_image_payload(&bytes).map(ClipboardPayload::StaticImage)
             }
-            ManagedCopyKind::GifFile => build_hdrop_payload(std::slice::from_ref(&path))
-                .map(|hdrop| ClipboardPayload::FileDrop { hdrop }),
+            ManagedCopyKind::GifFile => Ok(ClipboardPayload::FileDrop { paths: vec![path] }),
         }
     }
 
-    /// Build one multi-file `CF_HDROP` payload. IDs are validated and
+    /// Prepare managed paths for native file references. IDs are validated and
     /// de-duplicated up front and the existing batch limit applies.
     fn prepare_copy_original_files_for_connection(
         origin: &str,
@@ -561,7 +568,7 @@ impl SidecarSession {
                 paths.push(path);
             }
         }
-        build_hdrop_payload(&paths).map(|hdrop| ClipboardPayload::FileDrop { hdrop })
+        Ok(ClipboardPayload::FileDrop { paths })
     }
 
     fn copy_asset_with_writer(
@@ -1276,10 +1283,9 @@ pub fn open_log_directory(app: AppHandle) -> Result<(), SidecarError> {
     open_directory_in_file_manager(&logs_directory)
 }
 
-/// Primary Clipboard Copy: stills publish `CF_DIBV5` plus a registered PNG
-/// payload; GIFs publish a `CF_HDROP` reference to the managed `.gif` Library
-/// Copy so the encoded animation is preserved. The WebView passes only the
-/// Asset ID; the resolved path never leaves Rust.
+/// Primary Clipboard Copy: Mac publishes original file references; Windows
+/// publishes still-image pixels or GIF file references. The WebView supplies
+/// only the Asset ID; the resolved managed path never leaves Rust.
 #[tauri::command]
 pub fn copy_asset_to_clipboard(app: AppHandle, asset_id: String) -> Result<(), SidecarError> {
     with_clipboard_write(|| {
@@ -1288,13 +1294,13 @@ pub fn copy_asset_to_clipboard(app: AppHandle, asset_id: String) -> Result<(), S
                 origin,
                 session_cookie,
                 &asset_id,
-                &WindowsClipboardWriter,
+                &NativeClipboardWriter::default(),
             )
         })
     })
 }
 
-/// Copy one multi-file `CF_HDROP` payload for the given Assets. IDs are
+/// Copy native file references for the given Assets. IDs are
 /// validated and de-duplicated under the existing batch limit.
 #[tauri::command]
 pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(), SidecarError> {
@@ -1304,7 +1310,7 @@ pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(),
                 origin,
                 session_cookie,
                 &asset_ids,
-                &WindowsClipboardWriter,
+                &NativeClipboardWriter::default(),
             )
         })
     })
@@ -3470,6 +3476,7 @@ mod tests {
 
     const CLIPBOARD_ASSET_A: &str = "123e4567-e89b-12d3-a456-426614174000";
     const CLIPBOARD_ASSET_B: &str = "223e4567-e89b-12d3-a456-426614174001";
+    const CLIPBOARD_ASSET_C: &str = "323e4567-e89b-12d3-a456-426614174002";
     const CLIPBOARD_COOKIE: &str = "memesort_session=test-token";
 
     fn clipboard_fixture_root(name: &str) -> PathBuf {
@@ -3641,6 +3648,31 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_primary_copy_publishes_the_managed_still_as_a_file_reference() {
+        let root = clipboard_fixture_root("memesort-mac-primary-copy");
+        let still = root.join("原图 with spaces.png");
+        write_clipboard_png(&still, 4, 3);
+        let original_bytes = fs::read(&still).unwrap();
+        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, still.clone())]);
+        let fake = FakeClipboardWriter::new();
+
+        SidecarSession::copy_asset_with_writer(&origin, CLIPBOARD_COOKIE, CLIPBOARD_ASSET_A, &fake)
+            .expect("Mac primary copy should succeed");
+        server.join().unwrap();
+        let writes = fake.writes.lock().unwrap();
+        assert_eq!(writes.len(), 1);
+        match &writes[0] {
+            FakeClipboardWrite::FileDrop { hdrop } => {
+                assert_eq!(parse_hdrop_payload(hdrop).unwrap(), vec![still.clone()]);
+            }
+            _ => panic!("Mac primary copy must publish a file reference, never pixels"),
+        }
+        assert_eq!(fs::read(&still).unwrap(), original_bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn resolves_a_static_copy_only_through_the_fixed_managed_route() {
         let root = clipboard_fixture_root("memesort-clipboard-managed-png");
@@ -3656,13 +3688,19 @@ mod tests {
         .expect("static copy should prepare");
         server.join().expect("test server should finish");
 
+        assert_eq!(
+            matches!(&payload, ClipboardPayload::FileDrop { .. }),
+            cfg!(target_os = "macos")
+        );
         match payload {
             ClipboardPayload::StaticImage(image) => {
                 assert_eq!((image.width, image.height), (4, 3));
                 assert_eq!(image.dibv5.len(), 124 + 4 * 3 * 4);
                 assert_eq!(&image.png[0..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
             }
-            ClipboardPayload::FileDrop { .. } => panic!("PNG must publish image payloads"),
+            ClipboardPayload::FileDrop { paths } => {
+                assert_eq!(paths, vec![still]);
+            }
         }
 
         fs::remove_dir_all(&root).expect("fixture should be removed");
@@ -3682,6 +3720,10 @@ mod tests {
 
         assert_eq!(fake.write_count(), 1);
         let writes = fake.writes.lock().expect("fake clipboard lock");
+        assert_eq!(
+            matches!(&writes[0], FakeClipboardWrite::FileDrop { .. }),
+            cfg!(target_os = "macos")
+        );
         match &writes[0] {
             FakeClipboardWrite::StaticImage { dibv5, png } => {
                 assert_eq!(dibv5.len(), 124 + 5 * 2 * 4);
@@ -3690,7 +3732,9 @@ mod tests {
                 let decoded = image::load_from_memory(png).expect("png round-trip");
                 assert_eq!((decoded.width(), decoded.height()), (5, 2));
             }
-            FakeClipboardWrite::FileDrop { .. } => panic!("BMP must publish image payloads"),
+            FakeClipboardWrite::FileDrop { hdrop } => {
+                assert_eq!(parse_hdrop_payload(hdrop).unwrap(), vec![still]);
+            }
         }
 
         fs::remove_dir_all(&root).expect("fixture should be removed");
@@ -3717,7 +3761,11 @@ mod tests {
 
         assert_eq!(fake.write_count(), 2);
         let writes = fake.writes.lock().expect("fake clipboard lock");
-        for (write, expected) in writes.iter().zip([(6, 4), (7, 5)]) {
+        for ((write, expected), path) in writes.iter().zip([(6, 4), (7, 5)]).zip([photo, sticker]) {
+            assert_eq!(
+                matches!(write, FakeClipboardWrite::FileDrop { .. }),
+                cfg!(target_os = "macos")
+            );
             match write {
                 FakeClipboardWrite::StaticImage { dibv5, png } => {
                     assert_eq!(dibv5.len() as u32, 124 + expected.0 * expected.1 * 4);
@@ -3735,8 +3783,8 @@ mod tests {
                         (expected.0, expected.1)
                     );
                 }
-                FakeClipboardWrite::FileDrop { .. } => {
-                    panic!("JPEG/WebP must publish image payloads")
+                FakeClipboardWrite::FileDrop { hdrop } => {
+                    assert_eq!(parse_hdrop_payload(hdrop).unwrap(), vec![path]);
                 }
             }
         }
@@ -3778,9 +3826,9 @@ mod tests {
     fn copies_single_and_multi_original_files_as_hdrop() {
         let root = clipboard_fixture_root("memesort-clipboard-original-files");
         let first = root.join("first.png");
-        let second = root.join("second.png");
+        let second = root.join("动画 with spaces.gif");
         write_clipboard_png(&first, 2, 2);
-        write_clipboard_png(&second, 2, 2);
+        write_clipboard_gif(&second);
 
         let (single_origin, single_server) =
             spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, first.clone())]);
@@ -3813,6 +3861,7 @@ mod tests {
         let (multi_origin, multi_server) = spawn_managed_copy_server(vec![
             (CLIPBOARD_ASSET_B, second.clone()),
             (CLIPBOARD_ASSET_A, first.clone()),
+            (CLIPBOARD_ASSET_C, first.clone()),
         ]);
         let fake = FakeClipboardWriter::new();
         SidecarSession::copy_original_files_with_writer(
@@ -3822,6 +3871,7 @@ mod tests {
                 CLIPBOARD_ASSET_B.to_owned(),
                 CLIPBOARD_ASSET_A.to_owned(),
                 CLIPBOARD_ASSET_B.to_uppercase(),
+                CLIPBOARD_ASSET_C.to_owned(),
             ],
             &fake,
         )
@@ -3885,18 +3935,21 @@ mod tests {
         .is_err());
         server.join().expect("test server should finish");
 
-        // Corrupt still bytes.
-        let corrupt = root.join("corrupt.png");
-        fs::write(&corrupt, b"not an image").expect("corrupt fixture should be written");
-        let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, corrupt)]);
-        assert!(SidecarSession::copy_asset_with_writer(
-            &origin,
-            CLIPBOARD_COOKIE,
-            CLIPBOARD_ASSET_A,
-            &fake,
-        )
-        .is_err());
-        server.join().expect("test server should finish");
+        // Windows image-pixel copy must decode; Mac preserves the original file.
+        if !cfg!(target_os = "macos") {
+            // Corrupt still bytes.
+            let corrupt = root.join("corrupt.png");
+            fs::write(&corrupt, b"not an image").expect("corrupt fixture should be written");
+            let (origin, server) = spawn_managed_copy_server(vec![(CLIPBOARD_ASSET_A, corrupt)]);
+            assert!(SidecarSession::copy_asset_with_writer(
+                &origin,
+                CLIPBOARD_COOKIE,
+                CLIPBOARD_ASSET_A,
+                &fake,
+            )
+            .is_err());
+            server.join().expect("test server should finish");
+        }
 
         // Unsupported media type.
         let notes = root.join("notes.tiff");

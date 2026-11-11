@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import type { AssetSummary } from "../../api/types";
+import { isMacOS } from "../../api/platform";
 import { mediaUrl } from "../../api/media-url";
 import { getAssetDisplayName, isGifAsset } from "../library/libraryOrdering";
 import type { LibraryDensity } from "../library/libraryUrlState";
@@ -285,11 +286,11 @@ function AssetWaterfallCard({
           opener={menu.anchor.opener}
           menuLabel={`Actions for ${name}`}
           items={[
-            {
+            ...(!isMacOS() ? [{
               label: "Copy image",
               onSelect: () => onCopyImage?.(asset.asset_id),
               disabled: copyBusy,
-            },
+            }] : []),
             {
               label: "Copy original file",
               onSelect: () => onCopyOriginal?.(asset.asset_id),
