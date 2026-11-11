@@ -88,6 +88,7 @@ export function LibraryImportMenu({ client }: LibraryImportMenuProps) {
       });
     } finally {
       setLibraryBusy(null);
+      requestAnimationFrame(() => importTriggerRef.current?.focus({ preventScroll: true }));
     }
   };
 

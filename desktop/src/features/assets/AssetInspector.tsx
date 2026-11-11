@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemeSortClient } from "../../api/tauri-client";
 import { tauriErrorDetail } from "../../api/tauri-error";
+import { fileManagerName, revealLabel } from "../../api/platform";
 import { mediaUrl } from "../../api/media-url";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useEscapeSurface } from "../../components/useEscapeSurface";
@@ -79,7 +80,7 @@ function InspectorSection({
  * - Only Asset IDs cross the client seam for clipboard/delete/reveal-managed;
  *   recorded Source Paths come from server data for reveal-source/remove-source.
  * - Copy failure never claims clipboard rollback; it keeps browsing usable and
- *   offers Reveal in Explorer.
+ *   offers file reveal.
  */
 export function AssetInspector({
   assetId,
@@ -143,7 +144,7 @@ export function AssetInspector({
         kind: "error",
         message: tauriErrorDetail(
           error,
-          "Clipboard Copy failed. The Library was not modified. Use Reveal in Explorer to locate the file.",
+          `Clipboard Copy failed. The Library was not modified. Use ${revealLabel()} to locate the file.`,
         ),
       });
     } finally {
@@ -181,14 +182,14 @@ export function AssetInspector({
       await client.revealAsset(assetId, "managed");
       setRevealState({
         kind: "success",
-        message: "Opened the managed Library Copy in File Explorer.",
+        message: `Opened the managed Library Copy in ${fileManagerName()}.`,
       });
     } catch (error) {
       setRevealState({
         kind: "error",
         message: tauriErrorDetail(
           error,
-          "The requested file could not be opened in File Explorer. The Library was not modified.",
+          `The requested file could not be opened in ${fileManagerName()}. The Library was not modified.`,
         ),
       });
     }
@@ -200,14 +201,14 @@ export function AssetInspector({
       await client.revealAsset(assetId, "source", sourcePath);
       setActionFeedback({
         kind: "success",
-        message: "Opened the recorded Source Path in File Explorer.",
+        message: `Opened the recorded Source Path in ${fileManagerName()}.`,
       });
     } catch (error) {
       setActionFeedback({
         kind: "error",
         message: tauriErrorDetail(
           error,
-          "The requested file could not be opened in File Explorer. The Library was not modified.",
+          `The requested file could not be opened in ${fileManagerName()}. The Library was not modified.`,
         ),
       });
     }
@@ -504,7 +505,7 @@ function InspectorBody({
             disabled={revealing}
             onClick={onRevealManaged}
           >
-            {revealing ? "Revealing…" : "Reveal in Explorer"}
+            {revealing ? "Revealing…" : revealLabel()}
           </button>
         </div>
         {copyState.kind === "success" ? (
@@ -531,7 +532,7 @@ function InspectorBody({
                 disabled={revealing}
                 onClick={onRevealManaged}
               >
-                Reveal in Explorer
+                {revealLabel()}
               </button>
             </div>
           </section>

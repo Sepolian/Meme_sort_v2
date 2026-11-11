@@ -1248,7 +1248,7 @@ pub fn clear_accepted_pairs(app: AppHandle) -> Result<serde_json::Value, Sidecar
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_asset(
     app: AppHandle,
     asset_id: String,
@@ -1265,15 +1265,15 @@ pub fn reveal_asset(
             source_path.as_deref(),
         )
     })?;
-    reveal_path_in_file_explorer(&resolved_path)
+    reveal_path_in_file_manager(&resolved_path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_log_directory(app: AppHandle) -> Result<(), SidecarError> {
     let logs_directory = with_sidecar_connection(&app, |origin, session_cookie| {
         SidecarSession::resolve_log_directory_for_connection(origin, session_cookie)
     })?;
-    open_directory_in_file_explorer(&logs_directory)
+    open_directory_in_file_manager(&logs_directory)
 }
 
 /// Primary Clipboard Copy: stills publish `CF_DIBV5` plus a registered PNG
@@ -1310,7 +1310,7 @@ pub fn copy_original_files(app: AppHandle, asset_ids: Vec<String>) -> Result<(),
     })
 }
 
-fn reveal_path_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
+fn reveal_path_in_file_manager(path: &Path) -> Result<(), SidecarError> {
     let metadata = fs::metadata(path).map_err(|error| {
         SidecarError::new(format!("Could not access the Asset reveal path: {error}"))
     })?;
@@ -1319,14 +1319,10 @@ fn reveal_path_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
             "The resolved Asset reveal path is not a file.",
         ));
     }
-    Command::new("explorer.exe")
-        .arg(format!("/select,{}", path.display()))
-        .spawn()
-        .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
-    Ok(())
+    open_in_file_manager(path, true)
 }
 
-fn open_directory_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
+fn open_directory_in_file_manager(path: &Path) -> Result<(), SidecarError> {
     let metadata = fs::metadata(path).map_err(|error| {
         SidecarError::new(format!("Could not access the log directory: {error}"))
     })?;
@@ -1335,8 +1331,54 @@ fn open_directory_in_file_explorer(path: &Path) -> Result<(), SidecarError> {
             "The resolved log path is not a directory.",
         ));
     }
-    Command::new("explorer.exe")
-        .arg(path)
+    open_in_file_manager(path, false)
+}
+
+fn file_manager_command(path: &Path, reveal: bool) -> Result<Command, SidecarError> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("/usr/bin/open");
+        if reveal {
+            command.arg("-R");
+        }
+        command.arg("--").arg(path);
+        Ok(command)
+    }
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("explorer.exe");
+        if reveal {
+            command.arg(format!("/select,{}", path.display()));
+        } else {
+            command.arg(path);
+        }
+        Ok(command)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let _ = (path, reveal);
+        Err(SidecarError::new(
+            "Native file reveal is not supported on this platform.",
+        ))
+    }
+}
+
+fn open_in_file_manager(path: &Path, reveal: bool) -> Result<(), SidecarError> {
+    let mut command = file_manager_command(path, reveal)?;
+    #[cfg(target_os = "macos")]
+    {
+        let output = command
+            .output()
+            .map_err(|error| SidecarError::new(format!("Could not open Finder: {error}")))?;
+        if !output.status.success() {
+            return Err(SidecarError::new(format!(
+                "Finder could not open the requested path: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    command
         .spawn()
         .map_err(|error| SidecarError::new(format!("Could not open File Explorer: {error}")))?;
     Ok(())
@@ -3100,6 +3142,64 @@ mod tests {
         server.join().expect("test server should finish");
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn finder_commands_select_assets_and_open_log_directories_without_shell_parsing() {
+        let path = Path::new("/tmp/Meme Sort 你好/-reaction.gif");
+        let reveal = super::file_manager_command(path, true).expect("Finder command");
+        assert_eq!(reveal.get_program(), "/usr/bin/open");
+        assert_eq!(
+            reveal.get_args().collect::<Vec<_>>(),
+            ["-R", "--", path.to_str().unwrap()]
+        );
+        let logs = super::file_manager_command(path, false).expect("Finder command");
+        assert_eq!(
+            logs.get_args().collect::<Vec<_>>(),
+            ["--", path.to_str().unwrap()]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explorer_commands_keep_windows_selection_and_directory_arguments() {
+        let path = Path::new("C:/Meme Sort/你好.gif");
+        let reveal = super::file_manager_command(path, true).expect("Explorer command");
+        assert_eq!(reveal.get_program(), "explorer.exe");
+        assert_eq!(
+            reveal.get_args().collect::<Vec<_>>(),
+            ["/select,C:/Meme Sort/你好.gif"]
+        );
+        let logs = super::file_manager_command(path, false).expect("Explorer command");
+        assert_eq!(logs.get_args().collect::<Vec<_>>(), [path.as_os_str()]);
+    }
+
+    #[test]
+    fn missing_or_wrong_kind_paths_fail_before_launching_a_file_manager() {
+        let root = std::env::temp_dir().join(format!("memesort-reveal-{}", std::process::id()));
+        fs::create_dir_all(&root).expect("fixture directory");
+        let file = root.join("asset.gif");
+        fs::write(&file, b"GIF89a").expect("fixture file");
+        assert!(super::reveal_path_in_file_manager(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("not a file"));
+        assert!(super::open_directory_in_file_manager(&file)
+            .unwrap_err()
+            .to_string()
+            .contains("not a directory"));
+        assert!(
+            super::reveal_path_in_file_manager(&root.join("missing.gif"))
+                .unwrap_err()
+                .to_string()
+                .contains("Could not access")
+        );
+        assert!(super::open_directory_in_file_manager(&root.join("missing"))
+            .unwrap_err()
+            .to_string()
+            .contains("Could not access"));
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
     #[test]
     fn forwards_binary_media_with_its_mime_type_through_the_managed_route() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
@@ -3121,7 +3221,7 @@ mod tests {
         });
         let request = Request::builder()
             .method(Method::GET)
-            .uri("/media/thumbnails/asset.gif")
+            .uri("memesort-media://localhost/media/thumbnails/asset.gif")
             .body(Vec::new())
             .expect("media request should build");
 
