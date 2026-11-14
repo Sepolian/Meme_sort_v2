@@ -1,7 +1,3 @@
-# Acceptance gate: run the automated suite (tests/, including
-# tests/test_library.py) on every push and pull request. Reuses the
-# documented test command from README.md:
-#   python -m unittest discover -s tests -p "test_*.py"
 name: tests
 
 on:
@@ -10,8 +6,11 @@ on:
 
 jobs:
   python:
-    # Windows matches the portable Tauri desktop platform contract.
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,7 +23,18 @@ jobs:
         run: uv run python -m unittest discover -s tests -p "test_*.py"
 
   desktop:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: MemeSort-portable
+          - os: macos-15
+            artifact: MemeSort-macos-arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,11 +46,14 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v5
-      - name: Install the locked sidecar build environment
-        run: uv sync --locked --group build
-      - name: Install the desktop dependencies
-        working-directory: desktop
-        run: npm ci
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        run: |
+          uv sync --locked --group build
+          npm ci --prefix desktop
+      - name: Build and smoke-test the Apple Silicon app
+        if: runner.os == 'macOS'
+        run: bash scripts/build_macos.sh
       - name: Lint, typecheck, and test the desktop frontend
         working-directory: desktop
         run: |
@@ -54,14 +67,15 @@ jobs:
           cargo test
           cargo clippy --all-targets --all-features -- -D warnings
           cargo clippy --release --all-targets --all-features -- -D warnings
-      - name: Build and smoke-test the portable desktop
+      - name: Build and smoke-test the Windows portable desktop
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           .\scripts\build_portable.ps1
           .\scripts\test_portable_smoke.ps1
-      - name: Upload portable artifact
+      - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MemeSort-portable
-          path: dist/MemeSort-portable.zip
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.zip
           if-no-files-found: error

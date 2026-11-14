@@ -54,6 +54,11 @@ resources, and produces an ad-hoc signed arm64 `MemeSort.app`. The default outpu
 is `desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/MemeSort.app`
 (or the same target-relative path under `CARGO_TARGET_DIR`). Normal app launch
 uses the bundled Python environment and needs no developer Python, Node, or Rust.
+After the package check passes, the script creates `dist/MemeSort-macos-arm64.zip`
+with the app's permissions and symlinks intact. On pushes and pull requests, the
+`tests` workflow builds and checks both platforms. Its artifacts are
+`MemeSort-macos-arm64` for Mac and `MemeSort-portable` for Windows.
+
 Models, the semantic runtime, and the separate CPU OCR environment are installed
 by the bundled one-time `setup_macos_runtime.sh` script; they are not included
 in this app bundle. Before setup, the Library opens with **Setup needed**.

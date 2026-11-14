@@ -77,6 +77,7 @@ class MacRuntimeTests(unittest.TestCase):
         import os
         import subprocess
         import tempfile
+        from memesort_worker.llama_cpp_backend import _close_runtime_loggers
         from memesort_worker.pinned_runtime import PinnedRuntime
         from memesort_worker.runtime_activation import write_runtime_activation
         from memesort_worker.runtime_service import RuntimeAuthorizationError
@@ -133,3 +134,4 @@ class MacRuntimeTests(unittest.TestCase):
                     self.assertFalse(runtime.is_ready_for_indexing()[0])
                 finally:
                     runtime.close()
+                    _close_runtime_loggers()
